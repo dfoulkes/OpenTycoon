@@ -6,12 +6,12 @@ import java.time.LocalTime;
 public class GameImpl implements Game {
 
     private GameTime gameDateTime;
-    private GameState gameState;
+    private GameState state;
 
     @Override
     public void start() {
         gameDateTime =  new GameTimeImpl();
-        gameState = GameState.RUNNING;
+        state = GameState.RUNNING;
     }
 
     @Override
@@ -26,7 +26,7 @@ public class GameImpl implements Game {
 
     @Override
     public void tick() {
-        if(gameState.equals(GameState.RUNNING))
+        if(state.equals(GameState.RUNNING))
             gameDateTime.tick();
         verifyIfEndOfGame();
     }
@@ -38,12 +38,12 @@ public class GameImpl implements Game {
 
     @Override
     public GameState getState() {
-        return gameState;
+        return state;
     }
 
     private void verifyIfEndOfGame() {
         if(getCurrentYear().equals(2000)){
-            gameState = GameState.END;
+            state = GameState.END;
         }
     }
 
