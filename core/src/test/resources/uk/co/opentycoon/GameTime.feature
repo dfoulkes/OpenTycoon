@@ -3,6 +3,7 @@ Feature: Game Time
     Given the game has started
     When in the year nineteenThirty
     Then clock time should be midnight
+    And game state is running
 
   Scenario: Time processing
     Given the game has started

@@ -1,5 +1,7 @@
 package uk.co.opentycoon.game;
 
+import uk.co.opentycoon.GameState;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -7,12 +9,14 @@ import java.time.LocalTime;
 public class GameImpl implements Game {
 
     private LocalDateTime gameDateTime;
+    private GameState gameState;
 
     @Override
     public void start() {
         LocalDate localDate = LocalDate.of(1930,1, 1);
         LocalTime localTime = LocalTime.of(0,0);
         gameDateTime =  LocalDateTime.of(localDate, localTime);
+        gameState = GameState.RUNNING;
     }
 
     @Override
@@ -27,12 +31,18 @@ public class GameImpl implements Game {
 
     @Override
     public void tick() {
-        incrementTimeByOneMinute();
+        if(gameState.equals(GameState.RUNNING))
+            incrementTimeByOneMinute();
     }
 
     @Override
     public LocalDateTime getDateTime() {
         return gameDateTime;
+    }
+
+    @Override
+    public GameState getState() {
+        return gameState;
     }
 
     private void incrementTimeByOneMinute() {
@@ -53,6 +63,13 @@ public class GameImpl implements Game {
         if(gameDateTime.getDayOfMonth() == 3){
             gameDateTime =  gameDateTime.plusYears(5L);
             gameDateTime= gameDateTime.minusDays(2L);
+        }
+        verifyIfEndOfGame();
+    }
+
+    private void verifyIfEndOfGame() {
+        if(getCurrentYear().equals(2000)){
+            gameState = GameState.END;
         }
     }
 

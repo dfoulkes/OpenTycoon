@@ -1,5 +1,6 @@
 package uk.co.opentycoon;
 
+import cucumber.api.java.en.And;
 import cucumber.api.java.en.Given;
 import cucumber.api.java.en.Then;
 import cucumber.api.java.en.When;
@@ -79,6 +80,7 @@ public class GameTimeSteps {
 
     @Then("game should end")
     public void gameShouldEnd() {
+        assertThat("expected the game state to be ended", game.getState(), is(GameState.END));
     }
 
     @When("the game has lapsed three days")
@@ -105,5 +107,10 @@ public class GameTimeSteps {
     private void incrementEntireDay(){
         incrementToEndOFDay();
         game.tick();
+    }
+
+    @And("game state is running")
+    public void gamerStateIsStarted() {
+        assertThat("expected the name state to be running", game.getState(), is(GameState.RUNNING));
     }
 }
