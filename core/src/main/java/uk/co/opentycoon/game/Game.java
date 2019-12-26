@@ -1,7 +1,5 @@
 package uk.co.opentycoon.game;
 
-import uk.co.opentycoon.GameState;
-
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 

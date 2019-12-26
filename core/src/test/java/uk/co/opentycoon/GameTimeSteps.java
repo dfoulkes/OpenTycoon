@@ -6,6 +6,7 @@ import cucumber.api.java.en.Then;
 import cucumber.api.java.en.When;
 import uk.co.opentycoon.game.Game;
 import uk.co.opentycoon.game.GameImpl;
+import uk.co.opentycoon.game.GameState;
 
 import java.time.LocalDateTime;
 import java.time.LocalTime;
