@@ -1,5 +1,6 @@
 package uk.co.opentycoon.game;
 
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 public interface Game {
@@ -7,4 +8,6 @@ public interface Game {
     Integer getCurrentYear();
     LocalTime getTime();
     void tick();
+
+    LocalDateTime getDateTime();
 }
