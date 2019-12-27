@@ -1,37 +1,38 @@
-## Welcome to GitHub Pages
+## Open Tycoon
 
-You can use the [editor on GitHub](https://github.com/dfoulkes/OpenTycoon/edit/master/README.md) to maintain and preview the content for your website in Markdown files.
+## What is it?
 
-Whenever you commit to this repository, GitHub Pages will run [Jekyll](https://jekyllrb.com/) to rebuild the pages in your site, from the content in your Markdown files.
+I'm a huge fan of an early 00's game Monopoly Tycoon (MT), although the sun has set on this title a long time ago I am looking to bring it back. This time as an open source community driven initiative.
 
-### Markdown
+The plan is to keep the integrity of the game, for legal reasons, we will not be using any of the copyrights for obvious reasons, one addition I propose though is a much more robust multiplayer to allow for a much better online multiplayer experience.
 
-Markdown is a lightweight and easy-to-use syntax for styling your writing. It includes conventions for
+## How to Get involved ?
 
-```markdown
-Syntax highlighted code block
+I'm one person, I will give this as much time as a I can, however always looking for extra hands wherever that be writing stories for review, code reviews or writing code.
 
-# Header 1
-## Header 2
-### Header 3
+## Technology Choices
 
-- Bulleted
-- List
+This is a odd one I know but I've chosen Java. The main reason for this is I like Java haha. No really, Java has a reasonable low entry point for developer with decent support and C like syntax without some of the complexities of C++ I know some of you will point out I'm making my life harder in writing a game engine but I think in this case the game mechanics deserve a rewrite rather then a rehash , besides if it's good enough for Minecraft then surely it's good enough for this game.
 
-1. Numbered
-2. List
 
-**Bold** and _Italic_ and `Code` text
+## Build
 
-[Link](url) and ![Image](src)
+## Requirements 
+  - OpenJDK8
+  - maven 
+
+To build:
+```bash
+ mvn clean install package
 ```
 
-For more details see [GitHub Flavored Markdown](https://guides.github.com/features/mastering-markdown/).
+The project uses JaCoCo to manage the test coverage, this means if you write any code that does not have 80% test coverage the build will break, thankfully it also comes with 
+a quite helpful built in reporting tool, currently after a build it will generate a report in: 
+```bash
+${project.dir}/${module}/site/jacoco/index.html
+```
 
-### Jekyll Themes
 
-Your Pages site will use the layout and styles from the Jekyll theme you have selected in your [repository settings](https://github.com/dfoulkes/OpenTycoon/settings). The name of this theme is saved in the Jekyll `_config.yml` configuration file.
-
-### Support or Contact
-
-Having trouble with Pages? Check out our [documentation](https://help.github.com/categories/github-pages-basics/) or [contact support](https://github.com/contact) and we’ll help you sort it out.
+## Testing
+In the interest of keeping a high quality  code, I've been using a BDD approach for ticket creation with them all stories written with gherkin annotations, as such I'm looking 
+to propagate this down into the source itself both for readability of the code and ensure we capture all the game play. As the project matures so will the tests.
