@@ -1,4 +1,4 @@
-> Snapshot of the canonical spec in Dan's vault (Projects/monpoloy-tycoon/spec.md), taken 2026-11-19. Rulings are cited by ID (R1–R61).
+> Snapshot of the canonical spec in Dan's vault (Projects/opentycoon/spec.md), taken 2026-11-19. Rulings are cited by ID (R1–R61).
 
 ---
 type: spec
