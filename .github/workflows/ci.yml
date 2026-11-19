@@ -1,0 +1,109 @@
+#
+# ubuntu-latest is Linux x86_64 and macos-latest is macOS aarch64, so the matrix also proves
+# cross-architecture determinism (the `determinism` job compares the hashes).
+name: ci
+
+on:
+  push:
+    branches: [v2, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  GODOT_VERSION: "4.7.2"
+
+jobs:
+  rust:
+    name: rust (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+
+      - name: fmt
+        run: cargo fmt --all -- --check
+      - name: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: test (unit, property, BDD, schema sync, traceability)
+        run: cargo test --workspace
+      - name: traceability report
+        run: cargo test -p sim-core --test traceability -- --nocapture
+      - name: benches compile (not run)
+        run: cargo bench --workspace --no-run
+      - name: validate shipped config
+        run: cargo run -q -p sim-cli -- validate-config config
+      - name: server refuses bad config, accepts good
+        shell: bash
+        run: |
+          cargo run -q -p server -- --config config
+          mkdir -p /tmp/badcfg && cp config/*.yaml /tmp/badcfg/
+          sed -i.bak 's/real_minutes_per_day:/real_minutes_per_dya:/' /tmp/badcfg/game.yaml && rm /tmp/badcfg/*.bak
+          if cargo run -q -p server -- --config /tmp/badcfg; then
+            echo "server started on an invalid config" >&2; exit 1
+          fi
+      - name: determinism hash
+        shell: bash
+        run: |
+          cargo run -q --release -p sim-cli -- run config --seed 42 --ticks 17280 | tee hash.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hash-${{ matrix.os }}
+          path: hash.txt
+
+  determinism:
+    name: determinism (x86_64 Linux == aarch64 macOS)
+    needs: rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: hash-*
+      - name: compare
+        run: |
+          cat hash-*/hash.txt
+          test "$(cat hash-ubuntu-latest/hash.txt)" = "$(cat hash-macos-latest/hash.txt)"
+
+  godot:
+    name: godot (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: linux.x86_64
+            bin: Godot_v4.7.2-stable_linux.x86_64
+          - os: macos-latest
+            asset: macos.universal
+            bin: Godot.app/Contents/MacOS/Godot
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: build the Rust extension
+        run: cargo build -p client-ext
+      - name: install Godot ${{ env.GODOT_VERSION }}
+        shell: bash
+        run: |
+          url="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_${{ matrix.asset }}.zip"
+          curl -fsSL "$url" -o godot.zip
+          unzip -q godot.zip -d "$RUNNER_TEMP/godot"
+          echo "GODOT=$RUNNER_TEMP/godot/${{ matrix.bin }}" >> "$GITHUB_ENV"
+      - name: import project
+        run: '"$GODOT" --headless --path client --import'
+      - name: GUT tests
+        run: '"$GODOT" --headless --path client -s addons/gut/gut_cmdln.gd'
