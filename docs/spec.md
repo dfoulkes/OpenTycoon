@@ -452,7 +452,7 @@ All of them share one evaluation function with different weights. Putting an LLM
 **[PROPOSED]** Layout:
 
 ```
- sim-core (Rust library, headless, deterministic, 1 tick = 10 game-seconds ≈ 6 ticks/real second)
+ sim-core (Rust library, headless, deterministic, 1 tick = 10 game-seconds = 7.2 ticks/real second)
    ├── server   : authoritative game server (multiplayer on k3s; single-player on 127.0.0.1, started and stopped by the client)
    └── sim-cli  : balance harness, 1,000 AI-vs-AI games, no rendering
  client (3D engine) ──protobuf over WebSocket/QUIC──► server
@@ -526,7 +526,7 @@ leases:
 
 ## 10c. v1 build plan (Dan: approved 2026-11-19; tickets OTY-1 to OTY-6)
 
-**Goal:** play a 1930–1950 game (5 days, about 100 minutes) on a grey-box 3×3 map, single-player against one AI, in both camera modes, end to end. Also: the balance harness runs 1,000 headless games.
+**Goal:** play a 1930–1950 game (4 days, 80 minutes) on a grey-box 3×3 map, single-player against one AI, in both camera modes, end to end. Also: the balance harness runs 1,000 headless games.
 
 **Repo:** `dfoulkes/OpenTycoon`, restarted as a monorepo. The 2019 Java stub gets archived to a branch.
 
