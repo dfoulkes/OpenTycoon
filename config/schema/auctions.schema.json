@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Root of `auctions.yaml`.",
+  "properties": {
+    "countdown_real_seconds": {
+      "description": "Real seconds between the opening bid and the start of bidding (default 120).",
+      "format": "uint32",
+      "maximum": 3600,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "increments": {
+      "description": "Allowed raises (default £50 / £100 / £500 / £1,000).",
+      "items": {
+        "description": "Money in decimal pounds, at most 2 decimal places (held as integer pence).",
+        "type": "number"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "max_concurrent": {
+      "description": "Auctions scheduled or running at once across the game (default 1).",
+      "format": "uint32",
+      "maximum": 1,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "turn_real_seconds": {
+      "description": "Real seconds per bidding turn; running out counts as a pass (default 10).",
+      "format": "uint32",
+      "maximum": 600,
+      "minimum": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "countdown_real_seconds",
+    "turn_real_seconds",
+    "increments",
+    "max_concurrent"
+  ],
+  "title": "AuctionsConfig",
+  "type": "object"
+}

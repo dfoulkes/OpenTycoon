@@ -1,0 +1,18 @@
+# Common commands. See README.md "Build, test, bench".
+[alias]
+# Format check, as CI runs it.
+fmtc = "fmt --all -- --check"
+# Clippy across every crate and target, warnings are errors.
+lint = "clippy --workspace --all-targets -- -D warnings"
+# Unit, property, BDD and traceability tests (default members; no Godot needed).
+t = "test --workspace"
+# BDD scenarios only.
+bdd = "test -p sim-core --test bdd"
+# Spec traceability report (which in-scope rulings lack a scenario).
+trace = "test -p sim-core --test traceability -- --nocapture"
+# Validate the shipped config.
+validate = "run -q -p sim-cli -- validate-config config"
+# Regenerate config/schema/*.schema.json from the Rust config types.
+schema = "run -q -p sim-cli -- write-schemas config/schema"
+# Compile benches without running them.
+bench-build = "bench --workspace --no-run"

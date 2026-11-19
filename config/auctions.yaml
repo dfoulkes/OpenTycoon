@@ -1,0 +1,6 @@
+# yaml-language-server: $schema=schema/auctions.schema.json
+# auctions.yaml: §5.1. Opening bid minimum is the block's land_base_price in map.yaml (R23).
+countdown_real_seconds: 120     # §5.1
+turn_real_seconds: 10           # §5.1; running out counts as a pass
+increments: [50, 100, 500, 1000]  # §5.1, pounds
+max_concurrent: 1               # §5.1: one auction scheduled or running at a time

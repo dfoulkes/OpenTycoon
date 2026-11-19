@@ -1,0 +1,80 @@
+# yaml-language-server: $schema=schema/events.schema.json
+# events.yaml: §9. Each event fires on the year step covering its year. Effects reference
+# block ids in map.yaml; on the v1 3×3 map several are flavour only (marked).
+historical:
+  - id: ww2_rationing
+    year: 1939
+    headline: "War Declared: Rationing Begins"
+    effects:
+      - { kind: demand_multiplier, target: luxury, factor: 0.4, days: 2 }     # −60%; days placeholder
+  - id: blitz
+    year: 1940
+    headline: "The Blitz: East End Ablaze"
+    effects:
+      - { kind: destroy_buildings, blocks: [whitechapel, bethnal_green, old_kent_road], chance: 0.1, compensation: 0.5 }  # chance placeholder
+  - id: coronation
+    year: 1953
+    headline: "Long Live the Queen"
+    effects:
+      - { kind: demand_multiplier, target: drinks, factor: 2.0, days: 1 }
+  - id: world_cup
+    year: 1966
+    headline: "England Win the World Cup"
+    effects:
+      - { kind: demand_multiplier, target: drinks, factor: 2.0, days: 1 }
+  - id: decimal_day
+    year: 1971
+    headline: "Decimal Day: Goodbye to the Shilling"
+    effects:
+      - { kind: decimal_currency }
+  - id: three_day_week
+    year: 1973
+    headline: "Three-Day Week as Miners Strike"
+    effects:
+      - { kind: flavour }       # placeholder: electricity rationing mechanic not yet designed
+  - id: big_bang
+    year: 1986
+    headline: "Big Bang in the City"
+    effects:
+      - { kind: flavour }       # placeholder: no City block on the v1 map
+  - id: canary_wharf
+    year: 1987
+    headline: "Canary Wharf Rises"
+    effects:
+      - { kind: flavour }       # placeholder: no Docklands block on the v1 map
+  - id: dotcom
+    year: 2000
+    headline: "Dot-com Fever"
+    effects:
+      - { kind: flavour }
+  - id: crash
+    year: 2008
+    headline: "Banks Collapse"
+    effects:
+      - { kind: demand_multiplier, target: upper_class, factor: 0.8, days: 1 }
+  - id: olympics
+    year: 2012
+    headline: "London Olympics Open"
+    effects:
+      - { kind: flavour }
+  - id: pandemic
+    year: 2020
+    headline: "Lockdown"
+    effects:
+      - { kind: demand_multiplier, target: physical_retail, factor: 0.3, days: 1 }
+      - { kind: demand_multiplier, target: online, factor: 2.0, days: 1 }
+random:                         # placeholders
+  - { id: fire, daily_chance: 0.0005 }
+  - { id: burglary, daily_chance: 0.001 }
+  - { id: health_inspection, daily_chance: 0.002 }
+elections:                      # §9.1: every year step is a general election
+  enabled: true
+  weights:                      # placeholder weights following history
+    1930: { labour: 0.4, conservative: 0.6 }
+    1945: { labour: 0.9, conservative: 0.1 }
+    1950: { labour: 0.4, conservative: 0.6 }
+    1965: { labour: 0.6, conservative: 0.4 }
+    1980: { labour: 0.2, conservative: 0.8 }
+    1995: { labour: 0.8, conservative: 0.2 }
+    2010: { labour: 0.4, conservative: 0.6 }
+    2025: { labour: 0.5, conservative: 0.5 }

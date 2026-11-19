@@ -1,0 +1,22 @@
+[package]
+name = "sim-cli"
+description = "OpenTycoon headless harness: config validation now, balance runs from M1."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "sim-cli"
+path = "src/main.rs"
+
+[dependencies]
+sim-core = { workspace = true, features = ["fs"] }
+anyhow.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
