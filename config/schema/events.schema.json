@@ -1,0 +1,272 @@
+{
+  "$defs": {
+    "Effect": {
+      "description": "An event effect. Tagged by `kind`.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Scale demand for a target (a good id, a tag such as `luxury`, `physical_retail`, `online`).",
+          "properties": {
+            "days": {
+              "description": "How many in-game days it lasts.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "factor": {
+              "description": "Multiplier.",
+              "type": "number"
+            },
+            "kind": {
+              "const": "demand_multiplier",
+              "type": "string"
+            },
+            "target": {
+              "description": "What demand is scaled.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "target",
+            "factor",
+            "days"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Move blocks to a new desirability tier.",
+          "properties": {
+            "blocks": {
+              "description": "Block ids.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "desirability_change",
+              "type": "string"
+            },
+            "tier": {
+              "$ref": "#/$defs/Tier",
+              "description": "New tier."
+            }
+          },
+          "required": [
+            "kind",
+            "blocks",
+            "tier"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Destroy buildings at random, with compensation.",
+          "properties": {
+            "blocks": {
+              "description": "Block ids at risk.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "chance": {
+              "description": "Chance per building.",
+              "type": "number"
+            },
+            "compensation": {
+              "description": "Compensation as a share of property value.",
+              "type": "number"
+            },
+            "kind": {
+              "const": "destroy_buildings",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "blocks",
+            "chance",
+            "compensation"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Switch the currency display to decimal.",
+          "properties": {
+            "kind": {
+              "const": "decimal_currency",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Headline only; no mechanical effect yet.",
+          "properties": {
+            "kind": {
+              "const": "flavour",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ElectionSettings": {
+      "additionalProperties": false,
+      "description": "Elections (R12, §9.1).",
+      "properties": {
+        "enabled": {
+          "description": "Whether every year step holds a general election.",
+          "type": "boolean"
+        },
+        "weights": {
+          "additionalProperties": {
+            "$ref": "#/$defs/PartyWeights"
+          },
+          "description": "Win weights per step year. Steps without an entry use the latest earlier one.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "enabled",
+        "weights"
+      ],
+      "type": "object"
+    },
+    "HistoricalEvent": {
+      "additionalProperties": false,
+      "description": "A historical event.",
+      "properties": {
+        "effects": {
+          "default": [],
+          "description": "What it does.",
+          "items": {
+            "$ref": "#/$defs/Effect"
+          },
+          "type": "array"
+        },
+        "headline": {
+          "description": "Newspaper headline.",
+          "type": "string"
+        },
+        "id": {
+          "description": "Stable id.",
+          "type": "string"
+        },
+        "year": {
+          "description": "Historical year; fires on the step that covers it.",
+          "format": "int32",
+          "maximum": 2500,
+          "minimum": 1800,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "year",
+        "headline"
+      ],
+      "type": "object"
+    },
+    "PartyWeights": {
+      "additionalProperties": false,
+      "description": "Election weights.",
+      "properties": {
+        "conservative": {
+          "description": "Conservative (privatises utilities).",
+          "type": "number"
+        },
+        "labour": {
+          "description": "Labour (nationalises utilities).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "labour",
+        "conservative"
+      ],
+      "type": "object"
+    },
+    "RandomEvent": {
+      "additionalProperties": false,
+      "description": "A random per-building event.",
+      "properties": {
+        "daily_chance": {
+          "description": "Chance per building per day.",
+          "type": "number"
+        },
+        "id": {
+          "description": "Stable id.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "daily_chance"
+      ],
+      "type": "object"
+    },
+    "Tier": {
+      "description": "Desirability tier (§4.1).",
+      "oneOf": [
+        {
+          "const": "low",
+          "description": "Low.",
+          "type": "string"
+        },
+        {
+          "const": "medium",
+          "description": "Medium.",
+          "type": "string"
+        },
+        {
+          "const": "high",
+          "description": "High.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Root of `events.yaml`.",
+  "properties": {
+    "elections": {
+      "$ref": "#/$defs/ElectionSettings",
+      "description": "General elections (§9.1)."
+    },
+    "historical": {
+      "description": "Fixed history. Each fires on the year step covering its year (§9).",
+      "items": {
+        "$ref": "#/$defs/HistoricalEvent"
+      },
+      "type": "array"
+    },
+    "random": {
+      "description": "Per-building daily random events.",
+      "items": {
+        "$ref": "#/$defs/RandomEvent"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "historical",
+    "random",
+    "elections"
+  ],
+  "title": "EventsConfig",
+  "type": "object"
+}

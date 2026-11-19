@@ -1,0 +1,93 @@
+{
+  "$defs": {
+    "InternetSettings": {
+      "additionalProperties": false,
+      "description": "The internet upgrade (R11, R15, R36).",
+      "properties": {
+        "base_rate": {
+          "description": "Telecoms base rate after the upgrade.",
+          "type": "number"
+        },
+        "upgrade_year": {
+          "description": "Year the telephone exchange becomes the internet (default 1995).",
+          "format": "int32",
+          "maximum": 2500,
+          "minimum": 1800,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "upgrade_year",
+        "base_rate"
+      ],
+      "type": "object"
+    },
+    "NationalisationSettings": {
+      "additionalProperties": false,
+      "description": "Nationalisation and privatisation (R12, §9.1).",
+      "properties": {
+        "buyout_ratio": {
+          "description": "Buy-out price on nationalisation, as a share of book value (default 1.0).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "buyout_ratio"
+      ],
+      "type": "object"
+    },
+    "UtilityRates": {
+      "additionalProperties": false,
+      "description": "Base rate per utility.",
+      "properties": {
+        "electricity": {
+          "description": "Electricity.",
+          "type": "number"
+        },
+        "gas": {
+          "description": "Gas.",
+          "type": "number"
+        },
+        "telecoms": {
+          "description": "Telephone exchange, later the internet.",
+          "type": "number"
+        },
+        "water": {
+          "description": "Water.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "electricity",
+        "gas",
+        "water",
+        "telecoms"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Root of `utilities.yaml`.",
+  "properties": {
+    "base_rates": {
+      "$ref": "#/$defs/UtilityRates",
+      "description": "Bill per unit of building volume per day, before the business's utility factor (§5.3)."
+    },
+    "internet": {
+      "$ref": "#/$defs/InternetSettings",
+      "description": "The telephone exchange's upgrade to the internet (R11)."
+    },
+    "nationalisation": {
+      "$ref": "#/$defs/NationalisationSettings",
+      "description": "Elections and ownership (R12)."
+    }
+  },
+  "required": [
+    "base_rates",
+    "internet",
+    "nationalisation"
+  ],
+  "title": "UtilitiesConfig",
+  "type": "object"
+}

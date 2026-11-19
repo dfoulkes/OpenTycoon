@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=schema/ai.schema.json
+# ai.yaml: §10. One shared evaluation function; personalities differ by weights (placeholders).
+decision_interval_ticks: 60     # placeholder: one decision per 10 game-minutes
+opponents: [grocer]             # §10c v1: one AI, the Grocer
+personalities:
+  grocer:
+    name: "The Grocer"
+    description: "Opens many cheap Low-tier shops."
+    weights: { land: 0.5, retail: 1.0, residential: 0.0, risk: 0.3, tier_low: 1.0, tier_medium: 0.4, tier_high: 0.1 }
+  landlord:
+    name: "The Landlord"
+    description: "Hoards leases and never builds retail."
+    weights: { land: 1.0, retail: 0.0, residential: 0.3, risk: 0.5, tier_low: 0.6, tier_medium: 0.6, tier_high: 0.6 }
+  toff:
+    name: "The Toff"
+    description: "Only goes for High tier."
+    weights: { land: 0.7, retail: 0.7, residential: 0.2, risk: 0.5, tier_low: 0.0, tier_medium: 0.1, tier_high: 1.0 }
+  speculator:
+    name: "The Speculator"
+    description: "Bids hard and flips."
+    weights: { land: 0.9, retail: 0.2, residential: 0.1, risk: 1.0, tier_low: 0.5, tier_medium: 0.7, tier_high: 0.8 }
+  sir_penny_sugar:
+    name: "Sir Penny Sugar"
+    description: "Deals mostly in residential."
+    weights: { land: 0.6, retail: 0.1, residential: 1.0, risk: 0.4, tier_low: 0.5, tier_medium: 0.6, tier_high: 0.6 }

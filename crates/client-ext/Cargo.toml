@@ -1,0 +1,19 @@
+[package]
+name = "client-ext"
+description = "OpenTycoon Godot extension (godot-rust/gdext): network client and heavy lifting."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "opentycoon_client_ext"
+crate-type = ["cdylib"]
+
+[dependencies]
+godot.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,105 @@
+{
+  "$defs": {
+    "Personality": {
+      "additionalProperties": false,
+      "description": "An AI personality.",
+      "properties": {
+        "description": {
+          "description": "One line on how it plays.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Display name.",
+          "type": "string"
+        },
+        "weights": {
+          "$ref": "#/$defs/PersonalityWeights",
+          "description": "Evaluation weights."
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "weights"
+      ],
+      "type": "object"
+    },
+    "PersonalityWeights": {
+      "additionalProperties": false,
+      "description": "Weights for the shared evaluation function.",
+      "properties": {
+        "land": {
+          "description": "Appetite for land leases.",
+          "type": "number"
+        },
+        "residential": {
+          "description": "Appetite for residential.",
+          "type": "number"
+        },
+        "retail": {
+          "description": "Appetite for retail businesses.",
+          "type": "number"
+        },
+        "risk": {
+          "description": "Willingness to bid high and run an overdraft.",
+          "type": "number"
+        },
+        "tier_high": {
+          "description": "Preference for high-tier blocks.",
+          "type": "number"
+        },
+        "tier_low": {
+          "description": "Preference for low-tier blocks.",
+          "type": "number"
+        },
+        "tier_medium": {
+          "description": "Preference for medium-tier blocks.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "land",
+        "retail",
+        "residential",
+        "risk",
+        "tier_low",
+        "tier_medium",
+        "tier_high"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Root of `ai.yaml`.",
+  "properties": {
+    "decision_interval_ticks": {
+      "description": "Ticks between an AI player's decisions.",
+      "format": "uint32",
+      "maximum": 100000,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "opponents": {
+      "description": "Personality ids seated by default (v1: one Grocer).",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "personalities": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Personality"
+      },
+      "description": "Personalities, keyed by id. All share one evaluation function with different weights.",
+      "type": "object"
+    }
+  },
+  "required": [
+    "decision_interval_ticks",
+    "opponents",
+    "personalities"
+  ],
+  "title": "AiConfig",
+  "type": "object"
+}

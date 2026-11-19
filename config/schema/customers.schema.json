@@ -1,0 +1,469 @@
+{
+  "$defs": {
+    "AgeBandSettings": {
+      "additionalProperties": false,
+      "description": "An adult age band (R60).",
+      "properties": {
+        "id": {
+          "description": "Band id, e.g. `\"18-29\"`.",
+          "type": "string"
+        },
+        "max_age": {
+          "description": "Oldest age in the band; absent for the open-ended top band.",
+          "format": "uint32",
+          "maximum": 150,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "min_age": {
+          "description": "Youngest age in the band.",
+          "format": "uint32",
+          "maximum": 150,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "min_age"
+      ],
+      "type": "object"
+    },
+    "AllowanceSettings": {
+      "additionalProperties": false,
+      "description": "Daily allowance (R55).",
+      "properties": {
+        "age_multiplier": {
+          "additionalProperties": {
+            "description": "A decimal ratio or multiplier, at most 4 decimal places (held as basis points).",
+            "type": "number"
+          },
+          "description": "Multiplier per age band id.",
+          "type": "object"
+        },
+        "base_by_class": {
+          "$ref": "#/$defs/ClassPounds",
+          "description": "Base allowance per class."
+        },
+        "sex_multiplier": {
+          "$ref": "#/$defs/SexRatios",
+          "description": "Multiplier per sex."
+        }
+      },
+      "required": [
+        "base_by_class",
+        "age_multiplier",
+        "sex_multiplier"
+      ],
+      "type": "object"
+    },
+    "Class": {
+      "description": "Social class (§8.1).",
+      "oneOf": [
+        {
+          "const": "working",
+          "description": "Working class.",
+          "type": "string"
+        },
+        {
+          "const": "middle",
+          "description": "Middle class.",
+          "type": "string"
+        },
+        {
+          "const": "upper",
+          "description": "Upper class.",
+          "type": "string"
+        }
+      ]
+    },
+    "ClassF64": {
+      "additionalProperties": false,
+      "description": "A float per class (scoring inputs only).",
+      "properties": {
+        "middle": {
+          "description": "Middle class.",
+          "format": "double",
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        "upper": {
+          "description": "Upper class.",
+          "format": "double",
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        "working": {
+          "description": "Working class.",
+          "format": "double",
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "working",
+        "middle",
+        "upper"
+      ],
+      "type": "object"
+    },
+    "ClassPounds": {
+      "additionalProperties": false,
+      "description": "Money per class.",
+      "properties": {
+        "middle": {
+          "description": "Middle class.",
+          "type": "number"
+        },
+        "upper": {
+          "description": "Upper class.",
+          "type": "number"
+        },
+        "working": {
+          "description": "Working class.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "working",
+        "middle",
+        "upper"
+      ],
+      "type": "object"
+    },
+    "Demographics": {
+      "additionalProperties": false,
+      "description": "Population mix for an era. Each list must sum to 1.",
+      "properties": {
+        "age": {
+          "description": "Share per age band, in `age_bands` order.",
+          "items": {
+            "description": "A decimal ratio or multiplier, at most 4 decimal places (held as basis points).",
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "class": {
+          "description": "Working / middle / upper shares.",
+          "items": {
+            "description": "A decimal ratio or multiplier, at most 4 decimal places (held as basis points).",
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "sex": {
+          "description": "Female / male shares.",
+          "items": {
+            "description": "A decimal ratio or multiplier, at most 4 decimal places (held as basis points).",
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "class",
+        "age",
+        "sex"
+      ],
+      "type": "object"
+    },
+    "DesireMatch": {
+      "additionalProperties": false,
+      "description": "Segment selector for a [`DesireRule`].",
+      "properties": {
+        "age": {
+          "description": "Age band id, if restricted.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "class": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Class"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Class, if restricted."
+        },
+        "sex": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sex"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Sex, if restricted."
+        }
+      },
+      "type": "object"
+    },
+    "DesireRule": {
+      "additionalProperties": false,
+      "description": "Shopping-list weights for a segment. Unset match fields match everyone.",
+      "properties": {
+        "goods": {
+          "additionalProperties": {
+            "format": "double",
+            "type": "number"
+          },
+          "description": "`P(good)` weight per good id.",
+          "type": "object"
+        },
+        "match": {
+          "$ref": "#/$defs/DesireMatch",
+          "description": "Which customers this rule applies to."
+        }
+      },
+      "required": [
+        "match",
+        "goods"
+      ],
+      "type": "object"
+    },
+    "DistanceDecay": {
+      "additionalProperties": false,
+      "description": "Distance decay (§8.3).",
+      "properties": {
+        "per_block": {
+          "description": "Exponential decay per block walked.",
+          "format": "double",
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "per_block"
+      ],
+      "type": "object"
+    },
+    "ReputationSettings": {
+      "additionalProperties": false,
+      "description": "Shop reputation (§8.3).",
+      "properties": {
+        "initial": {
+          "description": "Reputation of a new shop, 0–1.",
+          "format": "double",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        "lost_sale_penalty": {
+          "description": "Drop per lost sale, 0–1.",
+          "format": "double",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "initial",
+        "lost_sale_penalty"
+      ],
+      "type": "object"
+    },
+    "ResidentialSettings": {
+      "additionalProperties": false,
+      "description": "Apartment affordability (§7.2).",
+      "properties": {
+        "comfortable_share": {
+          "description": "Comfortable rent share of allowance (R52, default 0.2).",
+          "type": "number"
+        },
+        "flat_size": {
+          "description": "Units of volume per flat (R50, default 4).",
+          "format": "uint32",
+          "maximum": 10000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "move_interval_years": {
+          "description": "Minimum in-game years between moves (R54, default 10).",
+          "format": "uint32",
+          "maximum": 500,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stretch_share": {
+          "description": "Stretch rent share for desirable flats (R52, default 0.5).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "flat_size",
+        "comfortable_share",
+        "stretch_share",
+        "move_interval_years"
+      ],
+      "type": "object"
+    },
+    "Sex": {
+      "description": "Sex, for the cohort model and allowances (R55, R61).",
+      "oneOf": [
+        {
+          "const": "female",
+          "description": "Female.",
+          "type": "string"
+        },
+        {
+          "const": "male",
+          "description": "Male.",
+          "type": "string"
+        }
+      ]
+    },
+    "SexRatios": {
+      "additionalProperties": false,
+      "description": "A ratio per sex.",
+      "properties": {
+        "female": {
+          "description": "Female.",
+          "type": "number"
+        },
+        "male": {
+          "description": "Male.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "female",
+        "male"
+      ],
+      "type": "object"
+    },
+    "VisitorSettings": {
+      "additionalProperties": false,
+      "description": "Visitor split (R59).",
+      "properties": {
+        "commuter_share": {
+          "description": "Share of visitors who are commuters (default 0.7); the rest are tourists.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "commuter_share"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Root of `customers.yaml`.",
+  "properties": {
+    "age_bands": {
+      "description": "Adult age bands (R60), youngest first.",
+      "items": {
+        "$ref": "#/$defs/AgeBandSettings"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "allowance": {
+      "$ref": "#/$defs/AllowanceSettings",
+      "description": "Daily allowance (R55)."
+    },
+    "births_per_woman": {
+      "additionalProperties": {
+        "description": "A decimal ratio or multiplier, at most 4 decimal places (held as basis points).",
+        "type": "number"
+      },
+      "description": "Historical births per woman, keyed by step year (R61).",
+      "type": "object"
+    },
+    "childbearing_years": {
+      "description": "Childbearing span in years, used to turn births per woman into births per step (R61).",
+      "format": "uint32",
+      "maximum": 60,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "demographics": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Demographics"
+      },
+      "description": "Population mix by era, keyed by year.",
+      "type": "object"
+    },
+    "desires": {
+      "description": "Shopping-list weights per segment (R55).",
+      "items": {
+        "$ref": "#/$defs/DesireRule"
+      },
+      "type": "array"
+    },
+    "distance_decay": {
+      "$ref": "#/$defs/DistanceDecay",
+      "description": "How fast a shop's pull falls with walking distance."
+    },
+    "initial_population": {
+      "description": "Starting population (adults), split by `demographics` for the start year.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "migration_per_day": {
+      "description": "Migrants added to each morning's arrivals.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "mortality_per_step": {
+      "additionalProperties": {
+        "description": "A decimal ratio or multiplier, at most 4 decimal places (held as basis points).",
+        "type": "number"
+      },
+      "description": "Share of each band dying per 5-year step, keyed by band id.",
+      "type": "object"
+    },
+    "price_sensitivity": {
+      "$ref": "#/$defs/ClassF64",
+      "description": "`k_class` price sensitivity (§8.3)."
+    },
+    "reputation": {
+      "$ref": "#/$defs/ReputationSettings",
+      "description": "Shop reputation (§8.3)."
+    },
+    "residential": {
+      "$ref": "#/$defs/ResidentialSettings",
+      "description": "Apartment affordability (R50, R52, R54)."
+    },
+    "visitors": {
+      "$ref": "#/$defs/VisitorSettings",
+      "description": "Visitor split (R59)."
+    }
+  },
+  "required": [
+    "initial_population",
+    "visitors",
+    "age_bands",
+    "births_per_woman",
+    "childbearing_years",
+    "mortality_per_step",
+    "migration_per_day",
+    "allowance",
+    "desires",
+    "demographics",
+    "price_sensitivity",
+    "reputation",
+    "distance_decay",
+    "residential"
+  ],
+  "title": "CustomersConfig",
+  "type": "object"
+}
