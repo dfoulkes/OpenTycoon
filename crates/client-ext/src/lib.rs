@@ -33,9 +33,11 @@ impl Hello {
     #[func]
     #[allow(
         clippy::needless_pass_by_value,
-        reason = "Godot-callable functions take arguments by value"
+        clippy::unused_self,
+        reason = "Godot-callable methods take arguments by value; an instance method keeps the \
+                  GDScript call simple (ClassDB.instantiate + call)"
     )]
-    fn greet(name: GString) -> GString {
+    fn greet(&self, name: GString) -> GString {
         GString::from(format!("Hello, {name}, from OpenTycoon Rust").as_str())
     }
 }
