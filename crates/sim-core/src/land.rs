@@ -85,10 +85,12 @@ pub struct Lease {
 }
 
 impl Lease {
-    /// Years left at `year`, never negative.
+    /// Years left at `year`, between 0 and the term (a year before the start counts as the
+    /// full term).
     pub fn remaining_years(&self, year: i32) -> u32 {
         let end = i64::from(self.start_year) + i64::from(self.term_years);
-        u32::try_from((end - i64::from(year)).max(0)).unwrap_or(0)
+        let left = (end - i64::from(year)).clamp(0, i64::from(self.term_years));
+        u32::try_from(left).unwrap_or(0)
     }
 
     /// True once the lease has run out (R9: the block goes back to auction).
