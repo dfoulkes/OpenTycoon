@@ -80,17 +80,18 @@ impl ClockRules {
 
     /// Ticks in one game day.
     pub fn ticks_per_day(&self) -> u32 {
-        0
+        SECONDS_PER_DAY / self.tick_game_seconds.max(1)
     }
 
     /// Real milliseconds one game day lasts at 1× speed.
     pub fn real_millis_per_day(&self) -> u64 {
-        0
+        u64::from(self.real_minutes_per_day) * 60_000
     }
 
     /// Days in a full game: `(end_year − start_year) / years_per_day`.
     pub fn total_days(&self) -> u32 {
-        0
+        let span = i64::from(self.end_year) - i64::from(self.start_year);
+        u32::try_from(span.max(0) / i64::from(self.years_per_day.max(1))).unwrap_or(u32::MAX)
     }
 }
 
@@ -148,12 +149,14 @@ impl Clock {
 
     /// Whole days since the start (= midnights passed = year steps taken).
     pub fn day(&self) -> u32 {
-        0
+        u32::try_from(self.tick / u64::from(self.rules.ticks_per_day())).unwrap_or(u32::MAX)
     }
 
     /// Game-seconds since midnight.
     pub fn second_of_day(&self) -> u32 {
-        0
+        let tick_of_day = self.tick % u64::from(self.rules.ticks_per_day());
+        // tick_of_day < ticks_per_day ≤ 86,400, so this fits in u32.
+        u32::try_from(tick_of_day).unwrap_or(0) * self.rules.tick_game_seconds
     }
 
     /// `(hour, minute, second)`.
@@ -164,22 +167,65 @@ impl Clock {
 
     /// The in-game year.
     pub fn year(&self) -> i32 {
-        self.rules.start_year
+        let year = i64::from(self.rules.start_year)
+            + i64::from(self.day()) * i64::from(self.rules.years_per_day);
+        i32::try_from(year).unwrap_or(i32::MAX)
     }
 
     /// True once the final midnight has passed.
     pub fn is_over(&self) -> bool {
-        false
+        self.day() >= self.rules.total_days()
     }
 
     /// True if `window` is open now.
-    pub fn is_open(&self, _window: TradingWindow) -> bool {
-        false
+    pub fn is_open(&self, window: TradingWindow) -> bool {
+        let w = &self.rules.trading;
+        let (open, close) = match window {
+            TradingWindow::Day => w.day,
+            TradingWindow::Night => w.night,
+            TradingWindow::Hotel => w.hotel,
+        };
+        in_window(self.second_of_day(), open, close)
     }
 
     /// Moves one tick forward and reports what fires at the new time.
+    ///
+    /// Once the game is over the clock stops: further calls change nothing and report nothing.
     pub fn advance(&mut self) -> ClockEvents {
+        if self.is_over() {
+            return ClockEvents::default();
+        }
         self.tick += 1;
-        ClockEvents::default()
+        let now = self.second_of_day();
+        let midnight = now == 0;
+        ClockEvents {
+            midnight,
+            arrivals: now == self.rules.arrivals_second,
+            settlement: now == self.rules.settlement_second,
+            game_over: midnight && self.is_over(),
+        }
+    }
+}
+
+/// True if `second` falls in `[open, close)`, wrapping midnight when `close < open`.
+fn in_window(second: u32, open: u32, close: u32) -> bool {
+    if open <= close {
+        open <= second && second < close
+    } else {
+        second >= open || second < close
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn a_window_and_its_complement_partition_the_day(open in 0u32..86_400, close in 0u32..86_400, s in 0u32..86_400) {
+            prop_assume!(open != close);
+            prop_assert_ne!(in_window(s, open, close), in_window(s, close, open));
+        }
     }
 }
