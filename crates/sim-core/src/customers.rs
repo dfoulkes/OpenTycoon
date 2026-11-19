@@ -115,10 +115,11 @@ mod tests {
 
     #[test]
     fn price_factor_bits_are_pinned() {
-        // libm is pure Rust, so this exact bit pattern holds on every target.
+        // libm is pure Rust, so this exact bit pattern must hold on every target. CI runs this
+        // on x86_64 and aarch64; if it ever differs, determinism is broken.
         assert_eq!(
             price_factor(1.5, 1.2, 1.0).to_bits(),
-            libm::exp(-0.3_f64).to_bits()
+            4_604_847_916_870_499_334
         );
     }
 

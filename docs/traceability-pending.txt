@@ -1,0 +1,30 @@
+# In-scope rulings that do not yet have a tagged Gherkin scenario, or are only partly proven.
+# The traceability test fails if an in-scope ruling is neither tagged nor listed here.
+# Shrink this file: when you tag a scenario that fully proves a ruling, delete its line.
+# Mark partly-proven rulings with 'partial:' so the report shows them.
+R1   # partial: trading hours proven (clock.feature); midnight stock write-off not yet
+R2   # businesses: no mid-day restock; order arrives 06:00
+R3   # economy: £0 at midnight is solvent
+R4   # economy: bankrupt assets to the city; city runs them
+R5   # economy/auctions: sell back at 50%, business auctions
+R6   # population: no inflation; daily growth drives the economy
+R7   # economy: overdraft limit and bid ceiling
+R8   # auctions: pass counts for one round
+R9   # land/auctions: lease expiry re-auction
+R10  # businesses/land: volume formulas
+R13  # businesses: one building, one type
+R19  # economy: net worth
+R22  # land: 9×9 lot, edge frontage
+R23  # auctions: minimum opening bid
+R25  # customers: spawn at residences and tube stations
+R28  # land/businesses: city apartment block per Low set
+R31  # economy: net worth before write-off
+R32  # economy: 06:00 bills may pass the limit
+R33  # auctions/land: leases auctioned, not sold
+R35  # businesses: no staff costs
+R39  # economy: lot value uplift
+R41  # businesses: no wear; property value = build cost
+R55  # customers: allowance and desires by age, class, sex
+R57  # businesses: no height cap by era
+R60  # population: age bands
+R61  # population: cohort model
