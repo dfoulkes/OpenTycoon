@@ -66,8 +66,25 @@ Allowlists:
   scenario fully proves a ruling, delete its line in the same PR. Mark half-proven ones
   `# partial: <what's missing>`.
 
-When the spec snapshot is refreshed from the vault, re-run `cargo trace`: new rulings show up as
-failures until they are tagged, pending or out of scope.
+### Keeping the spec in step with the vault
+
+The canonical spec lives in Dan's vault (`Projects/opentycoon/spec.md`). `docs/spec.md` is a
+snapshot: a header line, a blank line, then the vault file unchanged. **Agents and tests read only
+the snapshot**, so a vault edit doesn't count until it is synced.
+
+- **`cargo spec-sync`** (on the Mac that has the vault) copies the vault spec in, dates the header
+  and reports rulings **added, removed and reworded**, plus the feature files tagged with each
+  reworded or removed ruling. Re-read those scenarios: a reworded ruling can make a passing
+  scenario wrong. Then run `cargo trace`; new rulings fail until they are tagged, pending or out
+  of scope. Commit `docs/spec.md` with any scenario changes.
+- **`cargo spec-check`** reports the same without writing, and exits 1 if the snapshot is behind.
+- **A build warning** (`crates/sim-core/build.rs`) appears on every build while the snapshot is
+  behind the vault: `docs/spec.md is behind the vault spec ... run cargo spec-sync`. It is silent
+  where the vault doesn't exist (CI, other machines) and never fails the build.
+- The vault path defaults to `~/Vaults/Homelab/Projects/opentycoon/spec.md`; override it with
+  `OPENTYCOON_VAULT_SPEC` or `--vault`.
+- **Rule for orchestrators:** after any spec edit in the vault, run `cargo spec-sync` before
+  briefing agents on the changed rulings.
 
 ## 2. Readability and testability
 
@@ -192,6 +209,8 @@ Update the baseline column when a feature lands, and flag any regression over 20
 | `cargo bdd` | BDD scenarios only |
 | `cargo trace` | traceability report |
 | `cargo validate` | `sim-cli validate-config config` |
+| `cargo spec-sync` | refresh `docs/spec.md` from the vault; report ruling changes |
+| `cargo spec-check` | report only; exit 1 if `docs/spec.md` is behind the vault |
 | `cargo schema` | regenerate `config/schema/*.schema.json` |
 | `cargo bench-build` | compile benches without running |
 

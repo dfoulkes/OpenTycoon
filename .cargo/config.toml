@@ -16,3 +16,7 @@ validate = "run -q -p sim-cli -- validate-config config"
 schema = "run -q -p sim-cli -- write-schemas config/schema"
 # Compile benches without running them.
 bench-build = "bench --workspace --no-run"
+# Refresh docs/spec.md from the vault spec (Dan's Mac) and report ruling changes.
+spec-sync = "run -q -p sim-cli -- spec-sync"
+# Report only; exit 1 if docs/spec.md is behind the vault.
+spec-check = "run -q -p sim-cli -- spec-sync --check"

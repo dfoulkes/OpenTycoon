@@ -9,7 +9,8 @@ the 2050 whistle**, or is the last player still solvent.
 It's an immersive 3D world you can walk around at street level or run from a bird's-eye RTS
 view. Single-player is multiplayer against a server on your own machine.
 
-- **Spec**: [`docs/spec.md`](docs/spec.md) (rulings cited as R1–R61)
+- **Spec**: [`docs/spec.md`](docs/spec.md) (rulings cited as R1–R61), a snapshot of the canonical
+  spec in Dan's vault; refresh it with `cargo spec-sync`
 - **Architecture, module owners, tick order**: [`docs/architecture.md`](docs/architecture.md)
 - **Engineering standards (BDD/TDD, determinism, lints, perf)**: [`docs/engineering.md`](docs/engineering.md)
 - **Proposed CI**: [`docs/ci/ci.yml.proposed`](docs/ci/ci.yml.proposed)
@@ -60,6 +61,7 @@ cargo lint                       # clippy, warnings are errors
 cargo fmtc                       # format check
 cargo validate                   # validate config/
 cargo schema                     # regenerate config/schema/*.schema.json after changing config types
+cargo spec-sync                  # refresh docs/spec.md from the vault spec (Dan's Mac); reports ruling changes
 cargo bench -p sim-core          # criterion benches (cargo bench-build to compile only)
 ```
 
