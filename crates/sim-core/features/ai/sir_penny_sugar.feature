@@ -41,3 +41,17 @@ Feature: Sir Penny Sugar
     When the full roster plays the whole game
     Then every building Sir Penny Sugar put up is the residential type
     And Sir Penny Sugar put up at least 1 apartment block
+
+  # §7.3: holding every block of a colour set unlocks one Hotel there. A full-set holder puts it
+  # up before anything else; anyone else never tries (the world would refuse it, R14).
+  @spec-7.3 @R14 @R29
+  Scenario: Holding a whole set, it puts up a Hotel first
+    Given Sir Penny Sugar holds every lease in the "East End" set
+    When Sir Penny Sugar plays for 1 game hour
+    Then the first building Sir Penny Sugar put up is a Hotel in the "East End" set
+
+  @spec-7.3 @R14
+  Scenario: Without the whole set it never tries to build a Hotel
+    Given Sir Penny Sugar holds the lease on "Old Kent Road"
+    When Sir Penny Sugar plays for 6 game hours
+    Then Sir Penny Sugar never tried to build a Hotel

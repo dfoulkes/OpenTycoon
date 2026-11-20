@@ -330,6 +330,36 @@ fn focus_holds_with(w: &mut SimWorld, who: String, name: String, left: u32, paid
     b.lease = Some(Lease::new(AccountId::Player(FOCUS), start, term, price));
 }
 
+#[given(regex = r#"^(the Landlord|the Toff|Sir Penny Sugar) holds every lease in the "(.+)" set$"#)]
+fn focus_holds_set(w: &mut SimWorld, who: String, set: String) {
+    let names: Vec<String> = {
+        let world = game(w);
+        let key = set_key_named(world, &set);
+        world
+            .map()
+            .blocks
+            .iter()
+            .filter(|b| b.set.as_deref() == Some(key.as_str()))
+            .map(|b| b.name.clone())
+            .collect()
+    };
+    assert!(!names.is_empty(), "no blocks in {set:?}");
+    for name in names {
+        focus_holds(w, who.clone(), name);
+    }
+}
+
+/// The config id of the colour set called `name` (`map.yaml` `sets`).
+fn set_key_named(world: &World, name: &str) -> String {
+    world
+        .config()
+        .map
+        .sets
+        .iter()
+        .find(|(_, s)| s.name == name)
+        .map_or_else(|| panic!("no set called {name:?}"), |(k, _)| k.clone())
+}
+
 #[given(regex = r"^the Speculator's balance is (£[\d,]+)$")]
 fn speculator_balance(w: &mut SimWorld, to: String) {
     let world = game(w);
@@ -889,6 +919,54 @@ fn grocer_built_early(w: &mut SimWorld, year: i32) {
             .any(|b| b.owner == me && b.year < year),
         "{:?}",
         w.roster.built
+    );
+}
+
+#[then(
+    regex = r#"^the first building (the Landlord|the Toff|Sir Penny Sugar) put up is a Hotel in the "(.+)" set$"#
+)]
+fn first_is_hotel(w: &mut SimWorld, who: String, set: String) {
+    let me = AccountId::Player(player_of(&w.roster, &who));
+    let world = w.roster.game.as_ref().unwrap();
+    let key = set_key_named(world, &set);
+    let first = w
+        .roster
+        .built
+        .iter()
+        .find(|b| b.owner == me)
+        .unwrap_or_else(|| panic!("{who} built nothing"));
+    assert!(
+        sim_core::hotels::is_hotel(world.config(), &first.type_id),
+        "first built {first:?}"
+    );
+    let block = world.businesses().get(first.id).unwrap().block;
+    assert_eq!(
+        world.map().block(block).unwrap().set.as_deref(),
+        Some(key.as_str())
+    );
+}
+
+#[then(regex = r"^(the Landlord|the Toff|Sir Penny Sugar) never tried to build a Hotel$")]
+fn never_tried_hotel(w: &mut SimWorld, who: String) {
+    let me = player_of(&w.roster, &who);
+    let config = w.roster.game.as_ref().unwrap().config();
+    let tried: Vec<_> = w
+        .roster
+        .issued
+        .iter()
+        .filter(|i| {
+            i.player == me
+                && matches!(&i.command, Command::Build { type_id, .. }
+                    if sim_core::hotels::is_hotel(config, type_id))
+        })
+        .collect();
+    assert!(tried.is_empty(), "{tried:?}");
+    assert!(
+        w.roster
+            .built
+            .iter()
+            .any(|b| b.owner == AccountId::Player(me)),
+        "{who} built nothing at all"
     );
 }
 
