@@ -79,9 +79,22 @@ Feature: Choosing a shop
     And "Far" gets 10 bread
     And the city runs until "Near" has lost a sale
     Then "Near" lost 1 sale
-    And "Near" has a reputation of 0.48
+    And "Near" has a reputation of 0.49
     When the city runs for 1 tick
     Then a shopper is walking to "Far"
     When the city runs to "12:00:00"
     Then "Far" sold 1 bread
     And "Far" has a reputation of 0.5025
+
+  # §8.3: reputation is a 0–1 rolling stat. A completed sale moves it a share of the way to 1
+  # (sale_recovery) and a lost sale a share of the way to 0 (lost_sale_penalty), so a shop
+  # that has turned shoppers away is dented, never shut out for good (R68).
+  @R16 @R68
+  Scenario: Turning shoppers away dents a shop's reputation but never ends it
+    Given a bakery "Swamped" on "holborn" with 1000 bread
+    And a bakery "Steady" on "holborn" with 1000 bread
+    And "Swamped" has a reputation of 0.5
+    When "Swamped" turns away 100 shoppers
+    Then "Swamped" has a reputation of 0.0664
+    When 1000 middle shoppers at "holborn" choose where to buy bread
+    Then both "Swamped" and "Steady" were chosen
