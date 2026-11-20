@@ -26,6 +26,7 @@ pub struct BoardState {
     map: Option<Map>,
     config: Option<Config>,
     arrivals: Vec<u64>,
+    year: i32,
     weights: Vec<u32>,
 }
 
@@ -425,7 +426,9 @@ fn exactly_these(w: &mut SimWorld, player: u8, sets: String) {
 fn board_at(w: &mut SimWorld, year: i32) {
     let config = w.config.load_ok();
     let mut map = Map::from_config(&config.map);
-    map.apply_desirability(&config.map, year);
+    let span = i32::try_from(config.game.clock.years_per_day).unwrap();
+    map.apply_desirability(&config.map, i32::MIN..year + span);
+    w.board.year = year;
     w.board.map = Some(map);
     w.board.config = Some(config);
 }
@@ -438,11 +441,14 @@ fn full_board(w: &mut SimWorld) {
 #[when(expr = "the board's year steps to {int}")]
 fn year_steps(w: &mut SimWorld, year: i32) {
     let config = w.board.config.clone().unwrap();
+    let span = i32::try_from(config.game.clock.years_per_day).unwrap();
+    let from = w.board.year + span;
     w.board
         .map
         .as_mut()
         .unwrap()
-        .apply_desirability(&config.map, year);
+        .apply_desirability(&config.map, from..year + span);
+    w.board.year = year;
 }
 
 #[then(regex = r#"^"(.+)" is (Low|Medium|High) tier$"#)]
@@ -466,8 +472,8 @@ fn base_price(w: &mut SimWorld, name: String, expected: String) {
     assert_eq!(block.land_base_price, pounds(&expected));
 }
 
-#[then(regex = r#"^the front page for (\d+) reads "(.+)"$"#)]
-fn front_page(w: &mut SimWorld, year: i32, headline: String) {
+#[then(regex = r#"^the game's front page for (\d+) carries "(.+)"$"#)]
+fn game_front_page(w: &mut SimWorld, year: i32, headline: String) {
     let page = &game(w).events().front_page;
     assert_eq!(page.year, year);
     assert!(page.headlines.contains(&headline), "{:?}", page.headlines);

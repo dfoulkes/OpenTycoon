@@ -266,7 +266,8 @@ impl World {
         let clock = Clock::new(ClockRules::from_config(&config.game.clock));
         let mut map = Map::from_config(&config.map);
         // A game that starts late starts with the desirability shifts already made (§4.2).
-        map.apply_desirability(&config.map, clock.year());
+        let span = i32::try_from(clock.rules().years_per_day).unwrap_or(0);
+        map.apply_desirability(&config.map, i32::MIN..clock.year().saturating_add(span));
         let auctions =
             AuctionHouse::new(AuctionRules::from_config(&config.auctions, clock.rules()));
         let businesses = city_apartments(&map, &config);
@@ -328,6 +329,7 @@ impl World {
         if fired.midnight {
             self.midnight_reckoning();
             self.events_step();
+            self.desirability_step();
             self.population_year_step();
             after(Phase::Midnight);
         }
@@ -428,14 +430,16 @@ impl World {
         self.businesses.lock_orders(); // R2: tomorrow's order locks at midnight
         self.check_solvency();
         self.lease_expiry();
-        self.desirability_step();
     }
 
-    /// End of phase 3, land's part: the year has stepped, so districts take the tier and land
+    /// Phase 3, land's part, after the events step (whose front page it adds to): the year has stepped, so districts take the tier and land
     /// base price of their latest shift (§4.2, R16, R23), each announced on the front page.
     fn desirability_step(&mut self) {
         let year = self.clock.year();
-        let shifts = self.map.apply_desirability(&self.config.map, year);
+        let span = i32::try_from(self.clock.rules().years_per_day).unwrap_or(0);
+        let shifts = self
+            .map
+            .apply_desirability(&self.config.map, year..year.saturating_add(span));
         let headlines: Vec<String> = shifts
             .into_iter()
             .map(|s| s.headline)
