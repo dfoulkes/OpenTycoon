@@ -1307,7 +1307,8 @@ mod ai_tests {
 
     #[test]
     fn new_is_seated_with_the_opponents_in_the_last_seats() {
-        let config = businesses_tests::shipped();
+        let mut config = businesses_tests::shipped();
+        config.ai.opponents = vec!["grocer".to_owned()]; // one AI, so seat 0 stays free
         let mut a = World::new(config.clone(), 11, 2);
         let mut b = World::seated(config, 11, 2, &[(PlayerId(1), "grocer".to_owned())]);
         for _ in 0..20_000 {
@@ -1319,7 +1320,9 @@ mod ai_tests {
 
     #[test]
     fn a_bankrupt_ai_seat_issues_nothing() {
-        let mut w = World::new(businesses_tests::shipped(), 7, 2);
+        let mut config = businesses_tests::shipped();
+        config.ai.opponents = vec!["grocer".to_owned()]; // one AI seat, the one that goes bust
+        let mut w = World::new(config, 7, 2);
         w.players[1].1 = PlayerStatus::Bankrupt;
         w.ai_phase();
         assert_eq!(w.queued, Vec::new());

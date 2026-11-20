@@ -463,7 +463,7 @@ fn roster_tunables_out_of_range_are_rejected() {
         ("/toff/order_margin", "1.5", "/toff/order_margin"),
         ("/toff/shop_types", "[corner_shop]", "/toff/shop_types/0"),
         ("/toff/shop_types", "[apartments]", "/toff/shop_types/0"),
-        ("/toff/shop_height", "17", "/toff/shop_height"),
+        ("/toff/shop_height", "21", "/toff/shop_height"),
         ("/toff/fit_out", "gold", "/toff/fit_out"),
         ("/toff/shops_per_lot", "0", "/toff/shops_per_lot"),
         ("/speculator/aggression", "1.01", "/speculator/aggression"),

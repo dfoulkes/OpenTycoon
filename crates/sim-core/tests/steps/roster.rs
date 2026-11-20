@@ -75,7 +75,7 @@ struct Built {
 /// The game, its driven seats and what happened.
 #[derive(Debug, Default)]
 pub struct RosterState {
-    game: Option<World>,
+    game: Option<Box<World>>,
     /// The personality in seat 1 when one plays against the rival.
     focus: Option<&'static str>,
     seats: Vec<AiSeat>,
@@ -103,7 +103,7 @@ fn game(w: &mut SimWorld) -> &mut World {
         common::set_key(w.config.sources_mut(), "ai.yaml", "/opponents", "[]");
         let world = World::new(w.config.load_ok(), 42, 2);
         w.roster.seats = vec![AiSeat::new(FOCUS, focus, 42)];
-        w.roster.game = Some(world);
+        w.roster.game = Some(Box::new(world));
     }
     w.roster.game.as_mut().unwrap()
 }
@@ -460,7 +460,7 @@ fn full_roster(w: &mut SimWorld) {
     let config = w.config.load_ok();
     let st = state(w);
     *st = RosterState::default();
-    st.game = Some(World::new(config, 42, 6));
+    st.game = Some(Box::new(World::new(config, 42, 6)));
     st.seats = ROSTER
         .iter()
         .zip(1u8..)
