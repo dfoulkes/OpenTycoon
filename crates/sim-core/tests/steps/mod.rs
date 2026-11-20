@@ -11,6 +11,8 @@ pub mod customers;
 pub mod hotels;
 pub mod land;
 pub mod online;
+// land: the full board
+pub mod board;
 pub mod population;
 // events and utilities
 pub mod events;

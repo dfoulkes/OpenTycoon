@@ -317,6 +317,12 @@ pub fn front_doors(
         .collect()
 }
 
+/// Picks an arrival station by footfall weight (§4.3): index `k` with probability
+/// `weights[k] / Σ weights`, one draw from `rng`. `None` if every weight is zero.
+pub fn pick_station(_weights: &[u32], _rng: &mut SimRng) -> Option<usize> {
+    None
+}
+
 /// Tube stations open in `year`, as cells, in config order (§4.3).
 pub fn station_cells(config: &Config, map: &Map, year: i32, geometry: Geometry) -> Vec<Cell> {
     config

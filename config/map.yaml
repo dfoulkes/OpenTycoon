@@ -8,6 +8,18 @@ tiers:                          # §5.3 desirability_mult
   medium: { desirability_mult: 1.0 }
   high:   { desirability_mult: 1.8 }
 land_base_rate: 0.05            # placeholder: £ per unit of building volume per day (§5.3)
+tube_lines:                     # §4.3; footfall_weight: what each open station adds to its block
+  bakerloo:     { name: "Bakerloo",           footfall_weight: 1 }
+  central:      { name: "Central",            footfall_weight: 1 }
+  district:     { name: "District",           footfall_weight: 1 }
+  metropolitan: { name: "Metropolitan",       footfall_weight: 1 }
+  northern:     { name: "Northern",           footfall_weight: 1 }
+  piccadilly:   { name: "Piccadilly",         footfall_weight: 1 }
+  east_london:  { name: "East London",        footfall_weight: 1 }
+  victoria:     { name: "Victoria",           footfall_weight: 1 }   # 1968
+  jubilee:      { name: "Jubilee",            footfall_weight: 1 }   # 1979 / 1999
+  dlr:          { name: "Docklands Light Railway", footfall_weight: 1 }   # 1987
+  elizabeth:    { name: "Elizabeth",          footfall_weight: 2 }   # 2022; placeholder: a bigger line
 boards:
   v1:                           # one set per row, one tier per row
     grid: { width: 3, height: 3 }
@@ -26,10 +38,253 @@ boards:
       - { id: belgravia,     name: "Belgravia",     row: 2, col: 1, tier: high,   kind: buildable, set: green,      land_base_price: 12000 }  # placeholder price
       - { id: mayfair,       name: "Mayfair",       row: 2, col: 2, tier: high,   kind: buildable, set: green,      land_base_price: 14000 }  # placeholder price
     tube_stations:                  # §4.3; 1930 lines only on the v1 map
-      - { block: whitechapel, line: "District",  opens: 1930 }
-      - { block: holborn,     line: "Central",   opens: 1930 }
-      - { block: belgravia,   line: "Piccadilly", opens: 1930 }   # placeholder placement (Hyde Park Corner)
+      - { block: whitechapel, line: district,   opens: 1930 }
+      - { block: holborn,     line: central,    opens: 1930 }
+      - { block: belgravia,   line: piccadilly, opens: 1930 }   # placeholder placement (Hyde Park Corner)
     city_apartments:                # R28: the city starts with one apartment block in each Low-tier set
       business_type: apartments    # businesses.yaml type
       sites:
         - { block: whitechapel, position: [3, 0], size: [3, 3], height: 10 }   # placeholder size and height
+  full:                         # §4.1, R26: 26 sets, 4 utilities, City Hall at the centre
+    grid: { width: 9, height: 9 }
+    river: { name: "Thames", south_of_row: 5, bridges: [1, 3, 4, 5, 7] }   # Battersea, Westminster, Waterloo, London Bridge, Tower Bridge
+    sets:                         # cheapest band to dearest; every set's blocks adjacent by road
+      old_kent_road:  { name: "Old Kent Road & Whitechapel", band: brown }
+      shoreditch:     { name: "Shoreditch", band: light_blue }
+      docklands:      { name: "Stepney & Docklands", band: light_blue }
+      camberwell:     { name: "Walworth & Camberwell", band: light_blue }
+      bermondsey:     { name: "Bermondsey & Peckham", band: light_blue }
+      hackney:        { name: "Hackney", band: pink }
+      lambeth:        { name: "Lambeth & Vauxhall", band: pink }
+      brixton:        { name: "Brixton & Kennington", band: pink }
+      greenwich:      { name: "Greenwich & Deptford", band: pink }
+      maida_vale:     { name: "Kilburn & St John's Wood", band: orange }
+      highgate:       { name: "Highgate & Holloway", band: orange }
+      shepherds_bush: { name: "Shepherd's Bush", band: orange }
+      clapham:        { name: "Clapham & Richmond", band: orange }
+      camden:         { name: "Camden", band: red }
+      islington:      { name: "King's Cross & Islington", band: red }
+      fulham:         { name: "Hammersmith & Fulham", band: red }
+      putney:         { name: "Putney & Battersea", band: red }
+      soho:           { name: "Soho & Bloomsbury", band: yellow }
+      holborn:        { name: "Holborn & Clerkenwell", band: yellow }
+      south_bank:     { name: "South Bank", band: yellow }
+      bayswater:      { name: "Paddington & Notting Hill", band: yellow }
+      st_james:       { name: "St James's & Whitehall", band: green }
+      the_city:       { name: "The City", band: green }
+      kensington:     { name: "Kensington & Chelsea", band: green }
+      marylebone:     { name: "Marylebone & Hampstead", band: green }
+      mayfair:        { name: "Mayfair & Belgravia", band: dark_blue }
+    blocks:                       # row 0 is the north edge, col 0 the west; prices are placeholders (R23)
+      - { id: dollis_hill, name: "Dollis Hill Exchange", row: 0, col: 0, tier: low, kind: utility, utility: telecoms }
+      - { id: kilburn, name: "Kilburn", row: 0, col: 1, tier: medium, kind: buildable, set: maida_vale, land_base_price: 4000 }
+      - { id: st_johns_wood, name: "St John's Wood", row: 0, col: 2, tier: medium, kind: buildable, set: maida_vale, land_base_price: 4600 }
+      - { id: kentish_town, name: "Kentish Town", row: 0, col: 3, tier: medium, kind: buildable, set: camden, land_base_price: 5200 }
+      - { id: highgate, name: "Highgate", row: 0, col: 4, tier: medium, kind: buildable, set: highgate, land_base_price: 4400 }
+      - { id: holloway, name: "Holloway", row: 0, col: 5, tier: medium, kind: buildable, set: highgate, land_base_price: 4000 }
+      - { id: highbury, name: "Highbury", row: 0, col: 6, tier: medium, kind: buildable, set: islington, land_base_price: 5400 }
+      - { id: hackney, name: "Hackney", row: 0, col: 7, tier: low, kind: buildable, set: hackney, land_base_price: 2400 }
+      - { id: lea_valley, name: "Lea Valley Waterworks", row: 0, col: 8, tier: low, kind: utility, utility: water }
+      - { id: willesden, name: "Willesden", row: 1, col: 0, tier: medium, kind: buildable, set: shepherds_bush, land_base_price: 4000 }
+      - { id: maida_vale, name: "Maida Vale", row: 1, col: 1, tier: medium, kind: buildable, set: maida_vale, land_base_price: 4400 }
+      - { id: primrose_hill, name: "Primrose Hill", row: 1, col: 2, tier: medium, kind: buildable, set: camden, land_base_price: 6000 }
+      - { id: camden, name: "Camden", row: 1, col: 3, tier: medium, kind: buildable, set: camden, land_base_price: 5600 }
+      - { id: euston, name: "Euston", row: 1, col: 4, tier: medium, kind: buildable, set: highgate, land_base_price: 4600 }
+      - { id: kings_cross, name: "King's Cross", row: 1, col: 5, tier: medium, kind: buildable, set: islington, land_base_price: 5600 }
+      - { id: islington, name: "Islington", row: 1, col: 6, tier: medium, kind: buildable, set: islington, land_base_price: 5800 }
+      - { id: hoxton, name: "Hoxton", row: 1, col: 7, tier: low, kind: buildable, set: hackney, land_base_price: 2600 }
+      - { id: stratford, name: "Stratford", row: 1, col: 8, tier: low, kind: buildable, set: hackney, land_base_price: 2200 }
+      - { id: kensal_green, name: "Kensal Green", row: 2, col: 0, tier: medium, kind: buildable, set: shepherds_bush, land_base_price: 4000 }
+      - { id: paddington, name: "Paddington", row: 2, col: 1, tier: medium, kind: buildable, set: bayswater, land_base_price: 6800 }
+      - { id: marylebone, name: "Marylebone", row: 2, col: 2, tier: high, kind: buildable, set: marylebone, land_base_price: 10500 }
+      - { id: regents_park, name: "Regent's Park", row: 2, col: 3, tier: high, kind: buildable, set: marylebone, land_base_price: 10500 }
+      - { id: hampstead, name: "Hampstead", row: 2, col: 4, tier: high, kind: buildable, set: marylebone, land_base_price: 10000 }
+      - { id: soho, name: "Soho", row: 2, col: 5, tier: medium, kind: buildable, set: soho, land_base_price: 7600 }
+      - { id: fitzrovia, name: "Fitzrovia", row: 2, col: 6, tier: medium, kind: buildable, set: soho, land_base_price: 7200 }
+      - { id: shoreditch, name: "Shoreditch", row: 2, col: 7, tier: low, kind: buildable, set: shoreditch, land_base_price: 1800 }
+      - { id: bethnal_green, name: "Bethnal Green", row: 2, col: 8, tier: low, kind: buildable, set: shoreditch, land_base_price: 1600 }
+      - { id: shepherds_bush, name: "Shepherd's Bush", row: 3, col: 0, tier: medium, kind: buildable, set: shepherds_bush, land_base_price: 4400 }
+      - { id: bayswater, name: "Bayswater", row: 3, col: 1, tier: medium, kind: buildable, set: bayswater, land_base_price: 7000 }
+      - { id: kensington, name: "Kensington", row: 3, col: 2, tier: high, kind: buildable, set: kensington, land_base_price: 11000 }
+      - { id: mayfair, name: "Mayfair", row: 3, col: 3, tier: high, kind: buildable, set: mayfair, land_base_price: 16000 }
+      - { id: belgravia, name: "Belgravia", row: 3, col: 4, tier: high, kind: buildable, set: mayfair, land_base_price: 15000 }
+      - { id: st_pauls, name: "St Paul's", row: 3, col: 5, tier: high, kind: buildable, set: the_city, land_base_price: 12500 }
+      - { id: bloomsbury, name: "Bloomsbury", row: 3, col: 6, tier: medium, kind: buildable, set: soho, land_base_price: 7400 }
+      - { id: spitalfields, name: "Spitalfields", row: 3, col: 7, tier: low, kind: buildable, set: shoreditch, land_base_price: 1900 }
+      - { id: mile_end, name: "Mile End", row: 3, col: 8, tier: low, kind: buildable, set: docklands, land_base_price: 1600 }
+      - { id: hammersmith, name: "Hammersmith", row: 4, col: 0, tier: medium, kind: buildable, set: fulham, land_base_price: 5200 }
+      - { id: notting_hill, name: "Notting Hill", row: 4, col: 1, tier: medium, kind: buildable, set: bayswater, land_base_price: 7000 }
+      - { id: knightsbridge, name: "Knightsbridge", row: 4, col: 2, tier: high, kind: buildable, set: kensington, land_base_price: 11500 }
+      - { id: st_jamess, name: "St James's", row: 4, col: 3, tier: high, kind: buildable, set: st_james, land_base_price: 12500 }
+      - { id: city_hall, name: "City Hall", row: 4, col: 4, tier: high, kind: special }   # the city "player" lives here
+      - { id: the_city, name: "The City", row: 4, col: 5, tier: high, kind: buildable, set: the_city, land_base_price: 13000 }
+      - { id: holborn, name: "Holborn", row: 4, col: 6, tier: medium, kind: buildable, set: holborn, land_base_price: 7800 }
+      - { id: clerkenwell, name: "Clerkenwell", row: 4, col: 7, tier: medium, kind: buildable, set: holborn, land_base_price: 7000 }
+      - { id: stepney, name: "Stepney", row: 4, col: 8, tier: low, kind: buildable, set: docklands, land_base_price: 1600 }
+      - { id: fulham, name: "Fulham", row: 5, col: 0, tier: medium, kind: buildable, set: fulham, land_base_price: 5400 }
+      - { id: earls_court, name: "Earl's Court", row: 5, col: 1, tier: medium, kind: buildable, set: fulham, land_base_price: 5800 }
+      - { id: chelsea, name: "Chelsea", row: 5, col: 2, tier: high, kind: buildable, set: kensington, land_base_price: 11000 }
+      - { id: whitehall, name: "Whitehall", row: 5, col: 3, tier: high, kind: buildable, set: st_james, land_base_price: 12000 }
+      - { id: covent_garden, name: "Covent Garden", row: 5, col: 4, tier: high, kind: buildable, set: st_james, land_base_price: 12000 }
+      - { id: temple, name: "Temple", row: 5, col: 5, tier: high, kind: buildable, set: the_city, land_base_price: 12000 }
+      - { id: tower_hill, name: "Tower Hill", row: 5, col: 6, tier: medium, kind: buildable, set: holborn, land_base_price: 7200 }
+      - { id: whitechapel, name: "Whitechapel", row: 5, col: 7, tier: low, kind: buildable, set: old_kent_road, land_base_price: 1200 }
+      - { id: docklands, name: "Docklands", row: 5, col: 8, tier: low, kind: buildable, set: docklands, land_base_price: 1500 }
+      - { id: putney, name: "Putney", row: 6, col: 0, tier: medium, kind: buildable, set: putney, land_base_price: 5400 }
+      - { id: battersea, name: "Battersea", row: 6, col: 1, tier: medium, kind: buildable, set: putney, land_base_price: 5600 }
+      - { id: battersea_power_station, name: "Battersea Power Station", row: 6, col: 2, tier: low, kind: utility, utility: electricity }
+      - { id: waterloo, name: "Waterloo", row: 6, col: 3, tier: medium, kind: buildable, set: south_bank, land_base_price: 7000 }
+      - { id: southwark, name: "Southwark", row: 6, col: 4, tier: medium, kind: buildable, set: south_bank, land_base_price: 7000 }
+      - { id: london_bridge, name: "London Bridge", row: 6, col: 5, tier: medium, kind: buildable, set: south_bank, land_base_price: 7400 }
+      - { id: bermondsey, name: "Bermondsey", row: 6, col: 6, tier: low, kind: buildable, set: bermondsey, land_base_price: 1800 }
+      - { id: old_kent_road, name: "Old Kent Road", row: 6, col: 7, tier: low, kind: buildable, set: old_kent_road, land_base_price: 1000 }
+      - { id: deptford, name: "Deptford", row: 6, col: 8, tier: low, kind: buildable, set: greenwich, land_base_price: 2200 }
+      - { id: wandsworth, name: "Wandsworth", row: 7, col: 0, tier: medium, kind: buildable, set: putney, land_base_price: 5200 }
+      - { id: clapham, name: "Clapham", row: 7, col: 1, tier: medium, kind: buildable, set: clapham, land_base_price: 4600 }
+      - { id: vauxhall, name: "Vauxhall", row: 7, col: 2, tier: low, kind: buildable, set: lambeth, land_base_price: 2800 }
+      - { id: lambeth, name: "Lambeth", row: 7, col: 3, tier: low, kind: buildable, set: lambeth, land_base_price: 2800 }
+      - { id: elephant_and_castle, name: "Elephant & Castle", row: 7, col: 4, tier: low, kind: buildable, set: brixton, land_base_price: 2800 }
+      - { id: walworth, name: "Walworth", row: 7, col: 5, tier: low, kind: buildable, set: camberwell, land_base_price: 1700 }
+      - { id: rotherhithe, name: "Rotherhithe", row: 7, col: 6, tier: low, kind: buildable, set: bermondsey, land_base_price: 1600 }
+      - { id: peckham, name: "Peckham", row: 7, col: 7, tier: low, kind: buildable, set: bermondsey, land_base_price: 1500 }
+      - { id: greenwich, name: "Greenwich", row: 7, col: 8, tier: low, kind: buildable, set: greenwich, land_base_price: 2800 }
+      - { id: richmond, name: "Richmond", row: 8, col: 0, tier: medium, kind: buildable, set: clapham, land_base_price: 4400 }
+      - { id: balham, name: "Balham", row: 8, col: 1, tier: medium, kind: buildable, set: clapham, land_base_price: 4000 }
+      - { id: stockwell, name: "Stockwell", row: 8, col: 2, tier: low, kind: buildable, set: lambeth, land_base_price: 2400 }
+      - { id: brixton, name: "Brixton", row: 8, col: 3, tier: low, kind: buildable, set: brixton, land_base_price: 2400 }
+      - { id: kennington, name: "Kennington", row: 8, col: 4, tier: low, kind: buildable, set: brixton, land_base_price: 2600 }
+      - { id: camberwell, name: "Camberwell", row: 8, col: 5, tier: low, kind: buildable, set: camberwell, land_base_price: 1700 }
+      - { id: lewisham, name: "Lewisham", row: 8, col: 6, tier: low, kind: buildable, set: camberwell, land_base_price: 1500 }
+      - { id: east_greenwich_gasworks, name: "East Greenwich Gasworks", row: 8, col: 7, tier: low, kind: utility, utility: gas }
+      - { id: woolwich, name: "Woolwich", row: 8, col: 8, tier: low, kind: buildable, set: greenwich, land_base_price: 2200 }
+    tube_stations:                # §4.3: one entry per line at a block; a block's footfall weight sums its open lines
+      - { block: paddington, line: bakerloo, opens: 1930 }
+      - { block: maida_vale, line: bakerloo, opens: 1930 }
+      - { block: kilburn, line: bakerloo, opens: 1930 }
+      - { block: marylebone, line: bakerloo, opens: 1930 }
+      - { block: regents_park, line: bakerloo, opens: 1930 }
+      - { block: soho, line: bakerloo, opens: 1930 }
+      - { block: covent_garden, line: bakerloo, opens: 1930 }
+      - { block: waterloo, line: bakerloo, opens: 1930 }
+      - { block: lambeth, line: bakerloo, opens: 1930 }
+      - { block: elephant_and_castle, line: bakerloo, opens: 1930 }
+      - { block: shepherds_bush, line: central, opens: 1930 }
+      - { block: notting_hill, line: central, opens: 1930 }
+      - { block: bayswater, line: central, opens: 1930 }
+      - { block: mayfair, line: central, opens: 1930 }
+      - { block: soho, line: central, opens: 1930 }
+      - { block: holborn, line: central, opens: 1930 }
+      - { block: st_pauls, line: central, opens: 1930 }
+      - { block: the_city, line: central, opens: 1930 }
+      - { block: bethnal_green, line: central, opens: 1946 }
+      - { block: mile_end, line: central, opens: 1946 }
+      - { block: stratford, line: central, opens: 1946 }
+      - { block: richmond, line: district, opens: 1930 }
+      - { block: putney, line: district, opens: 1930 }
+      - { block: fulham, line: district, opens: 1930 }
+      - { block: hammersmith, line: district, opens: 1930 }
+      - { block: earls_court, line: district, opens: 1930 }
+      - { block: kensington, line: district, opens: 1930 }
+      - { block: bayswater, line: district, opens: 1930 }
+      - { block: st_jamess, line: district, opens: 1930 }
+      - { block: whitehall, line: district, opens: 1930 }
+      - { block: temple, line: district, opens: 1930 }
+      - { block: tower_hill, line: district, opens: 1930 }
+      - { block: whitechapel, line: district, opens: 1930 }
+      - { block: stepney, line: district, opens: 1930 }
+      - { block: mile_end, line: district, opens: 1930 }
+      - { block: hammersmith, line: metropolitan, opens: 1930 }
+      - { block: shepherds_bush, line: metropolitan, opens: 1930 }
+      - { block: paddington, line: metropolitan, opens: 1930 }
+      - { block: marylebone, line: metropolitan, opens: 1930 }
+      - { block: kings_cross, line: metropolitan, opens: 1930 }
+      - { block: clerkenwell, line: metropolitan, opens: 1930 }
+      - { block: spitalfields, line: metropolitan, opens: 1930 }
+      - { block: hampstead, line: northern, opens: 1930 }
+      - { block: highgate, line: northern, opens: 1930 }
+      - { block: kentish_town, line: northern, opens: 1930 }
+      - { block: camden, line: northern, opens: 1930 }
+      - { block: euston, line: northern, opens: 1930 }
+      - { block: kings_cross, line: northern, opens: 1930 }
+      - { block: islington, line: northern, opens: 1930 }
+      - { block: the_city, line: northern, opens: 1930 }
+      - { block: covent_garden, line: northern, opens: 1930 }
+      - { block: elephant_and_castle, line: northern, opens: 1930 }
+      - { block: kennington, line: northern, opens: 1930 }
+      - { block: stockwell, line: northern, opens: 1930 }
+      - { block: clapham, line: northern, opens: 1930 }
+      - { block: balham, line: northern, opens: 1930 }
+      - { block: hammersmith, line: piccadilly, opens: 1930 }
+      - { block: earls_court, line: piccadilly, opens: 1930 }
+      - { block: knightsbridge, line: piccadilly, opens: 1930 }
+      - { block: belgravia, line: piccadilly, opens: 1930 }
+      - { block: mayfair, line: piccadilly, opens: 1930 }
+      - { block: covent_garden, line: piccadilly, opens: 1930 }
+      - { block: holborn, line: piccadilly, opens: 1930 }
+      - { block: bloomsbury, line: piccadilly, opens: 1930 }
+      - { block: kings_cross, line: piccadilly, opens: 1930 }
+      - { block: holloway, line: piccadilly, opens: 1930 }
+      - { block: shoreditch, line: east_london, opens: 1930 }
+      - { block: whitechapel, line: east_london, opens: 1930 }
+      - { block: rotherhithe, line: east_london, opens: 1930 }
+      - { block: deptford, line: east_london, opens: 1930 }
+      - { block: highbury, line: victoria, opens: 1968 }
+      - { block: kings_cross, line: victoria, opens: 1968 }
+      - { block: euston, line: victoria, opens: 1968 }
+      - { block: soho, line: victoria, opens: 1968 }
+      - { block: mayfair, line: victoria, opens: 1968 }
+      - { block: belgravia, line: victoria, opens: 1968 }
+      - { block: vauxhall, line: victoria, opens: 1971 }
+      - { block: stockwell, line: victoria, opens: 1971 }
+      - { block: brixton, line: victoria, opens: 1971 }
+      - { block: kilburn, line: jubilee, opens: 1979 }
+      - { block: st_johns_wood, line: jubilee, opens: 1979 }
+      - { block: marylebone, line: jubilee, opens: 1979 }
+      - { block: mayfair, line: jubilee, opens: 1979 }
+      - { block: covent_garden, line: jubilee, opens: 1979 }
+      - { block: whitehall, line: jubilee, opens: 1999 }
+      - { block: waterloo, line: jubilee, opens: 1999 }
+      - { block: southwark, line: jubilee, opens: 1999 }
+      - { block: london_bridge, line: jubilee, opens: 1999 }
+      - { block: bermondsey, line: jubilee, opens: 1999 }
+      - { block: rotherhithe, line: jubilee, opens: 1999 }
+      - { block: docklands, line: jubilee, opens: 1999 }
+      - { block: greenwich, line: jubilee, opens: 1999 }
+      - { block: stratford, line: jubilee, opens: 1999 }
+      - { block: tower_hill, line: dlr, opens: 1987 }
+      - { block: stepney, line: dlr, opens: 1987 }
+      - { block: docklands, line: dlr, opens: 1987 }
+      - { block: stratford, line: dlr, opens: 1987 }
+      - { block: the_city, line: dlr, opens: 1991 }
+      - { block: greenwich, line: dlr, opens: 1999 }
+      - { block: deptford, line: dlr, opens: 1999 }
+      - { block: lewisham, line: dlr, opens: 1999 }
+      - { block: paddington, line: elizabeth, opens: 2022 }
+      - { block: mayfair, line: elizabeth, opens: 2022 }
+      - { block: soho, line: elizabeth, opens: 2022 }
+      - { block: clerkenwell, line: elizabeth, opens: 2022 }
+      - { block: the_city, line: elizabeth, opens: 2022 }
+      - { block: whitechapel, line: elizabeth, opens: 2022 }
+      - { block: docklands, line: elizabeth, opens: 2022 }
+      - { block: woolwich, line: elizabeth, opens: 2022 }
+      - { block: stratford, line: elizabeth, opens: 2022 }
+    desirability_shifts:          # §4.2, R16: applied at the first midnight year step that reaches the year
+      - { block: notting_hill, year: 1985, tier: high, land_base_price: 11000, headline: "Notting Hill Goes Up in the World" }   # placeholder price
+      - { block: docklands, year: 1987, tier: high, land_base_price: 12000, headline: "Canary Wharf Rises: Docklands Goes Upmarket" }   # placeholder price
+      - { block: shoreditch, year: 1995, tier: medium, land_base_price: 5000, headline: "Artists Move Into Shoreditch" }   # placeholder price
+      - { block: hackney, year: 2000, tier: medium, land_base_price: 4500, headline: "Hackney on the Up" }   # placeholder price
+      - { block: brixton, year: 2000, tier: medium, land_base_price: 4500, headline: "Brixton Is Buzzing" }   # placeholder price
+      - { block: shoreditch, year: 2005, tier: high, land_base_price: 10000, headline: "Shoreditch: the Hippest Postcode in London" }   # placeholder price
+      - { block: hackney, year: 2010, tier: high, land_base_price: 10000, headline: "Hackney Prices Hit the Heights" }   # placeholder price
+    city_apartments:              # R28: one apartment block in each Low-tier set
+      business_type: apartments
+      sites:                      # placeholder size and height, as on v1
+        - { block: whitechapel, position: [3, 0], size: [3, 3], height: 10 }
+        - { block: bethnal_green, position: [3, 0], size: [3, 3], height: 10 }
+        - { block: stepney, position: [3, 0], size: [3, 3], height: 10 }
+        - { block: walworth, position: [3, 0], size: [3, 3], height: 10 }
+        - { block: bermondsey, position: [3, 0], size: [3, 3], height: 10 }
+        - { block: hackney, position: [3, 0], size: [3, 3], height: 10 }
+        - { block: lambeth, position: [3, 0], size: [3, 3], height: 10 }
+        - { block: brixton, position: [3, 0], size: [3, 3], height: 10 }
+        - { block: deptford, position: [3, 0], size: [3, 3], height: 10 }
