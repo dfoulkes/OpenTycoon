@@ -21,7 +21,9 @@
 //! 4. **Evening orders.** Once day trade has closed, sets each stocked shop's order for
 //!    tomorrow from today's sales: [`next_order`] (R2, R10).
 //! 5. **Build.** On a lot it leases, puts up the next shop type in rotation at the first legal
-//!    site ([`super::find_site`], R22, R58), if it can pay and still keep `cash_buffer`.
+//!    site ([`super::find_site`], R22, R58), if it can pay and still keep `cash_buffer`. Only
+//!    types unlocked and not obsolete this year count ([`super::kit::in_era`]); if none of its
+//!    `shop_types` is, it builds any day-trade shop that is.
 //! 6. **Land.** Only when every lot it holds is full: opens an auction on the cheapest lot it
 //!    wants at its land base price (R23), if that is within [`Grocer::max_bid`].
 
@@ -102,9 +104,15 @@ impl Grocer {
         Some(share.min(keep).min(ceiling))
     }
 
-    /// The shop type it builds next: `shop_types` in rotation by how many shops it owns.
+    /// The shop type it builds next: `shop_types` that are unlocked and not obsolete this year
+    /// (or, if none is, any day-trade shop that is), in rotation by how many shops it owns.
     fn next_shop_type(world: &World, me: PlayerId) -> Option<String> {
-        let types = &world.config().ai.grocer.shop_types;
+        let config = world.config();
+        let year = world.clock().year();
+        let types = super::kit::prefer(
+            &config.ai.grocer.shop_types,
+            super::kit::retail_types(config, year, &[Hours::Day]),
+        );
         let owned = world
             .businesses()
             .owned_by(AccountId::Player(me))

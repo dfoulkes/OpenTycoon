@@ -76,6 +76,9 @@ pub struct LandlordConfig {
     pub aggression: Ratio,
     /// Cash it never spends below (R3).
     pub cash_buffer: Pounds,
+    /// Spread of its keenness: each auction it scales its maximum bid by a factor drawn from
+    /// its own RNG stream in `[1 − bid_jitter, 1]`. Between 0 and 1.
+    pub bid_jitter: Ratio,
     /// Tiers whose personality weight is at least this are worth a lease. Between 0 and 1.
     pub min_tier_weight: Ratio,
     /// Leases it holds at most at once.
@@ -108,6 +111,9 @@ pub struct ToffConfig {
     pub aggression: Ratio,
     /// Cash it never spends below (R3): large, by temperament.
     pub cash_buffer: Pounds,
+    /// Spread of its keenness: each auction it scales its maximum bid by a factor drawn from
+    /// its own RNG stream in `[1 − bid_jitter, 1]`. Between 0 and 1.
+    pub bid_jitter: Ratio,
     /// Tiers whose personality weight is at least this are worth a lease (High only).
     pub min_tier_weight: Ratio,
     /// Shop types it prefers, best first (`businesses.yaml` ids). Only types unlocked and not
@@ -143,8 +149,14 @@ pub struct SpeculatorConfig {
     pub aggression: Ratio,
     /// Cash it keeps when it opens an auction: small, by temperament.
     pub cash_buffer: Pounds,
+    /// Spread of its keenness: each auction it scales its maximum bid by a factor drawn from
+    /// its own RNG stream in `[1 − bid_jitter, 1]`. Between 0 and 1.
+    pub bid_jitter: Ratio,
     /// Tiers whose personality weight is at least this are worth a punt. Between 0 and 1.
     pub min_tier_weight: Ratio,
+    /// On a fresh lease from the city, the most it pays over the land base price (0.25 = 125%
+    /// of base): it has to sell on for more. Between 0 and 10.
+    pub max_markup: Ratio,
     /// Leases and businesses it holds at most at once.
     #[schemars(range(min = 1, max = 1000))]
     pub max_holdings: u32,
@@ -167,6 +179,9 @@ pub struct PennySugarConfig {
     pub aggression: Ratio,
     /// Cash he never spends below (R3).
     pub cash_buffer: Pounds,
+    /// Spread of its keenness: each auction it scales its maximum bid by a factor drawn from
+    /// its own RNG stream in `[1 − bid_jitter, 1]`. Between 0 and 1.
+    pub bid_jitter: Ratio,
     /// Tiers whose personality weight is at least this are worth a lease. Between 0 and 1.
     pub min_tier_weight: Ratio,
     /// Extra share of his bid ceiling he pays for a lot with an open tube station (§4.3). He

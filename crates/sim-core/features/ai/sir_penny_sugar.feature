@@ -1,7 +1,7 @@
 # Spec §10, §7.2: "Sir Penny Sugar deals mostly in residential." He plays seat 1 through public
 # commands only (R40); seat 0 is a scripted rival. Tunables are ai.yaml `sir_penny_sugar`
-# (shipped: Low and Medium tier, station lots first, 3×3×12 apartment blocks starting at the
-# reference rent of £3.00, raised 10% of reference when 95% let, cut when 60% or less let).
+# (shipped: Low and Medium tier, station lots first, 3×3×15 apartment blocks starting at the
+# reference rent of £3.00, moved 45% of reference: up when 95% let, down when 60% or less let).
 Feature: Sir Penny Sugar
   Sir Penny Sugar builds and runs apartment blocks near the tube, and sets each block's rent by
   how full it is: up when it is full, down when it stands empty.

@@ -131,6 +131,10 @@
           "minimum": 0,
           "type": "integer"
         },
+        "bid_jitter": {
+          "description": "Spread of its keenness: each auction it scales its maximum bid by a factor drawn from\nits own RNG stream in `[1 − bid_jitter, 1]`. Between 0 and 1.",
+          "type": "number"
+        },
         "cash_buffer": {
           "description": "Cash it never spends below (R3).",
           "type": "number"
@@ -166,6 +170,7 @@
       "required": [
         "aggression",
         "cash_buffer",
+        "bid_jitter",
         "min_tier_weight",
         "max_leases",
         "apartment_footprint",
@@ -209,6 +214,10 @@
           "maximum": 81,
           "minimum": 1,
           "type": "integer"
+        },
+        "bid_jitter": {
+          "description": "Spread of its keenness: each auction it scales its maximum bid by a factor drawn from\nits own RNG stream in `[1 − bid_jitter, 1]`. Between 0 and 1.",
+          "type": "number"
         },
         "buy_city_blocks": {
           "description": "Buys the city's apartment blocks at auction when he can (R28).",
@@ -259,6 +268,7 @@
       "required": [
         "aggression",
         "cash_buffer",
+        "bid_jitter",
         "min_tier_weight",
         "station_premium",
         "apartment_footprint",
@@ -355,6 +365,10 @@
           "description": "On an item a player offers (a lease part-way through its term, or a business), the most\nit bids as a share of book value (land value, R39; build cost, R41). Above 0, at most 1.",
           "type": "number"
         },
+        "bid_jitter": {
+          "description": "Spread of its keenness: each auction it scales its maximum bid by a factor drawn from\nits own RNG stream in `[1 − bid_jitter, 1]`. Between 0 and 1.",
+          "type": "number"
+        },
         "cash_buffer": {
           "description": "Cash it keeps when it opens an auction: small, by temperament.",
           "type": "number"
@@ -373,6 +387,10 @@
           "minimum": 1,
           "type": "integer"
         },
+        "max_markup": {
+          "description": "On a fresh lease from the city, the most it pays over the land base price (0.25 = 125%\nof base): it has to sell on for more. Between 0 and 10.",
+          "type": "number"
+        },
         "min_tier_weight": {
           "description": "Tiers whose personality weight is at least this are worth a punt. Between 0 and 1.",
           "type": "number"
@@ -386,7 +404,9 @@
       "required": [
         "aggression",
         "cash_buffer",
+        "bid_jitter",
         "min_tier_weight",
+        "max_markup",
         "max_holdings",
         "hold_hours",
         "bargain_share",
@@ -400,6 +420,10 @@
       "properties": {
         "aggression": {
           "description": "Strength knob: the most it pays for one lease, as a share of its bid ceiling (R7).\nAbove 0, at most 1.",
+          "type": "number"
+        },
+        "bid_jitter": {
+          "description": "Spread of its keenness: each auction it scales its maximum bid by a factor drawn from\nits own RNG stream in `[1 − bid_jitter, 1]`. Between 0 and 1.",
           "type": "number"
         },
         "cash_buffer": {
@@ -467,6 +491,7 @@
       "required": [
         "aggression",
         "cash_buffer",
+        "bid_jitter",
         "min_tier_weight",
         "shop_types",
         "shop_footprint",

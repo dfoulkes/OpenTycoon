@@ -1,7 +1,7 @@
 # Spec §10: "The Landlord hoards leases and never builds retail." It plays seat 1 through public
 # commands only (R40); seat 0 is a scripted rival. Tunables are ai.yaml `landlord` (shipped:
-# pays at most 35% of its bid ceiling for a lease, keeps £500, puts up one 3×3×12 apartment
-# block per lease at the reference rent, offers a lease with 5 or fewer years left).
+# pays at most 31% of its bid ceiling for a lease, keeps £500, puts up at most two 3×3×25
+# apartment blocks per lease at the reference rent, offers a lease with 5 or fewer years left).
 Feature: The Landlord
   The Landlord collects leases across every tier its weights allow, earns land rent and, as a
   sideline, residents' rent from apartment blocks, and sells a lease at auction late in its term
@@ -29,7 +29,7 @@ Feature: The Landlord
   Scenario: On a lot it holds it puts up an apartment block and sets its rent
     Given the Landlord holds the lease on "Old Kent Road"
     When the Landlord plays for 2 game hours
-    Then the Landlord owns 1 apartment block on "Old Kent Road"
+    Then the Landlord owns at least 1 apartment block on "Old Kent Road"
     And the Landlord set the rent on every apartment block it built
 
   @spec-10 @R33

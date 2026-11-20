@@ -140,6 +140,59 @@ pub fn lease_years(world: &World, block: BlockId) -> Option<(u32, u32)> {
     ))
 }
 
+/// The share of a full term a lease on `block` still has: `years left ÷ term` for a lease
+/// someone holds (they can only sell what is left, R33), 1 for a fresh lease from the city.
+pub fn term_share(world: &World, block: BlockId) -> Rate {
+    match lease_years(world, block) {
+        Some((left, term)) if term > 0 => {
+            Rate::from_bp(i64::from(left) * crate::money::BASIS_POINTS_PER_UNIT / i64::from(term))
+        }
+        _ => Rate::ONE,
+    }
+}
+
+/// The value of every building on `block` not owned by `me` (build cost, R41): the 20% lot
+/// uplift (R39) and the land rent (§5.2) a leaseholder collects come from these.
+pub fn others_property_on(world: &World, me: PlayerId, block: BlockId) -> Money {
+    world
+        .businesses()
+        .on_block(block)
+        .filter(|(_, b)| b.owner != AccountId::Player(me))
+        .map(|(_, b)| b.build_cost)
+        .sum()
+}
+
+/// Land rent per day that buildings not owned by `me` pay the holder of `block` (§5.3).
+pub fn others_rent_on(world: &World, me: PlayerId, block: BlockId) -> Money {
+    let config = world.config();
+    let Some(tier) = world.map().block(block).map(|b| b.tier) else {
+        return Money::ZERO;
+    };
+    let mult = config.map.tiers.get(tier).desirability_mult.rate();
+    world
+        .businesses()
+        .on_block(block)
+        .filter(|(_, b)| b.owner != AccountId::Player(me))
+        .map(|(_, b)| {
+            crate::land::land_rent_per_day(b.volume(), config.map.land_base_rate.money(), mult)
+        })
+        .sum()
+}
+
+/// True if `block` has a tube station open this year (§4.3, `map.yaml` `tube_stations`).
+pub fn has_station(world: &World, block: BlockId) -> bool {
+    let Some(key) = world.map().block(block).map(|b| &b.key) else {
+        return false;
+    };
+    let year = world.clock().year();
+    world
+        .config()
+        .map
+        .tube_stations
+        .iter()
+        .any(|s| &s.block == key && s.opens <= year)
+}
+
 /// `balance − buffer`: what it can spend and still keep its buffer.
 pub fn spare(world: &World, me: PlayerId, buffer: Money) -> Money {
     world.ledger().balance(AccountId::Player(me)) - buffer
@@ -210,6 +263,60 @@ pub fn rescue(world: &World, me: PlayerId) -> Option<Command> {
         .map(|block| Command::OfferForAuction {
             item: AuctionItem::Land(block),
         })
+}
+
+/// How keen it is on the item now up for auction: a factor drawn once per auction from its own
+/// RNG stream, uniform in `[1 − bid_jitter, 1]`, that scales its maximum bid. It never raises a
+/// maximum, so a personality's ceiling holds; it only makes the same personality bid a little
+/// differently from game to game.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub struct Temper {
+    current: Option<(AuctionItem, Rate)>,
+}
+
+impl Temper {
+    /// The factor for the auction on `item`, drawn when a new auction starts.
+    pub fn factor(
+        &mut self,
+        item: AuctionItem,
+        jitter: Rate,
+        rng: &mut crate::rng::SimRng,
+    ) -> Rate {
+        if let Some((seen, f)) = self.current
+            && seen == item
+        {
+            return f;
+        }
+        let spread =
+            u64::try_from(jitter.bp().clamp(0, crate::money::BASIS_POINTS_PER_UNIT)).unwrap_or(0);
+        let off = i64::try_from(crate::rng::below(rng, spread + 1)).unwrap_or(0);
+        let f = Rate::from_bp(Rate::ONE.bp() - off);
+        self.current = Some((item, f));
+        f
+    }
+
+    /// Forgets the auction once the house is quiet, so a re-listed item draws afresh.
+    pub fn settle(&mut self, world: &World) {
+        if world.auctions().current().is_none() {
+            self.current = None;
+        }
+    }
+}
+
+/// Its auction turn ([`auction_turn`]) with its maximum scaled by its [`Temper`].
+pub fn tempered_turn(
+    world: &World,
+    me: PlayerId,
+    temper: &mut Temper,
+    jitter: Rate,
+    rng: &mut crate::rng::SimRng,
+    max: impl FnOnce(&Auction) -> Option<Money>,
+) -> Option<Command> {
+    temper.settle(world);
+    auction_turn(world, me, |a| {
+        let f = temper.factor(a.item, jitter, rng);
+        max(a).map(|m| f.apply(m))
+    })
 }
 
 /// One decision every `decision_interval_ticks` (`ai.yaml`).
