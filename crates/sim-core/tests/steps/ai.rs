@@ -310,6 +310,8 @@ fn balance_drops(w: &mut SimWorld, to: String) {
     regex = r"^two games with seed (\d+) are played to the whistle with ai.yaml's Grocer in seat 1$"
 )]
 fn two_games(w: &mut SimWorld, seed: u64) {
+    // The Grocer alone in seat 1: pin the opponents, whatever ai.yaml ships.
+    common::set_key(w.config.sources_mut(), "ai.yaml", "/opponents", "[grocer]");
     let config = w.config.load_ok();
     assert_eq!(config.ai.opponents, vec!["grocer".to_owned()]);
     for _ in 0..2 {

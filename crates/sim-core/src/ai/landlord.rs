@@ -20,6 +20,8 @@
 //!    lease at auction (R33) when the reserve (the land base price, the least a sale can fetch)
 //!    beats holding to expiry: book value (§3) + the lot uplift on other owners' buildings
 //!    (R39) + their land rent for the days left (§5.2).
+//! - **Hotel.** Holding a whole colour set, it puts up a Hotel there before anything else
+//!   (§7.3; R14, R29), if the era has a Hotel type and it keeps its buffer.
 //! 5. **Build.** Only apartment blocks (`customers.yaml` `residential.building_type`, if the
 //!    era allows it), at most `apartments_per_lot` per lease, never on a lease it is about to
 //!    sell, and only if it keeps `cash_buffer`.
@@ -177,6 +179,18 @@ impl Landlord {
     }
 
     fn build(world: &World, me: PlayerId) -> Option<Command> {
+        let cfg_h = &world.config().ai.landlord;
+        if let Some(plan) = kit::hotel_plan(
+            world,
+            me,
+            cfg_h.apartment_footprint,
+            cfg_h.apartment_height,
+            FitOutLevel::Medium,
+        ) && kit::spare(world, me, cfg_h.cash_buffer.money()) >= plan.cost
+            && world.can_afford(me, plan.cost)
+        {
+            return Some(plan.command());
+        }
         let config = world.config();
         let cfg = &config.ai.landlord;
         let apartments = kit::apartments_type(config, world.clock().year())?;

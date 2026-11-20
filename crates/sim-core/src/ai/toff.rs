@@ -17,6 +17,8 @@
 //!    class, and orders `initial_order_share` of capacity.
 //! 4. **Evening orders.** After each trading window closes, tomorrow's order follows today's
 //!    sales plus `order_margin` ([`super::grocer::next_order`], R2, R10).
+//! - **Hotel.** Holding a whole colour set, it puts up a Hotel there before anything else
+//!   (§7.3; R14, R29), if the era has a Hotel type and it keeps its buffer.
 //! 5. **Build.** At most `shops_per_lot` shops a lease, `fit_out` (high) fit-out, of the next
 //!    type in rotation from `shop_types` that the era allows (else any retail type, dearest
 //!    goods first), if it keeps its large `cash_buffer`.
@@ -154,6 +156,18 @@ impl Toff {
     }
 
     fn build(world: &World, me: PlayerId) -> Option<Command> {
+        let cfg_h = &world.config().ai.toff;
+        if let Some(plan) = kit::hotel_plan(
+            world,
+            me,
+            cfg_h.shop_footprint,
+            cfg_h.shop_height,
+            cfg_h.fit_out,
+        ) && kit::spare(world, me, cfg_h.cash_buffer.money()) >= plan.cost
+            && world.can_afford(me, plan.cost)
+        {
+            return Some(plan.command());
+        }
         let buffer = world.config().ai.toff.cash_buffer.money();
         Self::lots_with_room(world, me)
             .into_iter()

@@ -14,7 +14,7 @@ use super::grocer::{initial_order, next_order};
 use crate::auctions::{Auction, AuctionItem, AuctionPhase};
 use crate::businesses::{BusinessId, FitOutLevel, Hours, build_cost};
 use crate::config::Config;
-use crate::config::businesses::BusinessType;
+use crate::config::businesses::{BusinessType, Channel};
 use crate::economy::{AccountId, PlayerId, net_worth::land_value};
 use crate::land::{BlockId, Footprint, Tier};
 use crate::money::{Money, Rate};
@@ -26,15 +26,21 @@ pub fn in_era(kind: &BusinessType, year: i32) -> bool {
     kind.unlock_year <= year && kind.obsolete_year.is_none_or(|end| year < end)
 }
 
-/// Retail types (goods, and a day or night window) buildable in `year`, dearest best good
-/// first, then by id: the order a personality with no preference falls back to.
+/// Walk-in retail types (`channel: shop`, goods, and one of `hours`) buildable in `year`,
+/// dearest best good first, then by id: the order a personality with no preference falls back
+/// to. Online and infrastructure types are never built as shops (§7.5).
 pub fn retail_types(config: &Config, year: i32, hours: &[Hours]) -> Vec<String> {
     let goods = &config.businesses.goods;
     let mut found: Vec<(Money, &String)> = config
         .businesses
         .types
         .iter()
-        .filter(|(_, k)| in_era(k, year) && !k.goods.is_empty() && hours.contains(&k.hours))
+        .filter(|(_, k)| {
+            in_era(k, year)
+                && k.channel == Channel::Shop
+                && !k.goods.is_empty()
+                && hours.contains(&k.hours)
+        })
         .map(|(id, k)| {
             let dearest = k
                 .goods
@@ -403,6 +409,44 @@ pub fn plan_on(
     })
 }
 
+/// A Hotel `me` may put up now (§7.3; R14, R29): a type with `hours: hotel` in era, on a lot
+/// whose whole set it holds and that has no Hotel yet ([`crate::hotels::check_build`]), at the
+/// first legal site. Hotels are optional: `None` when there is no such lot.
+pub fn hotel_plan(
+    world: &World,
+    me: PlayerId,
+    size: [u32; 2],
+    height: u32,
+    fit_out: FitOutLevel,
+) -> Option<Plan> {
+    let config = world.config();
+    let year = world.clock().year();
+    let kinds: Vec<&String> = config
+        .businesses
+        .types
+        .iter()
+        .filter(|(_, k)| k.hours == Hours::Hotel && in_era(k, year))
+        .map(|(id, _)| id)
+        .collect();
+    held_lots(world, me)
+        .into_iter()
+        .filter(|block| {
+            crate::hotels::check_build(
+                config,
+                world.map(),
+                world.businesses(),
+                *block,
+                AccountId::Player(me),
+            )
+            .is_ok()
+        })
+        .find_map(|block| {
+            kinds
+                .iter()
+                .find_map(|t| plan_on(world, me, block, t, size, height, fit_out))
+        })
+}
+
 /// A fit-out level's build-cost multiplier (§7.1).
 pub fn fit_out_mult(config: &Config, level: FitOutLevel) -> Rate {
     let f = &config.businesses.fit_out;
@@ -543,6 +587,20 @@ mod tests {
         assert!(!in_era(&kind(1935, None), 1930));
         assert!(in_era(&kind(1930, Some(1950)), 1945));
         assert!(!in_era(&kind(1930, Some(1950)), 1950));
+    }
+
+    #[test]
+    fn walk_in_retail_is_never_online_or_infrastructure() {
+        let config = crate::economy::test_support::shipped_config();
+        for year in (1930..=2050).step_by(5) {
+            let types = retail_types(&config, year, &[Hours::Day, Hours::Night]);
+            assert!(!types.is_empty(), "{year}");
+            for id in types {
+                let k = &config.businesses.types[&id];
+                assert_eq!(k.channel, Channel::Shop, "{id} in {year}");
+                assert!(in_era(k, year), "{id} in {year}");
+            }
+        }
     }
 
     #[test]

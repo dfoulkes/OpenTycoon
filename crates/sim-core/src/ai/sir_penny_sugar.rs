@@ -19,6 +19,8 @@
 //!    05:30 house-hunt (R53) he looks at each block's occupancy: at or above `raise_at` he puts
 //!    the rent up by `rent_step`, at or below `cut_at` he cuts it, within `min_rent`–`max_rent`
 //!    (R51, R52).
+//! - **Hotel.** Holding a whole colour set, it puts up a Hotel there before anything else
+//!   (§7.3; R14, R29), if the era has a Hotel type and it keeps its buffer.
 //! 4. **Build.** Apartment blocks (`customers.yaml` `residential.building_type`, if the era
 //!    allows it), at most `apartments_per_lot` a lease, if he keeps `cash_buffer`.
 //! 5. **Land.** Opens an auction on a lot he wants, station lots first, then the cheapest (R23);
@@ -227,6 +229,18 @@ impl PennySugar {
     }
 
     fn build(world: &World, me: PlayerId) -> Option<Command> {
+        let cfg_h = &world.config().ai.sir_penny_sugar;
+        if let Some(plan) = kit::hotel_plan(
+            world,
+            me,
+            cfg_h.apartment_footprint,
+            cfg_h.apartment_height,
+            FitOutLevel::Medium,
+        ) && kit::spare(world, me, cfg_h.cash_buffer.money()) >= plan.cost
+            && world.can_afford(me, plan.cost)
+        {
+            return Some(plan.command());
+        }
         let config = world.config();
         let cfg = &config.ai.sir_penny_sugar;
         let apartments = kit::apartments_type(config, world.clock().year())?;
