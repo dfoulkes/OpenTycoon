@@ -212,3 +212,46 @@ Worked example (the scenarios): a 30-year lease on Bloomsbury (land base price �
 | 1935 | 25 | £5,000.00 | £8,250.00 | £9,900.00 |
 | 1955 | 5 | £1,000.00 | £1,650.00 | £9,900.00 |
 | 1960 | 0 (back at auction) | £0.00 | £0.00 | £0.00 |
+
+## Residential levers
+
+Study levers, off by default. Over the full 1930–2050 span apartment rent is a guaranteed,
+growing income: residents pay it out of allowances minted fresh every morning (R63), and the
+city fills its flats as fast as they are built. Early studies found the residential AI (Sir
+Penny Sugar) winning almost every game whatever else they varied, and none of them could rein
+it in because no residential setting was varied. These rules give the study something to
+search. They are **not rulings**: each is a choice for the designer, off in the shipped
+config, so the shipped game and its state hashes are unchanged. Scenarios:
+`crates/sim-core/features/population/housing.feature` (the end of the file) and
+`crates/sim-core/features/economy/rent_levers.feature`.
+
+The residential settings the study can vary, all in `customers.yaml` under `residential`:
+
+| Key | Shipped | Kind | Effect |
+|---|---|---|---|
+| `flat_size` | 4 | existing (R50) | units of volume per flat: larger flats, fewer of them per block |
+| `comfortable_share` | 0.2 | existing (R52) | the rent share of allowance anyone will pay; the cheapest vacant flat must be within it |
+| `stretch_share` | 0.5 | existing (R52) | how far a desirable flat can stretch that |
+| `move_interval_years` | 10 | existing (R54) | years between moves |
+| `reference_rent` | 3.00 | existing (R51) | the rent the price factor weighs flats against; the AIs' rents are multiples of it |
+| `max_rent_per_flat` | `null` | **lever** | a cap on any flat's rent per day, in pounds |
+| `rent_tax` | 0 | **lever** | share of residents' rent paid to the city |
+| `commute_preference` | 0 | **lever** | share of the city's adults who commute rather than rent |
+
+- **`max_rent_per_flat`** (`null` = no cap). An owner may still set any rent (R51), but what
+  house-hunters see and residents pay is `min(rent, cap)`: the cap applies where flats are
+  listed (`population::residential::capped_rent`), so the house-hunt, the move and the 06:00
+  rent all use the capped figure. It bounds what a landlord who keeps raising rent on full
+  blocks can collect.
+- **`rent_tax`** (0–1). At 06:00 each block's rent is split: `rent_tax × rent` (rounded half
+  away from zero) goes to the city, the rest to the owner (`RentDue::tax`,
+  `economy::settlement::resident_rent_bills`). Residents pay the same; money is conserved.
+  It scales every landlord's rent income by `1 − rent_tax`, the city's own blocks aside.
+- **`commute_preference`** (0–1). Some people would rather commute in than live in a flat they
+  can afford. Each morning's house-hunt houses no more than
+  `⌊adults × (1 − commute_preference)⌋` in all, where adults are residents, the unhoused and
+  that morning's arrivals (`population::residential::house_room`); nobody already housed is
+  moved out. A per-arrival coin toss would not work: the unhoused re-hunt every morning while
+  flats stand empty (`rehunt_unhoused`), so a declined arrival would be housed the next day
+  and the lever would only delay filling. It only bites when flats would otherwise house more
+  than that share: in a city short of flats it changes nothing.
