@@ -3,5 +3,5 @@
 # Shrink this file: when you tag a scenario that fully proves a ruling, delete its line.
 # Mark partly-proven rulings with 'partial:' so the report shows them.
 R59  # partial: 70/30 commuter/tourist split proven; everyone unhoused takes the train at close until hotels (post-v1)
-R64  # balance study tooling + full-span run (in progress)
-R65  # balance criteria: checked by the study, not by scenarios yet
+R64  # partial: sim-cli study is built (crates/sim-cli/features/study.feature, outside cargo trace's sim-core scan); the 100 × 500 full-span run is still to do
+R65  # partial: the criteria and seat rotation are computed by sim-cli study (crates/sim-cli/features/study.feature); no model meets them yet

@@ -94,6 +94,10 @@ cargo simbench --days 1 --agents 10000     # synthetic large scenario
 
 # Perf budgets (perf/budgets.yaml): exits non-zero if over budget. Not part of `cargo t`.
 cargo perf
+
+# Balance study (R64, R65): ~100 sampled models × 500 rotated games of 1930–2050, ranked by
+# how even the AI win shares are. Resumable; definition in study/study.yaml (docs/study.md).
+cargo run --release -p sim-cli -- study config --out study-out
 ```
 
 Brains for the seats `ai.yaml` does not fill: `idle` (does nothing) and `scripted` (bids on the

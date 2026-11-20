@@ -14,6 +14,7 @@ no game rules.
 | `sim-cli bench config` | headless throughput of `World::tick`; `--phases` adds a per-phase breakdown | JSON |
 | `sim-cli perf-budget config` (`cargo perf`) | measures the budgeted metrics, compares with `perf/budgets.yaml` | table or JSON; exit 1 if over budget |
 | `cargo bench -p sim-core` | criterion micro-benches (`benches/*.rs`) | criterion reports |
+| `sim-cli study config` | the balance study (R64, R65): sampled models × rotated games | `models.csv`, `summary.json`, overlays ([`study.md`](study.md)) |
 
 Always measure with a release build (`cargo run --release -p sim-cli -- ...`, or the `cargo perf`
 / `cargo simbench` aliases). Debug builds are 10–50× slower.

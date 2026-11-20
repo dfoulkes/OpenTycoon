@@ -23,9 +23,7 @@ pub mod run;
 pub mod seats;
 
 pub use def::{Criteria, Distribution, IDLE, Kind, Mode, Parameter, StudyDef, StudyError};
-pub use metrics::{
-    EntryMetrics, ModelMetrics, Tally, gini, metrics, normalised_entropy, wilson,
-};
+pub use metrics::{EntryMetrics, ModelMetrics, Tally, gini, metrics, normalised_entropy, wilson};
 pub use models::{ModelSpec, baseline_values, generate, model_config, overrides_for};
 pub use output::split_csv_line;
 pub use run::{RunOptions, StudyReport, run_study};
