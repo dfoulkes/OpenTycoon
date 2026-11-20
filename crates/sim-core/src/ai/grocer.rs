@@ -19,7 +19,8 @@
 //! 3. **New shops.** Prices each good at `1 − working_class_discount` of reference, ± up to
 //!    `price_jitter` from its RNG, and sets a first order of `initial_order_share` of capacity.
 //! 4. **Evening orders.** Once day trade has closed, sets each stocked shop's order for
-//!    tomorrow from today's sales: [`next_order`] (R2, R10).
+//!    tomorrow from today's demand, its sales plus the shoppers it turned away once it sold out
+//!    ([`demand_seen`], [`next_order`]; R2, R10).
 //! 5. **Build.** On a lot it leases, puts up the next shop type in rotation at the first legal
 //!    site ([`super::find_site`], R22, R58), if it can pay and still keep `cash_buffer`. Only
 //!    types unlocked and not obsolete this year count ([`super::kit::in_era`]); if none of its
@@ -33,7 +34,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{Brain, find_site};
 use crate::auctions::{AuctionItem, AuctionPhase};
-use crate::businesses::{BusinessId, FitOutLevel, Hours, build_cost};
+use crate::businesses::{Business, BusinessId, FitOutLevel, Hours, build_cost};
 use crate::config::Config;
 use crate::config::ai::{GrocerConfig, PersonalityWeights};
 use crate::economy::{AccountId, PlayerId};
@@ -218,12 +219,10 @@ impl Grocer {
                 continue;
             }
             for good in shop.prices.keys() {
-                let delivered = shop.tomorrow_order.get(good).copied().unwrap_or(0);
-                if delivered <= 0 {
-                    continue; // nothing arrived today, so today's sales say nothing
-                }
-                let sold = shop.sold_today.get(good).copied().unwrap_or(0);
-                let order = next_order(sold, shop.capacity_per_good, cfg.order_margin.rate());
+                let Some(demand) = demand_seen(shop, good) else {
+                    continue;
+                };
+                let order = next_order(demand, shop.capacity_per_good, cfg.order_margin.rate());
                 if shop.standing_order.get(good).copied() != Some(order) {
                     out.push(Command::SetOrder {
                         business: id,
@@ -392,12 +391,38 @@ pub fn initial_order(capacity: i64, share: Rate) -> i64 {
         .min(capacity.max(0))
 }
 
-/// Tomorrow's order from today's sales (R2, R10): `⌈sold × (1 + margin)⌉`, at least 1 so a
-/// shop never stops trading, and never more than the shop holds. A shop that sold out grows by
-/// the margin; one that sold half shrinks to half plus the margin, so it doesn't order into
-/// waste. 0 only if the shop holds nothing.
-pub fn next_order(sold: i64, capacity: i64, margin: Rate) -> i64 {
-    let num = i128::from(sold.max(0)) * i128::from(BASIS_POINTS_PER_UNIT + margin.bp().max(0));
+/// What a shop's day says about demand for `good` (R2): the units it sold plus, if it sold
+/// out, its share of the shoppers it turned away (§8.3: lost sales are counted per shop, so
+/// they are split evenly over the goods that ran out, rounded up). `None` when the day says
+/// nothing because no stock arrived this morning (a new shop, or one an event kept shut, §9).
+///
+/// Sales alone understate demand whenever a shop sells out: a shop that ordered by sales would
+/// grow by only its margin a day however many shoppers it turned away.
+pub fn demand_seen(shop: &Business, good: &str) -> Option<i64> {
+    if shop.tomorrow_order.get(good).copied().unwrap_or(0) <= 0 {
+        return None;
+    }
+    let sold = shop.sold_today.get(good).copied().unwrap_or(0);
+    if shop.stock_of(good) > 0 {
+        return Some(sold);
+    }
+    let sold_out = shop
+        .prices
+        .keys()
+        .filter(|g| shop.stock_of(g) <= 0 && shop.tomorrow_order.get(*g).is_some_and(|u| *u > 0))
+        .count();
+    let sold_out = i64::try_from(sold_out.max(1)).unwrap_or(1);
+    let lost = i64::from(shop.lost_sales_today);
+    Some(sold + (lost + sold_out - 1) / sold_out)
+}
+
+/// Tomorrow's order from today's demand (R2, R10): `⌈demand × (1 + margin)⌉`, at least 1 so a
+/// shop never stops trading, and never more than the shop holds. A shop that sold out grows to
+/// what it was asked for plus the margin; one that sold half shrinks to half plus the margin,
+/// so it doesn't order into waste. 0 only if the shop holds nothing. `demand` is
+/// [`demand_seen`].
+pub fn next_order(demand: i64, capacity: i64, margin: Rate) -> i64 {
+    let num = i128::from(demand.max(0)) * i128::from(BASIS_POINTS_PER_UNIT + margin.bp().max(0));
     let units = num.div_euclid(i128::from(BASIS_POINTS_PER_UNIT))
         + i128::from(num.rem_euclid(i128::from(BASIS_POINTS_PER_UNIT)) != 0);
     i64::try_from(units)
@@ -421,6 +446,39 @@ mod tests {
         assert_eq!(next_order(60, 64, TEN_PERCENT), 64); // capped at capacity
         assert_eq!(next_order(0, 64, TEN_PERCENT), 1); // keep a toe in the market
         assert_eq!(next_order(5, 0, TEN_PERCENT), 0); // a shop that holds nothing
+    }
+
+    #[test]
+    fn demand_counts_the_shoppers_turned_away_once_sold_out() {
+        let mut shop = Business {
+            type_id: "grocery".into(),
+            block: BlockId(0),
+            footprint: crate::land::Footprint {
+                x: 0,
+                y: 0,
+                w: 3,
+                d: 3,
+            },
+            height: 12,
+            owner: AccountId::City,
+            fit_out: FitOutLevel::Medium,
+            build_cost: Money::ZERO,
+            hours: Hours::Day,
+            capacity_per_good: 238,
+            prices: [("groceries".to_owned(), Rate::ONE)].into(),
+            stock: [("groceries".to_owned(), 0)].into(),
+            standing_order: [("groceries".to_owned(), 40)].into(),
+            tomorrow_order: [("groceries".to_owned(), 40)].into(),
+            open: true,
+            takings_today: Money::ZERO,
+            sold_today: [("groceries".to_owned(), 40)].into(),
+            lost_sales_today: 12,
+        };
+        assert_eq!(demand_seen(&shop, "groceries"), Some(52));
+        shop.stock.insert("groceries".into(), 5); // didn't sell out: lost sales were elsewhere
+        assert_eq!(demand_seen(&shop, "groceries"), Some(40));
+        shop.tomorrow_order.insert("groceries".into(), 0); // nothing arrived: no news
+        assert_eq!(demand_seen(&shop, "groceries"), None);
     }
 
     #[test]

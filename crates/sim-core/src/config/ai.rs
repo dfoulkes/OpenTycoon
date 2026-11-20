@@ -60,7 +60,8 @@ pub struct GrocerConfig {
     pub price_jitter: Ratio,
     /// A new shop's first order, as a share of its capacity. Above 0, at most 1.
     pub initial_order_share: Ratio,
-    /// Tomorrow's order = today's sales × (1 + this), capped at capacity (R2, R10). At most 1.
+    /// Tomorrow's order = today's demand × (1 + this), capped at capacity (R2, R10). At most 1.
+    /// Demand is sales plus the shoppers turned away once sold out (`grocer::demand_seen`).
     pub order_margin: Ratio,
     /// From this time until midnight, a negative balance makes it sell a shop back to the
     /// city (R5) rather than take a strike (R3). Must be after day trade closes.
@@ -150,7 +151,8 @@ pub struct ToffConfig {
     pub price_premium: Ratio,
     /// A new shop's first order, as a share of capacity. Above 0, at most 1.
     pub initial_order_share: Ratio,
-    /// Tomorrow's order = today's sales × (1 + this), capped at capacity (R2, R10). At most 1.
+    /// Tomorrow's order = today's demand × (1 + this), capped at capacity (R2, R10). At most 1.
+    /// Demand is sales plus the shoppers turned away once sold out (`grocer::demand_seen`).
     pub order_margin: Ratio,
     /// From this time to midnight, a negative balance makes it sell a shop to the city (R5).
     pub rescue_after: ClockTime,

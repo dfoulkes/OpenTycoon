@@ -45,7 +45,7 @@
           "description": "When it moves into another line of business (R66). Shipped off: the Grocer stays pure\nretail."
         },
         "order_margin": {
-          "description": "Tomorrow's order = today's sales × (1 + this), capped at capacity (R2, R10). At most 1.",
+          "description": "Tomorrow's order = today's demand × (1 + this), capped at capacity (R2, R10). At most 1.\nDemand is sales plus the shoppers turned away once sold out (`grocer::demand_seen`).",
           "type": "number"
         },
         "price_jitter": {
@@ -582,7 +582,7 @@
           "description": "When it moves into luxury apartments on its High-tier lots (R66)."
         },
         "order_margin": {
-          "description": "Tomorrow's order = today's sales × (1 + this), capped at capacity (R2, R10). At most 1.",
+          "description": "Tomorrow's order = today's demand × (1 + this), capped at capacity (R2, R10). At most 1.\nDemand is sales plus the shoppers turned away once sold out (`grocer::demand_seen`).",
           "type": "number"
         },
         "price_premium": {

@@ -124,9 +124,12 @@ pub fn reputation_after_sale(rep: Rate, recovery: f64) -> Rate {
     unit_to_rate(r + recovery * (1.0 - r))
 }
 
-/// Reputation after a lost sale: `max(0, rep − penalty)` (§8.3).
+/// Reputation after a lost sale: `rep − penalty × rep` (§8.3). The mirror of
+/// [`reputation_after_sale`]: a lost sale moves it `penalty` of the way to 0, so, like any
+/// rolling stat, it never reaches 0 and a shop that is turned down can win shoppers back.
 pub fn reputation_after_lost_sale(rep: Rate, penalty: f64) -> Rate {
-    unit_to_rate(rate_f64(rep) - penalty)
+    let r = rate_f64(rep);
+    unit_to_rate(r - penalty * r)
 }
 
 /// `price_factor = exp(-k × (price/ref_price − 1))` (§8.3). `ref_price` must be positive.
@@ -198,11 +201,17 @@ mod tests {
     fn reputation_is_a_rolling_stat_clamped_to_unit() {
         let half = Rate::from_bp(5_000);
         assert_eq!(reputation_after_sale(half, 0.005), Rate::from_bp(5_025));
-        assert_eq!(reputation_after_lost_sale(half, 0.02), Rate::from_bp(4_800));
+        assert_eq!(reputation_after_lost_sale(half, 0.02), Rate::from_bp(4_900));
+        // A share of what is left, so it never reaches 0: a dented shop can win shoppers back.
         assert_eq!(
             reputation_after_lost_sale(Rate::from_bp(100), 0.02),
-            Rate::ZERO
+            Rate::from_bp(98)
         );
+        let mut rep = half;
+        for _ in 0..10_000 {
+            rep = reputation_after_lost_sale(rep, 0.02);
+        }
+        assert!(rep > Rate::ZERO);
         assert_eq!(reputation_after_sale(Rate::ONE, 0.5), Rate::ONE);
         assert_eq!(unit_to_rate(f64::NAN), Rate::ZERO);
     }

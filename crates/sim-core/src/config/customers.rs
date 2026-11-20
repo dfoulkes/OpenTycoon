@@ -253,7 +253,8 @@ pub struct ReputationSettings {
     /// Reputation of a new shop, 0–1.
     #[schemars(range(min = 0.0, max = 1.0))]
     pub initial: f64,
-    /// Drop per lost sale, 0–1.
+    /// Share of its reputation a shop loses per lost sale, 0–1 (a rolling stat: it never
+    /// reaches 0).
     #[schemars(range(min = 0.0, max = 1.0))]
     pub lost_sale_penalty: f64,
     /// Share of the gap to 1 recovered per completed sale, 0–1 (a rolling stat).

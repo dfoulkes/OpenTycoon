@@ -33,7 +33,7 @@ grocer:                         # §10: how the Grocer plays (placeholders; tune
   working_class_discount: 0.05  # prices 5% under reference: working-class shoppers are price-sensitive
   price_jitter: 0.02            # ± spread on that price, from its own RNG stream
   initial_order_share: 1.0      # a new shop's first order, as a share of capacity
-  order_margin: 0.1             # tomorrow's order = today's sales × 1.1, capped at capacity (R2, R10)
+  order_margin: 0.1             # tomorrow's order = (sold + turned away) × 1.1, capped at capacity (R2, R10)
   rescue_after: "22:00"         # a negative balance from here to midnight sells a shop to the city (R5)
   opportunism:                  # R66: off: the Grocer stays pure retail
     enabled: false
@@ -79,7 +79,7 @@ toff:                           # §10: how the Toff plays (placeholders; tune w
   fit_out: high                 # §7.1
   price_premium: 0.3            # prices 30% over reference: upper-class shoppers barely mind (§8.3)
   initial_order_share: 0.5      # a new shop's first order, as a share of capacity
-  order_margin: 0.1             # tomorrow's order = today's sales × 1.1, capped at capacity (R2, R10)
+  order_margin: 0.1             # tomorrow's order = (sold + turned away) × 1.1, capped at capacity (R2, R10)
   rescue_after: "22:00"         # a negative balance from here to midnight sells a shop (R5)
   opportunism:                  # R66: luxury flats on its High lots when they out-earn its shops
     enabled: true

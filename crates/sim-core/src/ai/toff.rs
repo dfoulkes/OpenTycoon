@@ -16,7 +16,8 @@
 //! 3. **New shops.** Prices every good at `1 + price_premium` of reference, for the upper
 //!    class, and orders `initial_order_share` of capacity.
 //! 4. **Evening orders.** After each trading window closes, tomorrow's order follows today's
-//!    sales plus `order_margin` ([`super::grocer::next_order`], R2, R10).
+//!    demand (sales plus the shoppers turned away once sold out) plus `order_margin`
+//!    ([`super::grocer::demand_seen`], [`super::grocer::next_order`], R2, R10).
 //! - **Hotel.** Holding a whole colour set, it puts up a Hotel there before anything else
 //!   (§7.3; R14, R29), if the era has a Hotel type and it keeps its buffer.
 //! - **Luxury flats (R66).** When the day's reading says apartment blocks earn `threshold` more
