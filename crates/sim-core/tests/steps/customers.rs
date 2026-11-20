@@ -7,7 +7,8 @@
 use std::collections::BTreeSet;
 
 use cucumber::{given, then, when};
-use sim_core::businesses::Hours;
+use sim_core::businesses::{Hours, formula};
+use sim_core::config::businesses::Channel;
 use sim_core::customers::movement::Geometry;
 use sim_core::customers::shops::{GoodsIndex, shop_offers};
 use sim_core::customers::{
@@ -16,7 +17,7 @@ use sim_core::customers::{
 };
 use sim_core::economy::AccountId;
 use sim_core::money::Rate;
-use sim_core::population::allowance;
+use sim_core::population::{AgeBand, Class, Cohort, Sex, allowance};
 
 use super::population::{CityState, class, cohort, pounds};
 use crate::SimWorld;
@@ -456,4 +457,217 @@ fn chosen_share(w: &mut SimWorld, a: String, bound: String, pct: u32) {
     } else {
         assert!(got <= limit, "{:?}", w.city.picks);
     }
+}
+
+// ---- Demand by decade (§7.1, §8.2; R55, R64) ----
+
+fn window(text: &str) -> Hours {
+    if text == "day" {
+        Hours::Day
+    } else {
+        Hours::Night
+    }
+}
+
+/// `P(good)` as shoppers act on it: the table, unlock and fade (§7.1, §8.2).
+fn effective_p(w: &mut SimWorld, who: Cohort, good: &str, hours: Hours, year: i32) -> f64 {
+    let config = CityState::config(w);
+    shopping::effective_weights(&config, who, hours, year)
+        .get(good)
+        .copied()
+        .unwrap_or(0.0)
+}
+
+/// Every cohort with its share of the population in `year` (the latest demographics entry at or
+/// before it).
+fn cohort_shares(config: &sim_core::Config, year: i32) -> Vec<(Cohort, f64)> {
+    let demo = config
+        .customers
+        .demographics
+        .iter()
+        .filter(|(y, _)| y.parse::<i32>().unwrap() <= year)
+        .last()
+        .unwrap()
+        .1;
+    let share = |r: &sim_core::config::Ratio| r.rate().bp() as f64 / 10_000.0;
+    let mut out = Vec::new();
+    for (ci, class) in Class::ALL.iter().enumerate() {
+        for (bi, band) in demo.age.iter().enumerate() {
+            for (si, sex) in Sex::ALL.iter().enumerate() {
+                out.push((
+                    Cohort {
+                        band: AgeBand(u8::try_from(bi).unwrap()),
+                        sex: *sex,
+                        class: *class,
+                    },
+                    share(&demo.class[ci]) * share(band) * share(&demo.sex[si]),
+                ));
+            }
+        }
+    }
+    out
+}
+
+#[then(
+    regex = r#"^by (day|night), an? (working|middle|upper) (man|woman) aged "([^"]+)" wants (\w+) (more|less) in (\d{4}) than in (\d{4})$"#
+)]
+#[allow(clippy::too_many_arguments, reason = "one argument per capture")]
+fn wants_more_or_less(
+    w: &mut SimWorld,
+    win: String,
+    c: String,
+    s: String,
+    b: String,
+    good: String,
+    direction: String,
+    later: i32,
+    earlier: i32,
+) {
+    let who = cohort(w, &c, &s, &b);
+    let then = effective_p(w, who, &good, window(&win), earlier);
+    let now = effective_p(w, who, &good, window(&win), later);
+    let ok = if direction == "more" {
+        now > then
+    } else {
+        now < then
+    };
+    assert!(
+        ok,
+        "P({good}) {earlier}: {then}, {later}: {now}; expected {direction}"
+    );
+}
+
+#[then(
+    regex = r#"^in (\d{4}) by (day|night) the most wanted good for an? (working|middle|upper) (man|woman) aged "([^"]+)" is (\w+)$"#
+)]
+#[allow(clippy::too_many_arguments, reason = "one argument per capture")]
+fn most_wanted(
+    w: &mut SimWorld,
+    year: i32,
+    win: String,
+    c: String,
+    s: String,
+    b: String,
+    good: String,
+) {
+    let config = CityState::config(w);
+    let who = cohort(w, &c, &s, &b);
+    let weights = shopping::effective_weights(&config, who, window(&win), year);
+    let top = weights
+        .iter()
+        .max_by(|a, b| a.1.total_cmp(b.1))
+        .map(|(g, _)| (*g).to_owned());
+    assert_eq!(top.as_deref(), Some(good.as_str()), "{weights:?}");
+}
+
+#[then(
+    regex = r#"^an? (working|middle|upper) (man|woman) aged "([^"]+)" wants (\w+) by (day|night) with P 0 in (\d{4})$"#
+)]
+fn not_wanted_yet(
+    w: &mut SimWorld,
+    c: String,
+    s: String,
+    b: String,
+    good: String,
+    win: String,
+    year: i32,
+) {
+    let config = CityState::config(w);
+    let who = cohort(w, &c, &s, &b);
+    let raw = shopping::desire_weights(&config.customers, who, window(&win), year)
+        .get(good.as_str())
+        .copied()
+        .unwrap_or(0.0);
+    assert!(
+        raw > 0.0,
+        "the {year} table doesn't ask for {good}: the scenario proves nothing"
+    );
+    let got = effective_p(w, who, &good, window(&win), year);
+    assert!(got == 0.0, "P({good}) in {year} = {got}");
+}
+
+#[then(regex = r"^the fade leaves (\d+)% of the demand for (\w+) by (day|night) in (\d{4})$")]
+fn fade_leaves(w: &mut SimWorld, pct: f64, good: String, win: String, year: i32) {
+    let config = CityState::config(w);
+    let who = cohort(w, "middle", "woman", "30-49");
+    let raw = shopping::desire_weights(&config.customers, who, window(&win), year)
+        .get(good.as_str())
+        .copied()
+        .unwrap_or(0.0);
+    assert!(raw > 0.0, "the {year} table doesn't ask for {good}");
+    let got = effective_p(w, who, &good, window(&win), year) / raw * 100.0;
+    assert!(
+        (got - pct).abs() < 0.5,
+        "{good} in {year}: {got:.2}% left, expected {pct}%"
+    );
+}
+
+#[then("every good a walk-in shop type sells is wanted by some shopper in every step it trades")]
+fn every_good_wanted(w: &mut SimWorld) {
+    let config = CityState::config(w);
+    let end = config.game.clock.end_year;
+    let step = i32::try_from(config.game.clock.years_per_day).unwrap();
+    let mut missing = Vec::new();
+    for (id, kind) in &config.businesses.types {
+        if kind.channel != Channel::Shop || kind.goods.is_empty() {
+            continue;
+        }
+        let mut year = kind.unlock_year;
+        while year <= end {
+            for good in &kind.goods {
+                let wanted = cohort_shares(&config, year).iter().any(|(who, _)| {
+                    shopping::effective_weights(&config, *who, kind.hours, year)
+                        .get(good.as_str())
+                        .is_some_and(|p| *p > 0.0)
+                });
+                if !wanted {
+                    missing.push(format!("{id}: {good} in {year}"));
+                }
+            }
+            year += step;
+        }
+    }
+    assert!(missing.is_empty(), "nobody wants: {missing:#?}");
+}
+
+#[then(
+    "the starting city wants at least one reference shop's footfall of every good, in each type's unlock year"
+)]
+fn city_supports_reference_shops(w: &mut SimWorld) {
+    let config = CityState::config(w);
+    let adults = config.customers.initial_population as f64;
+    let mut short = Vec::new();
+    let mut checked = 0;
+    for (id, kind) in &config.businesses.types {
+        if kind.channel != Channel::Shop || kind.goods.is_empty() {
+            continue;
+        }
+        let footfall = formula::reference_footfall(kind, &config);
+        assert!(footfall > 0, "{id} has no reference footfall");
+        let year = kind.unlock_year;
+        for good in &kind.goods {
+            let demand: f64 = cohort_shares(&config, year)
+                .iter()
+                .map(|(who, share)| {
+                    share
+                        * shopping::effective_weights(&config, *who, kind.hours, year)
+                            .get(good.as_str())
+                            .copied()
+                            .unwrap_or(0.0)
+                })
+                .sum::<f64>()
+                * adults;
+            checked += 1;
+            if demand < footfall as f64 {
+                short.push(format!(
+                    "{id}: {good} in {year}: {demand:.1} wanted < {footfall}"
+                ));
+            }
+        }
+    }
+    assert!(checked > 0);
+    assert!(
+        short.is_empty(),
+        "the starting city can't support: {short:#?}"
+    );
 }

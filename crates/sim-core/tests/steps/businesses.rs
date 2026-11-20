@@ -9,13 +9,14 @@ use std::collections::BTreeMap;
 
 use cucumber::{given, then, when};
 use sim_core::businesses::{
-    BuildError, BuildRequest, BusinessId, Businesses, FitOutLevel, LostSale, PlacementError,
-    WriteOff,
+    BuildError, BuildRequest, BusinessId, Businesses, FitOutLevel, Hours, LostSale, PlacementError,
+    WriteOff, formula,
 };
 use sim_core::clock::{Clock, ClockRules};
 use sim_core::config::Config;
+use sim_core::config::businesses::Channel;
 use sim_core::economy::{AccountId, Bill, PlayerId, settlement};
-use sim_core::land::{BlockId, Footprint, Map};
+use sim_core::land::{BlockId, Footprint, Map, Tier};
 use sim_core::money::{Money, Rate};
 use sim_core::utilities::Utilities;
 
@@ -414,7 +415,7 @@ fn no_bills(w: &mut SimWorld) {
 }
 
 #[then(
-    regex = r"^the building (goes up|is refused as too tall|is refused as too short|is refused as too small|is refused as outside the lot|is refused for having no street frontage|is refused for overlapping another building)$"
+    regex = r"^the building (goes up|is refused as too tall|is refused as too short|is refused as too small|is refused as outside the lot|is refused for having no street frontage|is refused for overlapping another building|is refused as not yet unlocked)$"
 )]
 fn building_outcome(w: &mut SimWorld, outcome: String) {
     let got = sim(w).last_build.clone().expect("nothing was built");
@@ -434,7 +435,8 @@ fn building_outcome(w: &mut SimWorld, outcome: String) {
         | (
             "is refused for overlapping another building",
             Err(BuildError::Placement(PlacementError::Overlaps(_))),
-        ) => true,
+        )
+        | ("is refused as not yet unlocked", Err(BuildError::NotUnlocked { .. })) => true,
         _ => panic!("expected the building {outcome}, got {got:?}"),
     };
     assert!(ok);
@@ -539,4 +541,133 @@ fn delivered_and_billed(w: &mut SimWorld, units: i64, good: String, owner: u8, a
         price.saturating_mul(s.delivered),
         "billed = delivered × price"
     );
+}
+
+// ---- Era content (§7.1, §7.4; docs/economy.md "Business stats") ----
+
+#[then(regex = r"^(\d+) business types can be built in (\d{4})$")]
+fn types_buildable_in(w: &mut SimWorld, count: usize, year: i32) {
+    let s = sim(w);
+    let open: Vec<&String> = s
+        .config
+        .businesses
+        .types
+        .iter()
+        .filter(|(_, k)| k.unlock_year <= year)
+        .map(|(id, _)| id)
+        .collect();
+    assert_eq!(open.len(), count, "buildable in {year}: {open:?}");
+}
+
+#[then("every online business type unlocks in or after the internet upgrade year")]
+fn online_after_internet(w: &mut SimWorld) {
+    let s = sim(w);
+    let internet = s.config.utilities.internet.upgrade_year;
+    let online: Vec<(&String, i32)> = s
+        .config
+        .businesses
+        .types
+        .iter()
+        .filter(|(_, k)| k.channel == Channel::Online)
+        .map(|(id, k)| (id, k.unlock_year))
+        .collect();
+    assert!(!online.is_empty(), "no online business types");
+    for (id, unlock) in online {
+        assert!(
+            unlock >= internet,
+            "{id} unlocks in {unlock}, before {internet}"
+        );
+    }
+}
+
+#[given(
+    regex = r"^player (\d+) owns an? (\w+) of reference size on ([A-Z][\w']*(?: [A-Z][\w']*)*)$"
+)]
+fn owns_reference(w: &mut SimWorld, owner: u8, t: String, block: String) {
+    let s = sim(w);
+    let kind = s.config.businesses.types[&t].clone();
+    let height = formula::reference_height(&s.config);
+    let [fw, fd] = kind.min_footprint;
+    build_step(w, owner, &t, (fw, fd), None, height, &block, None);
+    let got = &sim(w).last_build;
+    assert!(matches!(got, Some(Ok(_))), "setup build failed: {got:?}");
+}
+
+#[given(regex = r"^player (\d+) orders the (\w+)'s full capacity for tomorrow$")]
+fn orders_full_capacity(w: &mut SimWorld, owner: u8, t: String) {
+    let s = sim(w);
+    let id = s.owned(&t, owner);
+    let b = s.businesses.get(id).unwrap().clone();
+    for good in b.prices.keys() {
+        s.businesses
+            .set_order(id, good, b.capacity_per_good)
+            .unwrap();
+    }
+}
+
+#[when(regex = r"^the (\w+) sells its reference footfall at reference prices$")]
+fn sells_reference_footfall(w: &mut SimWorld, t: String) {
+    let s = sim(w);
+    let id = s.id(&t);
+    let kind = s.config.businesses.types[&t].clone();
+    let trade_at = match kind.hours {
+        Hours::Night => 20 * 3600,
+        _ => 12 * 3600,
+    };
+    s.run_to(trade_at);
+    let footfall = formula::reference_footfall(&kind, &s.config);
+    let b = s.businesses.by_id.get_mut(&id).unwrap();
+    // The full order arrived at 06:00 (it locks a midnight after it is set: stock it as delivered).
+    let cap = b.capacity_per_good;
+    for good in kind.goods.clone() {
+        b.stock.insert(good.clone(), cap);
+        b.prices.insert(good, Rate::ONE);
+    }
+    for good in &kind.goods {
+        if footfall > 0 {
+            let _ = s.sell(&t, good, footfall).unwrap();
+        }
+    }
+}
+
+#[then(regex = r"^the (\w+)'s takings cover its rent, utilities and stock$")]
+fn takings_cover_costs(w: &mut SimWorld, t: String) {
+    let cost = running(w, &t);
+    let s = sim(w);
+    let takings = s.businesses.get(s.id(&t)).unwrap().takings_today;
+    assert!(
+        takings > cost.total(),
+        "takings {takings} vs rent {} + utilities {} + stock {}",
+        cost.rent,
+        cost.utilities,
+        cost.stock
+    );
+}
+
+#[then(
+    "every shop type clears its rent, utilities and stock at reference footfall on every tier from its unlock year to 2050"
+)]
+fn every_type_pays_its_way(w: &mut SimWorld) {
+    let s = sim(w);
+    let end = s.config.game.clock.end_year;
+    let step = i32::try_from(s.config.game.clock.years_per_day).unwrap();
+    let mut checked = 0;
+    for (id, kind) in &s.config.businesses.types {
+        if kind.goods.is_empty() || kind.channel != Channel::Shop {
+            continue;
+        }
+        for tier in [Tier::Low, Tier::Medium, Tier::High] {
+            let mut year = kind.unlock_year;
+            while year <= end {
+                let profit = formula::reference_daily_profit(kind, &s.config, tier, year).unwrap();
+                assert!(
+                    profit > Money::ZERO,
+                    "{id} on {tier:?} in {year} makes {profit}"
+                );
+                checked += 1;
+                year += step;
+            }
+        }
+    }
+    assert!(checked > 0);
 }

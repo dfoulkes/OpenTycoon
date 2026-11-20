@@ -21,6 +21,7 @@
 
 pub mod costs;
 pub mod daily;
+pub mod formula;
 pub mod placement;
 pub mod trading;
 
