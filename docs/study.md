@@ -19,7 +19,7 @@ N more models and stops, for chunked runs.
 
 ## The definition file
 
-`study/study.yaml` (or `--def FILE`). It cannot live in `config/`: that directory holds exactly
+`study/study.yaml` (or `--def FILE`). The shipped `study.yaml` varies the economy only and holds AI behaviour at its shipped values, so a balanced model is balanced by the economy; `study/study-with-ai.yaml` also varies the AI tunables, to measure how sensitive balance is to AI strength. It cannot live in `config/`: that directory holds exactly
 the eight game files and the loader rejects any other YAML there. Parsing is strict: an unknown
 key, a wrong type or a bad range fails before any game, naming the key path
 (`parameters[3].min`). Every top-level key is optional:

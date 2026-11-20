@@ -1,0 +1,121 @@
+# Variant of study.yaml that ALSO varies the AI tunables (bid limits, buffers, aggression).
+# Use it to see how sensitive balance is to AI strength; the main study holds AI behaviour fixed.
+#
+# The balance study (R64, R65): `sim-cli study config` reads this file. Format: docs/study.md.
+#
+# It lives outside config/ because config/ holds exactly the eight game files (§10b) and the
+# loader rejects any other YAML there.
+#
+# Keys use the `--set` form, `file.key.path`. Every model is validated like a hand-edited
+# config; a model that fails is reported in models.csv (status = invalid), not fatal.
+# A key that does not exist yet fails the study before any game, unless the parameter is
+# `optional: true` (skipped with a warning until that content lands).
+
+# Run size: 2,000 games per model puts a win share within about ±2 points (95% Wilson
+# half-width at p = 0.2 is ~1.8 points), enough to tell 10% from 40% apart with margin;
+# the rest of the compute goes on more models (R64's ~100 is a floor), because the search
+# space below has ~25 dimensions and a Latin hypercube covers it better with more points.
+models: 300              # model 0 is always the shipped config
+games_per_model: 2000    # rounded up to whole seat rotations (2,004 for six seats)
+preset: full             # 1930–2050; falls back to the longest preset if missing
+seed: 0                  # drives the hypercube and the game seeds: same seed, same study
+# roster: not set, so the seats are the default: every personality in ai.yaml (the full
+#   roster: grocer, landlord, toff, speculator, sir_penny_sugar), then one idle seat
+top_n: 10                # balanced models that get a ready-to-copy overlay
+criteria:                # R65
+  min_win_share: 0.10    # every AI personality wins at least 10% of games ...
+  max_win_share: 0.40    # ... and at most 40%
+  max_bankruptcy_rate: 0.15   # AI bankruptcies below 15% of AI player-games
+  min_idle_below_solvent_rate: 1.0  # idle finishes below every solvent AI, every game
+
+parameters:
+  # Ranges are plausible bounds around the shipped value (shown as "shipped"), wide enough that
+  # the space holds economies where trading beats sitting on cash. Money is in pounds.
+  #
+  # Net worth: how held land is valued (docs/economy.md "Land value"). Categorical: each method
+  # gets a third of the models.
+  - { name: land_value,     key: game.net_worth.land_value, values: [book_decay, market, market_no_decay] }   # shipped book_decay
+  # Land and leases
+  - { name: lease_term,     key: game.leases.term_years,            min: 10,   max: 60,    kind: integer }   # shipped 30; 10 = two game days, 60 = half the full span
+  - { name: lot_uplift,     key: game.net_worth.lot_property_uplift, min: 0.0, max: 0.5 }   # shipped 0.2 (R39); 0 = no reward for owning both
+  - { name: land_rate,      key: map.land_base_rate,                min: 0.02, max: 0.15,  distribution: log_uniform }   # shipped 0.05 £/unit volume/day: 0.4× to 3×
+  - { name: build_rate,     key: businesses.build_base_rate,        min: 5,    max: 20,    distribution: log_uniform }   # shipped 10 £/unit volume: half to double
+  # Utilities: one factor on every base rate. Rates are whole pence, so the shipped 1p rates
+  # move in 1p steps (0.75× rounds back to 1p); the 2p ones from 2p to 6p.
+  - { name: utility_rates,  keys: [utilities.base_rates, utilities.internet.base_rate], min: 0.75, max: 3.0, distribution: log_uniform, mode: scale }
+  # Money
+  - { name: starting_cash,  key: game.players.starting_cash,        min: 5000, max: 30000, distribution: log_uniform, kind: integer }   # shipped 7,000 (R62); High lots cost £11k–£14k, reachable from ~£11k with the overdraft
+  - { name: overdraft,      key: game.overdraft.start_limit,        min: 2500, max: 25000, distribution: log_uniform, kind: integer }   # shipped 10,000 (R7)
+  - { name: overdraft_step, key: game.overdraft.increase_per_step,  min: 0,    max: 5000,  kind: integer }   # shipped 2,500 per 5-year step (R7)
+  # Population and demand
+  - { name: births,         key: customers.births_per_woman,        min: 0.7,  max: 1.3,   mode: scale }   # every year's rate ±30%
+  - { name: migration,      key: customers.migration_per_day,       min: 0,    max: 150,   kind: integer }   # shipped 50 adults a day
+  - { name: allowance,      key: customers.allowance.base_by_class, min: 0.6,  max: 1.6,   mode: scale }   # shipped £20 / £45 / £120 a day by class
+  - { name: price_k,        key: customers.price_sensitivity,       min: 0.5,  max: 2.0,   distribution: log_uniform, mode: scale }   # §8.3 k_class (shipped 3.0 / 1.5 / 0.5): halved to doubled
+  # Demand by decade (docs/economy.md "Demand by decade"): one factor per era on its day and
+  # night base tables, customers.desires 0–11 in era order. Four places, so rare goods
+  # (0.004) keep their weight; the highest weight (0.55) stays under 1 at 1.4×. The rules
+  # have no id, so each parameter `expect`s its rules' window and year range: if the desire
+  # rules are reordered, the study refuses to start instead of scaling the wrong table.
+  - name: demand_1930s
+    keys: [customers.desires.0.goods, customers.desires.1.goods]
+    min: 0.6
+    max: 1.4
+    decimals: 4
+    mode: scale
+    expect:
+      - { key: customers.desires.0.match,  equals: { window: day,   from_year: 1930, until_year: 1945 } }
+      - { key: customers.desires.1.match,  equals: { window: night, from_year: 1930, until_year: 1945 } }
+  - name: demand_1950s
+    keys: [customers.desires.2.goods, customers.desires.3.goods]
+    min: 0.6
+    max: 1.4
+    decimals: 4
+    mode: scale
+    expect:
+      - { key: customers.desires.2.match,  equals: { window: day,   from_year: 1950, until_year: 1965 } }
+      - { key: customers.desires.3.match,  equals: { window: night, from_year: 1950, until_year: 1965 } }
+  - name: demand_1970s
+    keys: [customers.desires.4.goods, customers.desires.5.goods]
+    min: 0.6
+    max: 1.4
+    decimals: 4
+    mode: scale
+    expect:
+      - { key: customers.desires.4.match,  equals: { window: day,   from_year: 1970, until_year: 1985 } }
+      - { key: customers.desires.5.match,  equals: { window: night, from_year: 1970, until_year: 1985 } }
+  - name: demand_1990s
+    keys: [customers.desires.6.goods, customers.desires.7.goods]
+    min: 0.6
+    max: 1.4
+    decimals: 4
+    mode: scale
+    expect:
+      - { key: customers.desires.6.match,  equals: { window: day,   from_year: 1990, until_year: 2005 } }
+      - { key: customers.desires.7.match,  equals: { window: night, from_year: 1990, until_year: 2005 } }
+  - name: demand_2010s
+    keys: [customers.desires.8.goods, customers.desires.9.goods]
+    min: 0.6
+    max: 1.4
+    decimals: 4
+    mode: scale
+    expect:
+      - { key: customers.desires.8.match,  equals: { window: day,   from_year: 2010, until_year: 2025 } }
+      - { key: customers.desires.9.match,  equals: { window: night, from_year: 2010, until_year: 2025 } }
+  - name: demand_2030s
+    keys: [customers.desires.10.goods, customers.desires.11.goods]
+    min: 0.6
+    max: 1.4
+    decimals: 4
+    mode: scale
+    expect:
+      - { key: customers.desires.10.match,  equals: { window: day,   from_year: 2030, until_year: 2050 } }
+      - { key: customers.desires.11.match,  equals: { window: night, from_year: 2030, until_year: 2050 } }
+  # AI tunables
+  - { name: grocer_bid,     key: ai.grocer.max_bid_share,           min: 0.1,  max: 0.6 }   # shipped 0.3 of the bid ceiling
+  - { name: grocer_buffer,  key: ai.grocer.cash_buffer,             min: 100,  max: 1000,  distribution: log_uniform, kind: integer }   # shipped £300
+  # Each personality's aggression: the share of its bid ceiling it will pay for a lease (R7).
+  - { name: landlord_aggression,   key: ai.landlord.aggression,        min: 0.1, max: 0.9 }   # shipped 0.31
+  - { name: toff_aggression,       key: ai.toff.aggression,            min: 0.1, max: 0.9 }   # shipped 0.8
+  - { name: speculator_aggression, key: ai.speculator.aggression,      min: 0.1, max: 0.9 }   # shipped 0.51
+  - { name: sir_penny_aggression,  key: ai.sir_penny_sugar.aggression, min: 0.1, max: 0.9 }   # shipped 0.34
