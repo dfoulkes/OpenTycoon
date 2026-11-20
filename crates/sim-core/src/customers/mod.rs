@@ -318,20 +318,44 @@ pub fn front_doors(
 }
 
 /// Picks an arrival station by footfall weight (§4.3): index `k` with probability
-/// `weights[k] / Σ weights`, one draw from `rng`. `None` if every weight is zero.
-pub fn pick_station(_weights: &[u32], _rng: &mut SimRng) -> Option<usize> {
-    None
+/// `weights[k] / Σ weights`, one draw from `rng`. `None` if every weight is zero. With equal
+/// weights this is the same draw as a uniform pick.
+pub fn pick_station(weights: &[u32], rng: &mut SimRng) -> Option<usize> {
+    let total: u64 = weights.iter().map(|w| u64::from(*w)).sum();
+    if total == 0 {
+        return None;
+    }
+    let mut r = below(rng, total);
+    weights.iter().position(|w| {
+        let w = u64::from(*w);
+        if r < w {
+            true
+        } else {
+            r -= w;
+            false
+        }
+    })
+}
+
+/// Tube stations open in `year`, as cells, with their footfall weights (§4.3, from
+/// [`crate::land::stations_in`]), in config order.
+pub fn weighted_station_cells(
+    config: &Config,
+    map: &Map,
+    year: i32,
+    geometry: Geometry,
+) -> Vec<(Cell, u32)> {
+    crate::land::stations_in(map, &config.map, year)
+        .iter()
+        .filter_map(|s| Some((geometry.centre(map.block(s.block)?), s.weight)))
+        .collect()
 }
 
 /// Tube stations open in `year`, as cells, in config order (§4.3).
 pub fn station_cells(config: &Config, map: &Map, year: i32, geometry: Geometry) -> Vec<Cell> {
-    config
-        .map
-        .tube_stations
-        .iter()
-        .filter(|s| s.opens <= year)
-        .filter_map(|s| map.blocks.iter().find(|b| b.key == s.block))
-        .map(|b| geometry.centre(b))
+    weighted_station_cells(config, map, year, geometry)
+        .into_iter()
+        .map(|(cell, _)| cell)
         .collect()
 }
 
@@ -427,7 +451,10 @@ pub fn spawn_wave(
     let tick_secs = clock_rules.tick_game_seconds.max(1);
     let spread_ticks = u64::from(rules.movement.spawn_spread_minutes * 60 / tick_secs);
     let geometry = inputs.geometry();
-    let stations = station_cells(inputs.config, inputs.map, year, geometry);
+    let (stations, station_weights): (Vec<Cell>, Vec<u32>) =
+        weighted_station_cells(inputs.config, inputs.map, year, geometry)
+            .into_iter()
+            .unzip();
     let default_rent = rules.residential.default_rent.money();
     let pop = inputs.population;
     let mut spawned = 0;
@@ -500,7 +527,7 @@ pub fn spawn_wave(
                 } else {
                     Origin::Tourist
                 };
-                let k = usize::try_from(below(rng, stations.len() as u64)).unwrap_or(0);
+                let k = pick_station(&station_weights, rng).unwrap_or(0);
                 spawn(state, *cohort, origin, stations[k], budget, rng);
             }
         }

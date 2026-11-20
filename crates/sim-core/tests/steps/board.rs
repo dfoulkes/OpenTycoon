@@ -71,7 +71,7 @@ fn loaded(w: &mut SimWorld) -> Config {
 fn board_size(w: &mut SimWorld, width: u32, height: u32) {
     let map = Map::from_config(&loaded(w).map);
     assert_eq!((map.width, map.height), (width, height));
-    assert_eq!(map.blocks.len() as u32, width * height);
+    assert_eq!(map.blocks.len(), (width * height) as usize);
 }
 
 #[then(expr = "the board has {int} colour sets")]
@@ -236,7 +236,7 @@ fn rings(w: &mut SimWorld) {
     }
     let means: Vec<i64> = rings
         .values()
-        .map(|p| p.iter().sum::<i64>() / p.len() as i64)
+        .map(|p| p.iter().sum::<i64>() / i64::try_from(p.len()).unwrap())
         .collect();
     assert!(
         means.windows(2).all(|m| m[0] > m[1]),
@@ -531,7 +531,7 @@ fn weights_positive(w: &mut SimWorld, year: i32) {
     let map = w.board.map.as_ref().unwrap();
     let config = w.board.config.as_ref().unwrap();
     let stations = stations_in(map, &config.map, year);
-    assert!(!stations.is_empty());
+    assert_ne!(stations.len(), 0);
     assert!(stations.iter().all(|s| s.weight >= 1));
 }
 

@@ -165,6 +165,13 @@ impl MapConfig {
     pub fn pointer(&self, rest: &str) -> String {
         format!("/boards/{}{rest}", self.board.key())
     }
+
+    /// True unless the river lies outside the grid: it must run between two rows.
+    pub fn river_fits(&self) -> bool {
+        self.river
+            .as_ref()
+            .is_none_or(|r| r.south_of_row.saturating_add(1) < self.grid.height)
+    }
 }
 
 /// The apartment blocks the city owns at the start of the game (R28).
