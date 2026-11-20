@@ -8,6 +8,11 @@ Feature: The 06:00 settlement
 
   Background:
     Given the shipped config
+    # The v1 placeholder bakery and bread this arithmetic is written against (the shipped
+    # stats are era content: docs/economy.md).
+    And the shipped config with "businesses.yaml" key "/goods/bread" set to "{name: Bread, ref_price: 0.10, purchase_price: 0.04}"
+    And the shipped config with "businesses.yaml" key "/types/bakery/stock_density" set to "0.5"
+    And the shipped config with "businesses.yaml" key "/types/bakery/utility_factor" set to "{electricity: 1.0, gas: 1.5, water: 1.0, telecoms: 0.5}"
     And a new game with 2 players
     And the game has run to "01:00"
 

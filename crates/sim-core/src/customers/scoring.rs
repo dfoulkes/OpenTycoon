@@ -162,6 +162,12 @@ pub fn weighted_pick(scores: &[f64], rng: &mut SimRng) -> Option<usize> {
     last
 }
 
+/// A shop's pull once its type is past its obsolete year: its desirability times the share
+/// of demand that is left ([`super::shopping::availability`], §7.1).
+pub fn faded(desirability: f64, left: f64) -> f64 {
+    desirability * left
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

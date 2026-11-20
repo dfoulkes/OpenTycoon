@@ -17,7 +17,7 @@ Feature: Tomorrow's stock order
     Then the bakery has 0 bread in stock
     When the day runs to "06:00"
     Then the bakery has 40 bread in stock
-    And the 06:00 bills charge player 1 "£1.60" for stock
+    And the 06:00 bills charge player 1 "£14.40" for stock
 
   @R2
   Scenario: A shop that sells out mid-day stays sold out until the next morning
@@ -55,20 +55,20 @@ Feature: Tomorrow's stock order
 
   @R2 @R10
   Scenario: An order is capped at what the building can hold
-    # 3×3×10 = 90 units of volume × 0.5 stock density = 45 units of bread.
+    # 3×3×10 = 90 units of volume × 9.25 stock density = 832 units of bread.
     When the day runs to "10:00"
-    And player 1 orders 100 bread for tomorrow at the bakery
-    Then tomorrow's order at the bakery is 45 bread
+    And player 1 orders 1000 bread for tomorrow at the bakery
+    Then tomorrow's order at the bakery is 832 bread
     When the day runs to "06:00"
-    Then the bakery has 45 bread in stock
+    Then the bakery has 832 bread in stock
 
   @R2 @R10
   Scenario: What is billed at 06:00 is exactly what is delivered
-    # A 100-unit order is capped at the bakery's 45; the bill is 45 × 4p, not 100 × 4p.
+    # A 1,000-unit order is capped at the bakery's 832; the bill is 832 × 36p, not 1,000 × 36p.
     When the day runs to "10:00"
-    And player 1 orders 100 bread for tomorrow at the bakery
+    And player 1 orders 1000 bread for tomorrow at the bakery
     And the day runs to "06:00"
-    Then 45 bread were delivered and player 1 was billed "£1.80" for them
+    Then 832 bread were delivered and player 1 was billed "£299.52" for them
 
   @R2
   Scenario: A change after midnight is neither billed nor delivered until the day after
@@ -77,6 +77,6 @@ Feature: Tomorrow's stock order
     And the day runs to "02:00"
     And player 1 orders 10 bread for tomorrow at the bakery
     And the day runs to "06:00"
-    Then 40 bread were delivered and player 1 was billed "£1.60" for them
+    Then 40 bread were delivered and player 1 was billed "£14.40" for them
     When the day runs to "06:00"
-    Then 10 bread were delivered and player 1 was billed "£0.40" for them
+    Then 10 bread were delivered and player 1 was billed "£3.60" for them

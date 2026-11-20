@@ -7,10 +7,11 @@ use serde::{Deserialize, Serialize};
 
 use super::movement::{Cell, Geometry};
 use super::scoring;
+use super::shopping::availability;
 use crate::businesses::{BusinessId, Businesses};
 use crate::clock::Clock;
 use crate::config::Config;
-use crate::config::businesses::Good;
+use crate::config::businesses::{Channel, Good};
 use crate::events::Modifiers;
 use crate::land::Map;
 use crate::money::{BASIS_POINTS_PER_UNIT, Money};
@@ -23,10 +24,11 @@ use crate::population::residential::fit_out_appeal;
 )]
 pub struct GoodId(pub u16);
 
-/// Good ids ↔ names, in catalogue key order.
+/// Good ids ↔ names, in catalogue key order, with each good's unlock and obsolete years.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct GoodsIndex {
     names: Vec<String>,
+    years: Vec<(Option<i32>, Option<i32>)>,
 }
 
 impl GoodsIndex {
@@ -34,7 +36,19 @@ impl GoodsIndex {
     pub fn new(goods: &BTreeMap<String, Good>) -> Self {
         GoodsIndex {
             names: goods.keys().cloned().collect(),
+            years: goods
+                .values()
+                .map(|g| (g.unlock_year, g.obsolete_year))
+                .collect(),
         }
+    }
+
+    /// A good's `(unlock_year, obsolete_year)` by id (`(None, None)` if unknown).
+    pub fn years(&self, id: GoodId) -> (Option<i32>, Option<i32>) {
+        self.years
+            .get(usize::from(id.0))
+            .copied()
+            .unwrap_or((None, None))
     }
 
     /// A good's id by name.
@@ -74,7 +88,9 @@ pub struct ShopOffer {
 }
 
 /// Every open shop's offer of every good it sells, in (shop, good) order (§8.3, §8.4:
-/// night businesses only score while open).
+/// night businesses only score while open). Only walk-in shops make offers: online sellers and
+/// infrastructure have no door to walk to (§7.5). A shop whose type is past its obsolete year
+/// pulls fewer shoppers: its affinity is scaled by the same fade as obsolete goods (§7.1).
 pub fn shop_offers(
     businesses: &Businesses,
     map: &Map,
@@ -88,15 +104,25 @@ pub fn shop_offers(
         let Some(kind) = config.businesses.types.get(&b.type_id) else {
             continue;
         };
-        if !b.is_trading(clock) {
+        if kind.channel != Channel::Shop || !b.is_trading(clock) {
             continue;
         }
         let Some(block) = map.block(b.block) else {
             continue;
         };
         let appeal = fit_out_appeal(config, b.fit_out);
-        let affinity =
-            Class::ALL.map(|c| scoring::desirability(&config.customers, c, block.tier, appeal));
+        let fade = availability(
+            None,
+            kind.obsolete_year,
+            clock.year(),
+            &config.customers.obsolescence,
+        );
+        let affinity = Class::ALL.map(|c| {
+            scoring::faded(
+                scoring::desirability(&config.customers, c, block.tier, appeal),
+                fade,
+            )
+        });
         let door = geometry.door(block, b.footprint);
         for name in &kind.goods {
             let (Some(good), Some(catalogue)) = (goods.id(name), config.businesses.goods.get(name))

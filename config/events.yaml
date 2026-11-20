@@ -9,7 +9,7 @@ groups:                         # goods that effects target, by name (businesses
   staples: [groceries]          # §9 "meat, dairy and sugar"; bread was not rationed in the war
   bar_trade: [drinks]
   physical_retail: [bread, groceries, clothes, drinks, meals]
-  online: []                    # e-commerce goods, once online businesses exist (R15)
+  online: [online_betting, music_streams, video_streams, takeaway]   # goods sold only by channel: online types (R15)
 historical:
   - id: ww2_rationing
     year: 1939
@@ -58,12 +58,12 @@ historical:
     year: 2000
     headline: "Dot-com Fever"
     effects:
-      - { kind: property_value, types: [], factor: 2.0 }    # online business types (R15)
+      - { kind: property_value, types: [ecommerce, online_casino, music_streaming, video_streaming, food_delivery_platform, dark_kitchen], factor: 2.0 }    # online business types (R15)
   - id: dotcom_bust
     year: 2001
     headline: "Dot-com Bubble Bursts"
     effects:
-      - { kind: property_value, types: [], factor: 0.4 }
+      - { kind: property_value, types: [ecommerce, online_casino, music_streaming, video_streaming, food_delivery_platform, dark_kitchen], factor: 0.4 }
   - id: crash
     year: 2008
     headline: "Banks Collapse"

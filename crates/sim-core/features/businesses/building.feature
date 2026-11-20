@@ -20,10 +20,10 @@ Feature: Putting up a building
       | grocery       | 17     | is refused as too tall      |
       | clothes_store | 20     | goes up                     |
       | clothes_store | 21     | is refused as too tall      |
-      | bar           | 12     | goes up                     |
-      | bar           | 13     | is refused as too tall      |
-      | restaurant    | 16     | goes up                     |
-      | restaurant    | 17     | is refused as too tall      |
+      | bar           | 16     | goes up                     |
+      | bar           | 17     | is refused as too tall      |
+      | restaurant    | 20     | goes up                     |
+      | restaurant    | 21     | is refused as too tall      |
       | bakery        | 0      | is refused as too short     |
 
   @R58
@@ -84,7 +84,7 @@ Feature: Putting up a building
     Then the building is refused for overlapping another building
     When player 1 builds a bar 3×3 at 3,0 and 10 high on Soho
     Then the building goes up
-    And the bakery stocks only bread, up to 45 units
+    And the bakery stocks only bread, up to 832 units
 
   @R41
   Scenario: Build cost scales with volume, tier and fit-out

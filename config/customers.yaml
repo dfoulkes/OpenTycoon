@@ -46,17 +46,65 @@ allowance:                      # §8.2, R55; daily, before rent
   age_multiplier: { "18-29": 0.9, "30-49": 1.1, "50-64": 1.0, "65+": 0.7 }
   sex_multiplier: { female: 1.0, male: 1.0 }
   day_share: 0.6                # placeholder: share of the after-rent allowance spent by day
-desires:                        # §8.2 placeholder weights: P(good) per segment and window.
-  # Rules apply in order; a later matching rule overrides the weight of each good it names.
-  # Match on class, age (band id), sex, window (day|night), from_year, until_year.
-  - match: { window: day }
-    goods: { bread: 0.6, groceries: 0.5, clothes: 0.05 }
-  - match: { window: night }
-    goods: { drinks: 0.3, meals: 0.1 }
-  - match: { class: upper, window: day }
-    goods: { bread: 0.4, groceries: 0.3, clothes: 0.2 }
-  - match: { class: upper, window: night }
-    goods: { drinks: 0.3, meals: 0.4 }
+desires:                        # §8.2, R55, R64: P(good | age, class, sex, hour, year)
+  # Rules apply in order. A `set` rule (the default) sets the weight of each good it names; a
+  # `scale` rule multiplies weights already set (capped at 1). Match on class, age (band id),
+  # sex, window (day|night), from_year, until_year. On top of the table, a good is wanted only
+  # from its unlock_year and fades after its obsolete_year (businesses.yaml; `obsolescence`).
+  # Era base tables: the middle-class shopper. Staples dominate early; leisure, electronics and
+  # services rise later; newspapers, video and music fade after their obsolete years.
+  # 1930s–40s: staples, the paper and the pictures
+  - match: { window: day, from_year: 1930, until_year: 1945 }
+    goods: { bread: 0.55, groceries: 0.5, meat: 0.3, fish: 0.15, dairy: 0.4, snacks: 0.15, pies: 0.1, clothes: 0.05, books: 0.04, electrical: 0.01, furniture: 0.01, hardware: 0.04, jewellery: 0.005, newspapers: 0.55, souvenirs: 0.025, toys: 0.03, consultations: 0.03, antiques: 0.004, ice_cream: 0.1 }
+  - match: { window: night, from_year: 1930, until_year: 1945 }
+    goods: { drinks: 0.35, meals: 0.1, dancing: 0.1, movies: 0.25, theatre: 0.04, games: 0.05 }
+  # 1950s–60s: post-war boom, records and fast food
+  - match: { window: day, from_year: 1950, until_year: 1965 }
+    goods: { bread: 0.5, groceries: 0.5, meat: 0.35, fish: 0.15, dairy: 0.4, snacks: 0.15, pies: 0.08, clothes: 0.07, books: 0.05, electrical: 0.03, furniture: 0.015, hardware: 0.05, jewellery: 0.008, newspapers: 0.55, souvenirs: 0.03, toys: 0.04, consultations: 0.05, antiques: 0.005, ice_cream: 0.12, sports_goods: 0.02, music: 0.05, holidays: 0.01, medicine: 0.06 }
+  - match: { window: night, from_year: 1950, until_year: 1965 }
+    goods: { drinks: 0.35, meals: 0.12, dancing: 0.1, movies: 0.2, theatre: 0.04, games: 0.06, fast_food: 0.05 }
+  # 1970s–80s: video, computers, supermarkets
+  - match: { window: day, from_year: 1970, until_year: 1985 }
+    goods: { bread: 0.4, groceries: 0.45, meat: 0.35, fish: 0.12, dairy: 0.35, snacks: 0.12, pies: 0.05, clothes: 0.1, books: 0.06, electrical: 0.05, furniture: 0.02, hardware: 0.05, jewellery: 0.01, newspapers: 0.5, souvenirs: 0.04, toys: 0.05, consultations: 0.05, antiques: 0.006, ice_cream: 0.1, sports_goods: 0.03, music: 0.08, videos: 0.03, holidays: 0.012, medicine: 0.08, fitness: 0.02, computers: 0.01, phones: 0.01 }
+  - match: { window: night, from_year: 1970, until_year: 1985 }
+    goods: { drinks: 0.35, meals: 0.15, dancing: 0.08, movies: 0.12, theatre: 0.04, games: 0.08, fast_food: 0.1, videos: 0.05 }
+  # 1990s–2000s: coffee, mobiles, the internet
+  - match: { window: day, from_year: 1990, until_year: 2005 }
+    goods: { bread: 0.35, groceries: 0.4, meat: 0.3, fish: 0.1, dairy: 0.3, snacks: 0.1, pies: 0.03, clothes: 0.12, books: 0.06, electrical: 0.06, furniture: 0.02, hardware: 0.04, jewellery: 0.012, newspapers: 0.4, souvenirs: 0.05, toys: 0.05, consultations: 0.05, antiques: 0.005, ice_cream: 0.08, sports_goods: 0.04, music: 0.08, videos: 0.04, holidays: 0.015, medicine: 0.1, fitness: 0.05, computers: 0.015, phones: 0.01, video_games: 0.03, betting: 0.04, second_hand_clothes: 0.03, coffee: 0.1, mobile_phones: 0.01, internet_access: 0.03, music_streams: 0.1 }
+  - match: { window: night, from_year: 1990, until_year: 2005 }
+    goods: { drinks: 0.35, meals: 0.18, dancing: 0.06, movies: 0.1, theatre: 0.04, games: 0.06, fast_food: 0.12, videos: 0.08, fried_chicken: 0.05, online_betting: 0.02, craft_beer: 0.03 }
+  # 2010s–20s: streaming, takeaways, wellness
+  - match: { window: day, from_year: 2010, until_year: 2025 }
+    goods: { bread: 0.3, groceries: 0.35, meat: 0.25, fish: 0.1, dairy: 0.25, snacks: 0.1, pies: 0.02, clothes: 0.12, books: 0.05, electrical: 0.06, furniture: 0.02, hardware: 0.03, jewellery: 0.012, newspapers: 0.3, souvenirs: 0.06, toys: 0.04, consultations: 0.05, antiques: 0.004, ice_cream: 0.07, sports_goods: 0.04, music: 0.05, videos: 0.04, holidays: 0.015, medicine: 0.1, fitness: 0.08, computers: 0.02, phones: 0.01, video_games: 0.04, betting: 0.04, second_hand_clothes: 0.04, coffee: 0.25, mobile_phones: 0.03, internet_access: 0.03, music_streams: 0.2, vapes: 0.04, desk_days: 0.01, grooming: 0.04, ev_charging: 0.06 }
+  - match: { window: night, from_year: 2010, until_year: 2025 }
+    goods: { drinks: 0.3, meals: 0.2, dancing: 0.05, movies: 0.08, theatre: 0.04, games: 0.05, fast_food: 0.12, videos: 0.08, fried_chicken: 0.08, online_betting: 0.03, craft_beer: 0.08, takeaway: 0.1, video_streams: 0.2, escape_games: 0.02 }
+  # 2030–2050: speculative era
+  - match: { window: day, from_year: 2030, until_year: 2050 }
+    goods: { bread: 0.25, groceries: 0.3, meat: 0.15, fish: 0.08, dairy: 0.2, snacks: 0.08, pies: 0.02, clothes: 0.1, books: 0.04, electrical: 0.06, furniture: 0.015, hardware: 0.03, jewellery: 0.012, newspapers: 0.3, souvenirs: 0.06, toys: 0.04, consultations: 0.05, antiques: 0.004, ice_cream: 0.06, sports_goods: 0.04, music: 0.05, videos: 0.04, holidays: 0.015, medicine: 0.1, fitness: 0.1, computers: 0.015, phones: 0.01, video_games: 0.04, betting: 0.03, second_hand_clothes: 0.05, coffee: 0.3, mobile_phones: 0.03, internet_access: 0.03, music_streams: 0.3, vapes: 0.03, desk_days: 0.03, grooming: 0.05, ev_charging: 0.1, cultured_meat: 0.05 }
+  - match: { window: night, from_year: 2030, until_year: 2050 }
+    goods: { drinks: 0.28, meals: 0.18, dancing: 0.05, movies: 0.06, theatre: 0.04, games: 0.05, fast_food: 0.1, videos: 0.08, fried_chicken: 0.07, online_betting: 0.03, craft_beer: 0.08, takeaway: 0.15, video_streams: 0.3, escape_games: 0.03, vr_experiences: 0.05, robo_meals: 0.04 }
+  # Segments, in every era: class, age and sex shift the base table.
+  - match: { class: working }
+    mode: scale
+    goods: { jewellery: 0.3, antiques: 0.2, theatre: 0.4, holidays: 0.5, furniture: 0.7, electrical: 0.8, computers: 0.6, meals: 0.6, pies: 1.6, fish: 1.2, bread: 1.1, betting: 1.5, fast_food: 1.2, fried_chicken: 1.3, drinks: 1.1, desk_days: 0.5, escape_games: 0.7, craft_beer: 0.6, coffee: 0.7, second_hand_clothes: 1.4 }
+  - match: { class: upper }
+    mode: scale
+    goods: { jewellery: 4, antiques: 5, theatre: 3, holidays: 3, meals: 2, furniture: 2, books: 1.5, pies: 0.2, fast_food: 0.3, fried_chicken: 0.2, betting: 0.5, bread: 0.7, second_hand_clothes: 0.3, craft_beer: 1.3, desk_days: 1.5, computers: 1.5 }
+  - match: { age: "18-29" }
+    mode: scale
+    goods: { dancing: 2, drinks: 1.3, movies: 1.4, games: 1.8, fast_food: 1.4, fried_chicken: 1.6, video_games: 2, fitness: 1.5, vapes: 2, escape_games: 1.8, vr_experiences: 2, craft_beer: 1.3, coffee: 1.3, consultations: 0.6, medicine: 0.6, furniture: 0.8, newspapers: 0.7, mobile_phones: 1.5, theatre: 0.8, music: 1.6, music_streams: 1.5 }
+  - match: { age: "50-64" }
+    mode: scale
+    goods: { dancing: 0.6, games: 0.6, video_games: 0.4, consultations: 1.4, medicine: 1.4, newspapers: 1.2, theatre: 1.3, antiques: 1.4, vapes: 0.6, fitness: 0.8 }
+  - match: { age: "65+" }
+    mode: scale
+    goods: { dancing: 0.3, drinks: 0.7, games: 0.3, video_games: 0.2, fast_food: 0.5, fried_chicken: 0.4, consultations: 2, medicine: 2, newspapers: 1.4, toys: 1.3, theatre: 1.2, fitness: 0.4, escape_games: 0.3, vr_experiences: 0.3, vapes: 0.4, mobile_phones: 0.6, craft_beer: 0.6 }
+  - match: { sex: female }
+    mode: scale
+    goods: { clothes: 1.3, jewellery: 1.4, grooming: 1.4 }
+  - match: { sex: male }
+    mode: scale
+    goods: { hardware: 1.3, betting: 1.6, drinks: 1.15, sports_goods: 1.3 }
 obsolescence:                   # §7.1: demand fades after a good's or a type's obsolete year
   fade_years: 15                # linear fade from 1 at the obsolete year to the floor
   floor: 0.1                    # collectors and die-hards: the share that never goes away

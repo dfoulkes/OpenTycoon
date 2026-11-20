@@ -133,3 +133,31 @@ proptest! {
         }
     }
 }
+
+/// docs/economy.md "Business stats": every shipped stock density is the formula's, rounded up
+/// to three significant figures (so at most 1% above it). A change to rents, utility rates or
+/// prices that isn't carried through to the densities fails here.
+#[test]
+fn shipped_stock_densities_follow_the_formula() {
+    use sim_core::businesses::formula::derived_stock_density;
+    let config = common::shipped_config();
+    let mut checked = 0;
+    for (id, kind) in &config.businesses.types {
+        let Some(derived) = derived_stock_density(kind, &config) else {
+            assert!(
+                kind.goods.is_empty(),
+                "{id}: its goods lose money at the reference sell-through"
+            );
+            continue;
+        };
+        let shipped = kind.stock_density.rate().bp();
+        let want = derived.bp();
+        assert!(
+            shipped >= want && shipped * 100 <= want * 101,
+            "{id}: stock_density {shipped} bp but the formula gives {want} bp (regenerate, \
+             docs/economy.md)"
+        );
+        checked += 1;
+    }
+    assert!(checked > 50, "only {checked} types checked");
+}

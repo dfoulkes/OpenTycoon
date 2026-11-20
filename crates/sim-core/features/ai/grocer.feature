@@ -57,7 +57,7 @@ Feature: The Grocer
 
   @spec-10 @R2 @R10
   Scenario Outline: Tomorrow's order follows today's sales plus a 10% margin, within capacity
-    # A 3×3×12 grocery holds 108 × 0.6 = 64 units of groceries.
+    # A 3×3×12 grocery holds 108 × 2.21 = 238 units of groceries.
     Given nobody comes shopping
     And the rival holds the lease on every Low-tier block except "Old Kent Road"
     When the Grocer plays until 16:00 on day 1
@@ -69,7 +69,7 @@ Feature: The Grocer
       | delivered | sold | order |
       | 40        | 20   | 22    |
       | 40        | 40   | 44    |
-      | 64        | 64   | 64    |
+      | 238       | 238  | 238   |
       | 40        | 0    | 1     |
 
   @spec-10 @R2 @R10
