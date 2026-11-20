@@ -21,7 +21,7 @@ use sim_core::{Config, ConfigSources, World};
 
 use super::def::{StudyDef, StudyError};
 use super::metrics::{GameOutcome, Tally, metrics};
-use super::models::{ModelSpec, baseline_values, generate, model_config, node_at};
+use super::models::{ModelSpec, baseline_labels, generate, model_config, node_at};
 use super::output::{
     Columns, Outcome, Row, csv_text, game_row, games_header, model_row, models_header, rank,
     read_models, split_csv_line, write_overlays,
@@ -224,7 +224,7 @@ struct Study<'a> {
     preset: String,
     roster: Roster,
     models: Vec<ModelSpec>,
-    baseline: Vec<Option<f64>>,
+    baseline: Vec<Option<String>>,
     plans: Vec<GamePlan>,
     header: Vec<String>,
     games_header: Vec<String>,
@@ -253,7 +253,7 @@ impl<'a> Study<'a> {
         check_keys(def, base)?;
         Ok(Study {
             models: generate(def)?,
-            baseline: baseline_values(def, base),
+            baseline: baseline_labels(def, base),
             plans: plan(def.games_per_model, roster.len(), def.seed),
             header: models_header(def, &roster, opts.wall_time),
             games_header: games_header(roster.len(), opts.wall_time),

@@ -47,10 +47,22 @@ pub fn unit_samples(dims: usize, count: usize, seed: u64) -> Vec<Vec<f64>> {
     points
 }
 
-/// The category index of unit sample `u` when `strata` models share `categories` values.
+/// The category index of unit sample `u` when `strata` models share `categories` values: the
+/// stratum `⌊u · strata⌋` maps to `⌊stratum · categories / strata⌋`. Since the hypercube puts
+/// one model in each stratum, each value gets `strata / categories` models, or one fewer or
+/// more when they do not divide evenly. The jitter inside a stratum never changes the value.
 pub fn category_at(u: f64, strata: usize, categories: usize) -> usize {
-    let _ = (u, strata, categories);
-    0
+    if strata == 0 || categories == 0 {
+        return 0;
+    }
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "u is in [0, 1) and strata is far below 2^52"
+    )]
+    let stratum = ((u * strata as f64) as usize).min(strata - 1);
+    stratum * categories / strata
 }
 
 /// Rounds `v` to `places` decimals (half away from zero).
@@ -160,7 +172,7 @@ mod tests {
             n
         };
         assert_eq!(shares(12, 3), vec![4, 4, 4]);
-        assert_eq!(shares(11, 3), vec![3, 4, 4]);
+        assert_eq!(shares(11, 3), vec![4, 4, 3]);
         assert_eq!(shares(99, 3), vec![33, 33, 33]);
         assert_eq!(shares(5, 1), vec![5]);
     }

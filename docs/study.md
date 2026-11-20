@@ -46,13 +46,15 @@ parameters:
   - { name: overdraft,  key: game.overdraft.start_limit, min: 2500, max: 25000,
       distribution: log_uniform, kind: integer }
   - { name: births,     key: customers.births_per_woman, min: 0.7, max: 1.3, mode: scale }
+  - { name: land_value, key: game.net_worth.land_value, values: [book_decay, market, market_no_decay] }
 ```
 
 | Field | Default | Meaning |
 |---|---|---|
 | `name` | required | column `param_<name>` in `models.csv`; letters, digits, `_` |
 | `key` / `keys` | one required | config key(s) in `--set` form, `file.key.path` (year keys and list indices work); every key takes the same value |
-| `min`, `max` | required | inclusive range |
+| `min`, `max` | required (numeric) | inclusive range; leave out for a categorical parameter |
+| `values` | none | makes the parameter **categorical**: each model sets the key to one of these words (letters, digits, `_`, `-`; no repeats). Takes no `min`/`max`, `distribution`, `decimals` or `mode: scale`. `models.csv` shows the word |
 | `distribution` | `uniform` | `uniform`, or `log_uniform` (even in log space; needs `min > 0`) |
 | `kind` | `decimal` | `integer` (every whole number in range equally likely) or `decimal` |
 | `decimals` | 2 | places a decimal is rounded to. Money in the config is pence and ratios are basis points, so a value with more places than the key allows makes that model invalid |
@@ -67,13 +69,16 @@ config rejects (out of the key's range, or breaking a cross-file rule) makes tha
 
 - **Model 0 is always the base config** (the shipped defaults, plus any `--set`): the baseline
   every other model is compared with. Its `param_` columns show the base values (1 for a scale
-  factor).
+  factor; the base word for a categorical parameter, listed among its `values` or not).
 - **Models 1..N−1 are a Latin hypercube** over the parameters: each parameter's range is cut
   into N−1 equal strata, a seeded Fisher–Yates shuffle assigns strata to models, and a seeded
   jitter places each sample inside its stratum. Every stratum of every parameter is sampled
   exactly once. The draws are sim-core's portable ChaCha8 helpers seeded from `seed`, and
   log-uniform maps use `libm`, so the same definition gives the same models on any machine.
   Adding a parameter at the end leaves the earlier parameters' samples unchanged.
+- **A categorical parameter** with `k` values is stratified the same way: the model in stratum
+  `s` of `N−1` takes value `⌊s · k / (N−1)⌋`, so each value gets an equal share of the models
+  (`(N−1)/k`, or one more or fewer when `k` does not divide `N−1`), whatever the jitter.
 - A model's config is: base sources → the preset's start/end years → the model's overrides,
   through the normal loader (schema + cross-file rules, R45), the same order as
   `sim-cli batch --preset P --set ...`.
