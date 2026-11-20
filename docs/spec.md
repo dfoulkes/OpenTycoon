@@ -630,6 +630,7 @@ OpenTycoon/
 | R66 | AI personalities are opportunistic: each keeps its preferences but moves into residential (or any line) when it is earning more than its own; the Grocer stays pure retail |
 | R67 | The Landlord is a real residential rival: rent set by vacancy and a larger lease book |
 | R68 | A competently run shop must be profitable in every era: retail is fixed in the economy, not by loosening the balance rule |
+| R69 | Events act within a game day, never across whole days (a game day is a 5-year era). The 1970s three-day week becomes power cuts: shops shut for a few hours that day, with a front-page article. The locked stock order always arrives at 06:00 |
 | R40 | Client/server architecture: the server runs the simulation and clients display it |
 
 ### Open

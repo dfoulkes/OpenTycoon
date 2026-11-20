@@ -20,7 +20,6 @@ Feature: History makes the front page and moves the market
       | 1945  | 1950 | Long Live the Queen                  |
       | 1960  | 1965 | England Win the World Cup            |
       | 1965  | 1970 | Decimal Day: Goodbye to the Shilling |
-      | 1965  | 1970 | Three-Day Week as Miners Strike      |
       | 1980  | 1985 | Big Bang in the City                 |
       | 1995  | 2000 | Dot-com Fever                        |
       | 2000  | 2005 | Banks Collapse                       |
@@ -78,30 +77,6 @@ Feature: History makes the front page and moves the market
     When the game runs to midnight
     Then every shelf price is back to usual
     And the currency shows decimal
-
-  @R16
-  Scenario: The three-day week lets each shop open only 3 days in 7
-    Given the shipped config with "game.yaml" key "/clock/start_year" set to "1965"
-    And a new game with 2 players
-    And the game has run to "07:00"
-    And player 1 has a bakery selling bread on each of "Old Kent Road, Whitechapel, Bethnal Green, Soho, Holborn, Bloomsbury, Knightsbridge"
-    When the game runs to midnight
-    Then 3 of the 7 bakeries may open today
-    When the game runs to "17:00"
-    Then only the bakeries allowed to open sold bread today
-
-  # R1, R68: a shop the three-day week keeps shut all day takes no delivery, so it is not billed
-  # for stock it could only bin at midnight. The order still stands for its next open day.
-  @R16 @R1 @R68
-  Scenario: A shop kept shut by the three-day week takes no delivery that day
-    Given the shipped config with "game.yaml" key "/clock/start_year" set to "1965"
-    And a new game with 2 players
-    And the game has run to "07:00"
-    And player 1 has a bakery selling bread on each of "Old Kent Road, Whitechapel, Bethnal Green, Soho, Holborn, Bloomsbury, Knightsbridge"
-    When the game runs to midnight
-    And the game runs to "07:00"
-    Then the bakeries that may not open today had no bread delivered and none billed
-    And the bakeries allowed to open had 300 bread delivered
 
   @R16
   Scenario: The Big Bang lifts the City's desirability

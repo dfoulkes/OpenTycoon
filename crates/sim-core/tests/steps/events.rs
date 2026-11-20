@@ -5,8 +5,9 @@
 use cucumber::{given, then, when};
 use sim_core::World;
 use sim_core::auctions::{AuctionError, AuctionItem, AuctionPhase};
+use sim_core::customers::Activity;
 use sim_core::economy::AccountId;
-use sim_core::events::{Modifier, Party};
+use sim_core::events::Party;
 use sim_core::land::Tier;
 use sim_core::money::Rate;
 use sim_core::population::Class;
@@ -14,7 +15,8 @@ use sim_core::utilities::UtilityKind;
 use sim_core::world::Command;
 
 use super::economy::{
-    account, block_id, business, business_id, money, owns_building, player, rebaseline, world,
+    account, block_id, business, business_id, money, owns_building, parse_hm, player, rebaseline,
+    world,
 };
 use crate::SimWorld;
 
@@ -364,92 +366,146 @@ fn footfall_is(w: &mut SimWorld, block: String, percent: i64) {
     assert_eq!(factor, Rate::from_bp(percent * 100));
 }
 
-/// The bakeries on the map and whether the open-days rule lets each trade today.
-fn bakeries_allowed(world: &World) -> Vec<(sim_core::businesses::BusinessId, bool)> {
-    let day = world.clock().day();
-    let modifiers = world.events().modifiers();
-    assert!(
-        modifiers
-            .active()
-            .iter()
-            .any(|m| matches!(m.modifier, Modifier::OpenDays { .. })),
-        "no open-days rule in force"
-    );
+/// The bakeries on the map.
+fn bakeries(world: &World) -> Vec<&sim_core::businesses::Business> {
     world
         .businesses()
         .by_id
-        .iter()
-        .filter(|(_, b)| b.type_id == "bakery")
-        .map(|(id, _)| (*id, modifiers.may_trade(*id, day)))
+        .values()
+        .filter(|b| b.type_id == "bakery")
         .collect()
 }
 
-#[then(expr = "{int} of the {int} bakeries may open today")]
-fn bakeries_may_open(w: &mut SimWorld, open: usize, total: usize) {
-    let allowed = bakeries_allowed(world(w));
-    assert_eq!(allowed.len(), total);
-    assert_eq!(allowed.iter().filter(|(_, ok)| *ok).count(), open);
+/// True if the three-day week's power cuts are on the modifier stack.
+fn power_cuts_in_force(world: &World) -> bool {
+    world
+        .events()
+        .modifiers()
+        .active()
+        .iter()
+        .any(|m| m.source == "three_day_week")
 }
 
-#[then("only the bakeries allowed to open sold bread today")]
-fn only_allowed_sold(w: &mut SimWorld) {
+#[when(expr = "the game runs to {string} keeping the bakeries' books")]
+fn runs_keeping_books(w: &mut SimWorld, time: String) {
+    let target = parse_hm(&time);
     let world = world(w);
-    let allowed = bakeries_allowed(world);
-    let sold = |id| {
-        world
-            .businesses()
-            .get(id)
-            .and_then(|b| b.sold_today.get("bread").copied())
-            .unwrap_or(0)
-    };
-    for (id, ok) in &allowed {
-        if !ok {
-            assert_eq!(sold(*id), 0, "shut bakery {id:?} sold bread");
+    let mut books = Vec::new();
+    let limit = world.clock().rules().ticks_per_day();
+    for _ in 0..limit {
+        world.tick();
+        let now = world.clock().second_of_day();
+        let sold = bakeries(world)
+            .iter()
+            .map(|b| b.sold_today.get("bread").copied().unwrap_or(0))
+            .sum();
+        let lost = bakeries(world)
+            .iter()
+            .map(|b| i64::from(b.lost_sales_today))
+            .sum();
+        let out = world
+            .customers()
+            .agents
+            .iter()
+            .filter(|c| !matches!(c.activity, Activity::Waiting { .. }))
+            .count();
+        books.push(Books {
+            second: now,
+            sold,
+            lost,
+            out,
+        });
+        if now == target {
+            w.events.books = books;
+            return;
         }
     }
-    assert!(
-        allowed.iter().any(|(id, ok)| *ok && sold(*id) > 0),
-        "no open bakery sold anything"
+    panic!("{time} not reached within a day");
+}
+
+/// The bakeries' bread sold and shoppers turned away in `[from, to)`, from the books.
+fn trade_between(w: &SimWorld, from: &str, to: &str) -> (i64, i64) {
+    let (from, to) = (parse_hm(from), parse_hm(to));
+    let books = &w.events.books;
+    assert!(!books.is_empty(), "keep the bakeries' books first");
+    // Totals as they stood after the last tick before `at` (nothing before the first tick).
+    let at = |second: u32| {
+        books
+            .iter()
+            .take_while(|b| b.second < second)
+            .last()
+            .map_or((0, 0), |b| (b.sold, b.lost))
+    };
+    let (s0, l0) = at(from);
+    let (s1, l1) = at(to);
+    (s1 - s0, l1 - l0)
+}
+
+#[then(expr = "no bakery sold bread or turned a shopper away between {string} and {string}")]
+fn dark_between(w: &mut SimWorld, from: String, to: String) {
+    let (sold, lost) = trade_between(w, &from, &to);
+    assert_eq!(
+        (sold, lost),
+        (0, 0),
+        "sold {sold} and turned {lost} away while the lights were out"
     );
 }
 
-#[then("the bakeries that may not open today had no bread delivered and none billed")]
-fn shut_bakeries_took_nothing(w: &mut SimWorld) {
-    let world = world(w);
-    let allowed = bakeries_allowed(world);
-    assert!(allowed.iter().any(|(_, ok)| !ok), "no bakery was kept shut");
-    for (id, ok) in &allowed {
-        if *ok {
-            continue;
-        }
-        let b = world.businesses().get(*id).unwrap();
-        // The 06:00 bill is the locked order at purchase price, and exactly that is delivered.
-        assert_eq!(
-            b.tomorrow_order.get("bread").copied(),
-            Some(0),
-            "shut {id:?} billed"
-        );
-        assert_eq!(b.stock_of("bread"), 0, "shut bakery {id:?} took a delivery");
-        assert_eq!(
-            b.standing_order.get("bread").copied(),
-            Some(300),
-            "order lost"
-        );
+#[then(expr = "the bakeries sold bread between {string} and {string}")]
+fn sold_between(w: &mut SimWorld, from: String, to: String) {
+    let (sold, _) = trade_between(w, &from, &to);
+    assert!(sold > 0, "no bread sold between {from} and {to}");
+}
+
+#[then(expr = "shoppers were out on the street at {string}")]
+fn shoppers_out_at(w: &mut SimWorld, time: String) {
+    let at = parse_hm(&time);
+    let out = w
+        .events
+        .books
+        .iter()
+        .take_while(|b| b.second < at)
+        .last()
+        .map_or(0, |b| b.out);
+    assert!(out > 0, "nobody was out at {time}");
+}
+
+#[then("every bakery sold bread today")]
+fn every_bakery_sold(w: &mut SimWorld) {
+    for b in bakeries(world(w)) {
+        let sold = b.sold_today.get("bread").copied().unwrap_or(0);
+        assert!(sold > 0, "a bakery on block {:?} sold nothing", b.block);
     }
 }
 
-#[then(expr = "the bakeries allowed to open had {int} bread delivered")]
-fn open_bakeries_delivered(w: &mut SimWorld, units: i64) {
-    let world = world(w);
-    for (id, ok) in bakeries_allowed(world) {
-        if ok {
-            let b = world.businesses().get(id).unwrap();
-            assert_eq!(
-                b.tomorrow_order.get("bread").copied(),
-                Some(units),
-                "{id:?}"
-            );
-        }
+#[then("the power cuts are in force")]
+fn cuts_in_force(w: &mut SimWorld) {
+    assert!(power_cuts_in_force(world(w)), "no power cuts in force");
+}
+
+#[then("no power cut is in force")]
+fn no_cuts(w: &mut SimWorld) {
+    assert!(!power_cuts_in_force(world(w)), "power cuts still in force");
+}
+
+#[then(expr = "every bakery had {int} bread delivered and billed at 06:00")]
+fn every_bakery_delivered(w: &mut SimWorld, units: i64) {
+    let all = bakeries(world(w));
+    assert_eq!(all.len(), 7);
+    for b in all {
+        // The 06:00 bill is the locked order at purchase price, and exactly that is delivered.
+        assert_eq!(
+            b.tomorrow_order.get("bread").copied(),
+            Some(units),
+            "bakery on block {:?} billed",
+            b.block
+        );
+        assert_eq!(
+            b.stock_of("bread"),
+            units,
+            "bakery on block {:?} delivered",
+            b.block
+        );
     }
 }
 
@@ -472,8 +528,19 @@ fn games_match(w: &mut SimWorld) {
     );
 }
 
-/// Two games for the determinism scenario.
+/// Two games for the determinism scenario, and the bakeries' books through a power-cut day.
 #[derive(Debug, Default)]
 pub struct EventsState {
     games: Vec<World>,
+    books: Vec<Books>,
+}
+
+/// The bakeries' running totals after one tick.
+#[derive(Debug, Clone, Copy)]
+struct Books {
+    second: u32,
+    sold: i64,
+    lost: i64,
+    /// Shoppers on the street (stepped out, not yet gone).
+    out: usize,
 }

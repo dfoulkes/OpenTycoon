@@ -287,7 +287,7 @@ fn event_effects_must_name_known_targets_blocks_and_types() {
 }
 
 #[test]
-fn event_shares_and_open_days_out_of_range_are_rejected() {
+fn event_shares_out_of_range_are_rejected() {
     for (pointer, value, names) in [
         (
             "/historical/0/effects/1/share",
@@ -298,11 +298,6 @@ fn event_shares_and_open_days_out_of_range_are_rejected() {
             "/historical/1/effects/0/chance",
             "-0.1",
             "/historical/1/effects/0/chance",
-        ),
-        (
-            "/historical/5/effects/0/open",
-            "8",
-            "/historical/5/effects/0/open",
         ),
         ("/random/0/daily_chance", "2", "/random/0/daily_chance"),
         ("/insurance/premium_rate", "-1", "/insurance/premium_rate"),
@@ -321,6 +316,93 @@ fn event_shares_and_open_days_out_of_range_are_rejected() {
             load_with("events.yaml", pointer, value),
             "events.yaml",
             names,
+        );
+    }
+}
+
+/// R69: a power cut acts within a game day. Each case breaks the three-day week's windows (or
+/// its headline) one way; the error names the key and says what is wrong.
+#[test]
+fn power_cut_windows_must_fall_inside_a_day_and_not_overlap() {
+    let cut = "/historical/5/effects/0/windows";
+    for (value, names, says) in [
+        (
+            "[{from: '10:00', to: '07:00'}]",
+            "/historical/5/effects/0/windows/0",
+            "must start before it ends",
+        ),
+        (
+            "[{from: '07:00', to: '07:00'}]",
+            "/historical/5/effects/0/windows/0",
+            "must start before it ends",
+        ),
+        (
+            "[{from: '07:00', to: '10:00'}, {from: '09:30', to: '11:00'}]",
+            "/historical/5/effects/0/windows/1",
+            "overlaps",
+        ),
+        (
+            "[{from: '13:00', to: '15:30'}, {from: '07:00', to: '13:30'}]",
+            "/historical/5/effects/0/windows/1",
+            "overlaps",
+        ),
+        (
+            "[]",
+            "/historical/5/effects/0/windows",
+            "at least one window",
+        ),
+        (
+            "[{from: '06:00', to: '12:00'}, {from: '12:00', to: '18:00'}]",
+            "/historical/5/effects/0/windows",
+            "whole of day trade",
+        ),
+    ] {
+        let errors = load_with("events.yaml", cut, value).expect_err(value);
+        assert!(
+            errors.0.iter().any(|e| e.file == "events.yaml"
+                && e.location == names
+                && e.message.contains(says)),
+            "{value}: no error at {names} saying {says:?}:\n{errors}"
+        );
+    }
+    // Not a time of day at all: rejected while reading the file.
+    assert_names(
+        load_with("events.yaml", cut, "[{from: '07:00', to: '24:30'}]"),
+        "events.yaml",
+        "24:30",
+    );
+}
+
+/// R69: no event effect spans whole days. The old open-days rule (shops shut for whole game
+/// days) is no longer an effect at all.
+#[test]
+fn whole_day_closures_are_not_an_event_effect() {
+    assert_names(
+        load_with(
+            "events.yaml",
+            "/historical/5/effects/0",
+            "{kind: open_days, open: 3, of: 7, days: 1}",
+        ),
+        "events.yaml",
+        "open_days",
+    );
+}
+
+/// R69: the front page names the hours. A power cut's headline must render its windows with
+/// `{cut_windows}`, and only a power cut's headline may use it.
+#[test]
+fn a_power_cut_headline_must_name_its_windows() {
+    for (pointer, value) in [
+        ("/historical/5/headline", "Power Cuts as Miners Strike"),
+        (
+            "/historical/2/headline",
+            "Long Live the Queen {cut_windows}",
+        ),
+    ] {
+        assert_names(
+            load_with("events.yaml", pointer, &format!("{value:?}")),
+            "events.yaml",
+            pointer,
         );
     }
 }
