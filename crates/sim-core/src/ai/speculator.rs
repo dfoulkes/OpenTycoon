@@ -23,6 +23,12 @@
 //!    the city (R5) or offers a lease at auction.
 //! 3. **Flip.** A purchase held `hold_hours` goes back up for auction (R5, R33). Unsold, it is
 //!    offered again after another `hold_hours`.
+//! - **Apartment blocks (R66).** When the day's reading says apartment blocks earn `threshold`
+//!   more per pound than land ([`kit::opportunity`]), it builds one on a lease it holds, or
+//!   opens an auction on the city's cheapest apartment block at its build cost (R28, R41), and
+//!   bids up to build cost on one the city sells; never past `max_outside_share` of its
+//!   holdings. It lets them by vacancy ([`kit::rent`]) and re-lists them after
+//!   `apartment_hold_hours`, having collected some rent.
 //! 4. **Buy.** Opens an auction on the cheapest lot it wants at its base price (R23), keeping
 //!    `cash_buffer`.
 
@@ -31,7 +37,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use super::Brain;
-use super::kit::{self, Cadence, Temper};
+use super::kit::{self, Cadence, Line, Opportunist, Temper};
 use crate::auctions::{Auction, AuctionItem};
 use crate::businesses::BusinessId;
 use crate::economy::{AccountId, PlayerId};
@@ -65,6 +71,8 @@ pub struct Speculator {
     temper: Temper,
     /// What it holds, and the tick it got it (or last offered it).
     holdings: BTreeMap<Holding, u64>,
+    /// The day's reading of what each line earns, and the rents on its flats (R66).
+    opportunist: Opportunist,
 }
 
 impl Speculator {
@@ -119,9 +127,34 @@ impl Speculator {
                 kit::lease_book_value(world, block)?
             }
             AuctionItem::Business(id) if from_player => world.businesses().get(id)?.build_cost,
-            _ => return None,
+            AuctionItem::Business(id) => return self.max_for_city_block(world, me, id, cap),
+            AuctionItem::Utility(_) => return None,
         };
         Some(cfg.bargain_share.rate().apply(book).min(cap))
+    }
+
+    /// On an apartment block the city sells (R28): up to its build cost, the auction's minimum
+    /// (R41), within `cap`, if apartment blocks pay and it stays within its holdings cap.
+    fn max_for_city_block(
+        &self,
+        world: &World,
+        me: PlayerId,
+        id: BusinessId,
+        cap: Money,
+    ) -> Option<Money> {
+        let config = world.config();
+        let cfg = &config.ai.speculator.opportunism;
+        let b = world.businesses().get(id)?;
+        let wanted = b.type_id == config.customers.residential.building_type
+            && self.opportunist.wants(cfg, Line::Land, Line::Residential)
+            && kit::opportunity::within_cap(
+                world,
+                me,
+                Line::Land,
+                b.build_cost,
+                cfg.max_outside_share.rate(),
+            );
+        wanted.then_some(b.build_cost.min(cap))
     }
 
     fn strategy(&mut self, world: &World, me: PlayerId) -> Vec<Command> {
@@ -130,10 +163,53 @@ impl Speculator {
             return kit::rescue(world, me).into_iter().collect();
         }
         self.track(world, me);
+        let mut out = self.opportunist.let_flats(world, me, &cfg.opportunism);
         if let Some(flip) = self.flip(world) {
-            return vec![flip];
+            out.push(flip);
+        } else if let Some(flats) = self.flats(world, me) {
+            out.push(flats);
+        } else if let Some(open) = self.open_auction(world, me) {
+            out.push(open);
         }
-        self.open_auction(world, me).into_iter().collect()
+        out
+    }
+
+    /// When apartment blocks out-earn land (R66): build one on a lease it holds, else open an
+    /// auction on the city's cheapest apartment block at its build cost.
+    fn flats(&self, world: &World, me: PlayerId) -> Option<Command> {
+        let config = world.config();
+        let cfg = &config.ai.speculator;
+        let opp = &cfg.opportunism;
+        if !Self::has_room(world, me) || !self.opportunist.wants(opp, Line::Land, Line::Residential)
+        {
+            return None;
+        }
+        let lots = kit::held_lots(world, me);
+        if let Some(plan) =
+            kit::opportunity::flats_plan(world, me, opp, Line::Land, &lots, cfg.cash_buffer.money())
+        {
+            return Some(plan.command());
+        }
+        if !kit::house_free(world) {
+            return None;
+        }
+        let cap = kit::share_of_ceiling(world, me, cfg.aggression.rate()).min(kit::spare(
+            world,
+            me,
+            cfg.cash_buffer.money(),
+        ));
+        world
+            .businesses()
+            .owned_by(AccountId::City)
+            .filter(|(id, b)| {
+                self.max_for_city_block(world, me, *id, cap)
+                    .is_some_and(|max| b.build_cost <= max)
+            })
+            .min_by_key(|(id, b)| (b.build_cost, *id))
+            .map(|(business, b)| Command::OpenBusinessAuction {
+                business,
+                bid: b.build_cost,
+            })
     }
 
     /// Notes new purchases (from now) and forgets what it no longer holds.
@@ -152,11 +228,26 @@ impl Speculator {
         }
         let now = world.clock().tick();
         let per_hour = u64::from(world.clock().rules().ticks_per_day() / 24);
-        let hold = u64::from(world.config().ai.speculator.hold_hours) * per_hour;
+        let cfg = &world.config().ai.speculator;
+        let apartments = &world.config().customers.residential.building_type;
+        let hold = |h: &Holding| {
+            let hours = match h {
+                Holding::Business(id)
+                    if world
+                        .businesses()
+                        .get(*id)
+                        .is_some_and(|b| &b.type_id == apartments) =>
+                {
+                    cfg.apartment_hold_hours
+                }
+                _ => cfg.hold_hours,
+            };
+            u64::from(hours) * per_hour
+        };
         let (holding, since) = self
             .holdings
             .iter_mut()
-            .find(|(_, since)| now >= since.saturating_add(hold))?;
+            .find(|(h, since)| now >= since.saturating_add(hold(h)))?;
         *since = now;
         Some(Command::OfferForAuction {
             item: holding.item(),
@@ -186,6 +277,7 @@ impl Speculator {
 
 impl Brain for Speculator {
     fn decide(&mut self, world: &World, me: PlayerId, rng: &mut SimRng) -> Vec<Command> {
+        self.opportunist.observe(world, me);
         let jitter = world.config().ai.speculator.bid_jitter.rate();
         let mut temper = self.temper;
         let mut out: Vec<Command> = kit::tempered_turn(world, me, &mut temper, jitter, rng, |a| {

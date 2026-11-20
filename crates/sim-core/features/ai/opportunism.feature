@@ -17,17 +17,17 @@ Feature: Opportunism
     Given the shipped config on the v1 map
 
   @spec-10 @spec-7.2 @R66
-  Scenario Outline: The Toff builds flats on its High lot only when flats out-earn its shops
-    # The city's starter apartment blocks are let at the reference rent: at £3.00 they pay well,
-    # at £0.05 they barely cover their bills.
+  Scenario Outline: The Toff builds flats on its High lots only when flats out-earn its shops
+    # The city's starter apartment blocks are let at the going rent: at £3.00 they pay well, at
+    # £0.05 they don't cover their bills.
     Given the Toff plays seat 1 against a scripted rival in seat 0
     And every player starts with £60,000
     And 2000 people live in the city
-    And the reference rent is £<rent>
+    And flats let at £<rent> a day
     And the Toff holds the lease on "Mayfair"
     When the Toff plays for 3 game days
     Then the Toff put up at least 1 shop
-    And the Toff <did> put up an apartment block on "Mayfair"
+    And the Toff <did> put up an apartment block, only ever on High tier
 
     Examples:
       | rent | did    |
@@ -57,7 +57,7 @@ Feature: Opportunism
   Scenario: The Speculator leaves apartment blocks alone when they don't pay
     Given the Speculator plays seat 1 against a scripted rival in seat 0
     And 2000 people live in the city
-    And the reference rent is £0.05
+    And flats let at £0.05 a day
     And the rival holds every lease
     When the Speculator plays for 4 game days
     Then the Speculator never bid on an apartment block
@@ -67,7 +67,7 @@ Feature: Opportunism
     Given the Grocer plays seat 1 against a scripted rival in seat 0
     And every player starts with £60,000
     And 2000 people live in the city
-    And the reference rent is £9.00
+    And flats let at £9.00 a day
     And the Grocer holds the lease on "Old Kent Road"
     When seat 1 plays for 3 game days
     Then the Grocer put up at least 1 shop

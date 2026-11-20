@@ -4,6 +4,16 @@
 //!
 //! Everything here reads only the world's public state and returns [`Command`]s, so a
 //! personality built from it plays exactly like a client (R40).
+//!
+//! - [`opportunity`]: what each line of business is earning and when to leave the home line for
+//!   another (R66).
+//! - [`rent`]: rent set by vacancy, for every AI that lets flats (R51).
+
+pub mod opportunity;
+pub mod rent;
+
+pub use opportunity::{Line, LineYields, Opportunist, Outlook, line_yields};
+pub use rent::{RentBook, VacancyRule, rent_for_occupancy};
 
 use std::collections::{BTreeMap, BTreeSet};
 

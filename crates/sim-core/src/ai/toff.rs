@@ -19,6 +19,11 @@
 //!    sales plus `order_margin` ([`super::grocer::next_order`], R2, R10).
 //! - **Hotel.** Holding a whole colour set, it puts up a Hotel there before anything else
 //!   (§7.3; R14, R29), if the era has a Hotel type and it keeps its buffer.
+//! - **Luxury flats (R66).** When the day's reading says apartment blocks earn `threshold` more
+//!   per pound than its shops ([`kit::opportunity`]), it puts up `opportunism.fit_out` (high)
+//!   apartment blocks on its High lots, at most `apartments_per_lot` a lease and never more
+//!   than `max_outside_share` of its buildings by build cost, and lets them by vacancy from
+//!   `start_rent` (twice the reference rent) ([`kit::rent`]).
 //! 5. **Build.** At most `shops_per_lot` shops a lease, `fit_out` (high) fit-out, of the next
 //!    type in rotation from `shop_types` that the era allows (else any retail type, dearest
 //!    goods first), if it keeps its large `cash_buffer`.
@@ -28,7 +33,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::Brain;
-use super::kit::{self, Cadence, ShopBook, Temper};
+use super::kit::{self, Cadence, Line, Opportunist, ShopBook, Temper};
 use crate::auctions::{Auction, AuctionItem};
 use crate::businesses::Hours;
 use crate::economy::{AccountId, PlayerId};
@@ -45,6 +50,8 @@ pub struct Toff {
     cadence: Cadence,
     temper: Temper,
     shops: ShopBook,
+    /// The day's reading of what each line earns, and the rents on its flats (R66).
+    opportunist: Opportunist,
 }
 
 impl Toff {
@@ -119,7 +126,8 @@ impl Toff {
             self.shops
                 .evening_orders(world, me, cfg.order_margin.rate()),
         );
-        if let Some(build) = Self::build(world, me) {
+        out.extend(self.opportunist.let_flats(world, me, &cfg.opportunism));
+        if let Some(build) = self.build(world, me) {
             out.push(build);
         } else if !Self::has_room(world, me)
             && let Some(open) = self.open_auction(world, me)
@@ -134,9 +142,12 @@ impl Toff {
         let Some(type_id) = Self::next_type(world, me) else {
             return Vec::new();
         };
+        let apartments = &world.config().customers.residential.building_type;
         kit::held_lots(world, me)
             .into_iter()
-            .filter(|block| kit::owned_on(world, me, *block, |_| true) < cfg.shops_per_lot)
+            .filter(|block| {
+                kit::owned_on(world, me, *block, |t| t != apartments) < cfg.shops_per_lot
+            })
             .filter_map(|block| {
                 kit::plan_on(
                     world,
@@ -155,7 +166,7 @@ impl Toff {
         !Self::lots_with_room(world, me).is_empty()
     }
 
-    fn build(world: &World, me: PlayerId) -> Option<Command> {
+    fn build(&self, world: &World, me: PlayerId) -> Option<Command> {
         let cfg_h = &world.config().ai.toff;
         if let Some(plan) = kit::hotel_plan(
             world,
@@ -169,12 +180,38 @@ impl Toff {
             return Some(plan.command());
         }
         let buffer = world.config().ai.toff.cash_buffer.money();
+        if let Some(flats) = self.luxury_flats(world, me) {
+            return Some(flats.command());
+        }
         Self::lots_with_room(world, me)
             .into_iter()
             .find(|plan| {
                 kit::spare(world, me, buffer) >= plan.cost && world.can_afford(me, plan.cost)
             })
             .map(kit::Plan::command)
+    }
+
+    /// Luxury flats on a High lot it holds, when flats out-earn its shops (R66).
+    fn luxury_flats(&self, world: &World, me: PlayerId) -> Option<kit::Plan> {
+        let cfg = &world.config().ai.toff;
+        if !self
+            .opportunist
+            .wants(&cfg.opportunism, Line::Retail, Line::Residential)
+        {
+            return None;
+        }
+        let lots: Vec<_> = kit::held_lots(world, me)
+            .into_iter()
+            .filter(|b| kit::wants_block(world, &self.personality, cfg.min_tier_weight.rate(), *b))
+            .collect();
+        kit::opportunity::flats_plan(
+            world,
+            me,
+            &cfg.opportunism,
+            Line::Retail,
+            &lots,
+            cfg.cash_buffer.money(),
+        )
     }
 
     fn open_auction(&self, world: &World, me: PlayerId) -> Option<Command> {
@@ -191,6 +228,7 @@ impl Toff {
 
 impl Brain for Toff {
     fn decide(&mut self, world: &World, me: PlayerId, rng: &mut SimRng) -> Vec<Command> {
+        self.opportunist.observe(world, me);
         let jitter = world.config().ai.toff.bid_jitter.rate();
         let mut temper = self.temper;
         let mut out: Vec<Command> = kit::tempered_turn(world, me, &mut temper, jitter, rng, |a| {

@@ -53,6 +53,9 @@ pub struct Grocer {
     known: BTreeSet<BusinessId>,
     /// The day it last set evening orders.
     ordered_on_day: Option<u32>,
+    /// The day's reading of what each line earns (R66). Its `opportunism` is off as shipped:
+    /// the Grocer stays pure retail.
+    opportunist: super::kit::Opportunist,
 }
 
 impl Grocer {
@@ -162,7 +165,10 @@ impl Grocer {
             self.ordered_on_day = Some(today);
             out.extend(self.evening_orders(world, account, cfg));
         }
-        if let Some(build) = Self::build(world, me, balance, cfg) {
+        out.extend(self.opportunist.let_flats(world, me, &cfg.opportunism));
+        if let Some(flats) = self.flats(world, me) {
+            out.push(flats);
+        } else if let Some(build) = Self::build(world, me, balance, cfg) {
             out.push(build);
         } else if !Self::has_free_site(world, me)
             && let Some(open) = self.open_auction(world, me)
@@ -263,6 +269,29 @@ impl Grocer {
         Some((type_id, footprint, height, cost))
     }
 
+    /// Flats on a lot it holds, only if its `opportunism` is on and flats out-earn its shops
+    /// (R66). Off as shipped.
+    fn flats(&self, world: &World, me: PlayerId) -> Option<Command> {
+        use super::kit::Line;
+        let cfg = &world.config().ai.grocer;
+        if !self
+            .opportunist
+            .wants(&cfg.opportunism, Line::Retail, Line::Residential)
+        {
+            return None;
+        }
+        let lots: Vec<BlockId> = Self::held_lots(world, me).collect();
+        super::kit::opportunity::flats_plan(
+            world,
+            me,
+            &cfg.opportunism,
+            Line::Retail,
+            &lots,
+            cfg.cash_buffer.money(),
+        )
+        .map(super::kit::Plan::command)
+    }
+
     fn has_free_site(world: &World, me: PlayerId) -> bool {
         Self::held_lots(world, me).any(|block| Self::site_on(world, me, block).is_some())
     }
@@ -304,6 +333,7 @@ impl Grocer {
 
 impl Brain for Grocer {
     fn decide(&mut self, world: &World, me: PlayerId, rng: &mut SimRng) -> Vec<Command> {
+        self.opportunist.observe(world, me);
         let mut out: Vec<Command> = self.auction_turn(world, me).into_iter().collect();
         let now = world.clock().tick();
         let interval = u64::from(world.config().ai.decision_interval_ticks);

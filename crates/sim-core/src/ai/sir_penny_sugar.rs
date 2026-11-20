@@ -18,7 +18,7 @@
 //! 3. **Rents.** A new block is let at `start_rent × reference_rent`. Each morning after the
 //!    05:30 house-hunt (R53) he looks at each block's occupancy: at or above `raise_at` he puts
 //!    the rent up by `rent_step`, at or below `cut_at` he cuts it, within `min_rent`–`max_rent`
-//!    (R51, R52).
+//!    (R51, R52; the shared rule, [`kit::rent`]).
 //! - **Hotel.** Holding a whole colour set, it puts up a Hotel there before anything else
 //!   (§7.3; R14, R29), if the era has a Hotel type and it keeps its buffer.
 //! 4. **Build.** Apartment blocks (`customers.yaml` `residential.building_type`, if the era
@@ -26,18 +26,15 @@
 //! 5. **Land.** Opens an auction on a lot he wants, station lots first, then the cheapest (R23);
 //!    failing that, on one of the city's apartment blocks at its build cost (R28).
 
-use std::collections::BTreeMap;
-
 use serde::{Deserialize, Serialize};
 
 use super::Brain;
-use super::kit::{self, Cadence, Temper};
+use super::kit::{self, Cadence, RentBook, Temper, VacancyRule};
 use crate::auctions::{Auction, AuctionItem};
 use crate::businesses::{BusinessId, FitOutLevel};
 use crate::economy::{AccountId, PlayerId};
 use crate::land::BlockId;
 use crate::money::{Money, Rate};
-use crate::population::residential::flats;
 use crate::rng::SimRng;
 use crate::world::{Command, World};
 
@@ -48,35 +45,8 @@ pub struct PennySugar {
     personality: String,
     cadence: Cadence,
     temper: Temper,
-    /// The rent he last set on each block.
-    rents: BTreeMap<BusinessId, Money>,
-    /// The day he last reviewed rents.
-    reviewed_on: Option<u32>,
-}
-
-/// The new rent for a block from its occupancy (§7.2, R51): `rent + step` when `let ÷ flats ≥
-/// raise_at`, `rent − step` when it is `≤ cut_at`, otherwise unchanged; always within
-/// `min..=max`. An empty building (no flats) keeps its rent.
-pub fn rent_for_occupancy(
-    rent: Money,
-    let_flats: u32,
-    total: u32,
-    step: Money,
-    (raise_at, cut_at): (Rate, Rate),
-    (min, max): (Money, Money),
-) -> Money {
-    if total == 0 {
-        return rent.max(min).min(max);
-    }
-    let occupancy = i64::from(let_flats) * crate::money::BASIS_POINTS_PER_UNIT / i64::from(total);
-    let next = if occupancy >= raise_at.bp() {
-        rent + step
-    } else if occupancy <= cut_at.bp() {
-        rent - step
-    } else {
-        rent
-    };
-    next.max(min).min(max)
+    /// The rents he has set, reviewed each morning by vacancy ([`kit::RentBook`]).
+    rents: RentBook,
 }
 
 impl PennySugar {
@@ -86,10 +56,6 @@ impl PennySugar {
             personality: personality.into(),
             ..PennySugar::default()
         }
-    }
-
-    fn reference(world: &World, share: Rate) -> Money {
-        share.apply(world.config().customers.residential.reference_rent.money())
     }
 
     /// The most he pays for the lease on `block` now: `aggression × bid ceiling` (R7), plus
@@ -171,61 +137,16 @@ impl PennySugar {
 
     /// New blocks at the starting rent; once a morning, every block's rent by occupancy.
     fn rents(&mut self, world: &World, me: PlayerId) -> Vec<Command> {
-        let config = world.config();
-        let cfg = &config.ai.sir_penny_sugar;
-        let rules = &config.customers.residential;
-        let mine: Vec<(BusinessId, u32)> = world
-            .businesses()
-            .owned_by(AccountId::Player(me))
-            .filter(|(_, b)| b.type_id == rules.building_type)
-            .map(|(id, b)| (id, flats(b.volume(), rules.flat_size)))
-            .collect();
-        self.rents.retain(|id, _| mine.iter().any(|(m, _)| m == id));
-        let mut out = Vec::new();
-        for (id, _) in &mine {
-            if !self.rents.contains_key(id) {
-                let rent = Self::reference(world, cfg.start_rent.rate());
-                self.rents.insert(*id, rent);
-                out.push(Command::SetRent {
-                    building: *id,
-                    rent,
-                });
-            }
-        }
-        let today = world.clock().day();
-        let after_hunt = world.clock().second_of_day() >= world.clock().rules().arrivals_second;
-        if !after_hunt || self.reviewed_on == Some(today) {
-            return out;
-        }
-        self.reviewed_on = Some(today);
-        let occupancy = world.population().residential.occupancy();
-        let step = Self::reference(world, cfg.rent_step.rate());
-        let bounds = (
-            Self::reference(world, cfg.min_rent.rate()),
-            Self::reference(world, cfg.max_rent.rate()),
-        );
-        for (id, total) in mine {
-            let Some(rent) = self.rents.get_mut(&id) else {
-                continue;
-            };
-            let let_flats = occupancy.get(&id).copied().unwrap_or(0);
-            let next = rent_for_occupancy(
-                *rent,
-                let_flats,
-                total,
-                step,
-                (cfg.raise_at.rate(), cfg.cut_at.rate()),
-                bounds,
-            );
-            if next != *rent {
-                *rent = next;
-                out.push(Command::SetRent {
-                    building: id,
-                    rent: next,
-                });
-            }
-        }
-        out
+        let cfg = &world.config().ai.sir_penny_sugar;
+        let rule = VacancyRule {
+            start: cfg.start_rent.rate(),
+            step: cfg.rent_step.rate(),
+            raise_at: cfg.raise_at.rate(),
+            cut_at: cfg.cut_at.rate(),
+            min: cfg.min_rent.rate(),
+            max: cfg.max_rent.rate(),
+        };
+        self.rents.review(world, me, &rule)
     }
 
     fn build(world: &World, me: PlayerId) -> Option<Command> {
@@ -307,38 +228,5 @@ impl Brain for PennySugar {
             out.extend(self.strategy(world, me));
         }
         out
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use proptest::prelude::*;
-
-    const STEP: Money = Money::from_pence(30);
-    const LIMITS: (Rate, Rate) = (Rate::from_bp(9_500), Rate::from_bp(6_000));
-    const BOUNDS: (Money, Money) = (Money::from_pence(150), Money::from_pence(900));
-
-    #[test]
-    fn rent_follows_vacancy() {
-        let three = Money::from_pence(300);
-        let rent = |let_flats| rent_for_occupancy(three, let_flats, 20, STEP, LIMITS, BOUNDS);
-        assert_eq!(rent(20), Money::from_pence(330)); // full: up
-        assert_eq!(rent(19), Money::from_pence(330)); // 95%: up
-        assert_eq!(rent(15), three); // 75%: hold
-        assert_eq!(rent(12), Money::from_pence(270)); // 60%: down
-        assert_eq!(rent(0), Money::from_pence(270)); // empty: down
-        assert_eq!(rent_for_occupancy(three, 0, 0, STEP, LIMITS, BOUNDS), three);
-    }
-
-    proptest! {
-        /// Whatever the occupancy, the rent stays within his bounds.
-        #[test]
-        fn rent_stays_within_bounds(rent in 0i64..2_000, let_flats in 0u32..100, total in 0u32..100) {
-            let next = rent_for_occupancy(
-                Money::from_pence(rent), let_flats.min(total), total, STEP, LIMITS, BOUNDS,
-            );
-            prop_assert!(next >= BOUNDS.0 && next <= BOUNDS.1);
-        }
     }
 }
