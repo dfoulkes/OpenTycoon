@@ -536,6 +536,13 @@ fn check_ai(config: &Config, errors: &mut Vec<ConfigError>) {
             );
         }
     }
+    check_grocer(config, errors);
+}
+
+/// `ai.yaml` `grocer` (§10): shares in range, and every shop it builds is a known day-trade
+/// type that its footprint and height fit (R22, R58).
+fn check_grocer(config: &Config, errors: &mut Vec<ConfigError>) {
+    let _ = (config, errors); // red: rules land in the next commit
 }
 
 /// `map.yaml` `city_apartments` (R28): one block in each Low-tier set, on a known block, with

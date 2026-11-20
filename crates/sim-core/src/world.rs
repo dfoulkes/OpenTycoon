@@ -25,7 +25,7 @@ use std::hash::{Hash, Hasher};
 
 use serde::{Deserialize, Serialize};
 
-use crate::ai::{AiSeat, Brain};
+use crate::ai::AiSeat;
 use crate::auctions::{
     AuctionError, AuctionHouse, AuctionItem, AuctionOutcome, AuctionRules, Opening, QueuedSale,
 };
@@ -247,10 +247,7 @@ impl World {
             .opponents
             .iter()
             .zip((0..players).rev())
-            .map(|(personality, p)| AiSeat {
-                player: PlayerId(p),
-                personality: personality.clone(),
-            })
+            .map(|(personality, p)| AiSeat::new(PlayerId(p), personality.clone(), seed))
             .collect();
         World {
             seed,
@@ -698,16 +695,21 @@ impl World {
             .collect()
     }
 
-    /// Phase 7. AIs see the world read-only and queue commands for the next tick.
+    /// Phase 7. AIs see the world read-only and queue commands for the next tick. Each seat
+    /// draws from its own RNG stream, never the world's, so an AI never shifts the world's
+    /// draws. Bankrupt seats are out of the game (R4).
     fn ai_phase(&mut self) {
+        if self.ai.is_empty() {
+            return;
+        }
         let mut seats = std::mem::take(&mut self.ai);
-        let mut rng = self.rng.clone();
         let mut out = Vec::new();
         for seat in &mut seats {
             let me = seat.player;
-            out.extend(seat.decide(self, me, &mut rng).into_iter().map(|c| (me, c)));
+            if self.is_active(me) {
+                out.extend(seat.play(self).into_iter().map(|c| (me, c)));
+            }
         }
-        self.rng = rng;
         self.ai = seats;
         self.queued.extend(out);
     }
@@ -1021,7 +1023,7 @@ mod businesses_tests {
     use crate::config::{ConfigFile, ConfigSources};
     use crate::land::Lease;
 
-    fn shipped() -> Config {
+    pub(super) fn shipped() -> Config {
         let text = |f: ConfigFile| match f {
             ConfigFile::Game => include_str!("../../../config/game.yaml"),
             ConfigFile::Map => include_str!("../../../config/map.yaml"),
@@ -1180,5 +1182,39 @@ mod businesses_tests {
             let expected = if once_a_day { 1 } else { ticks_per_day };
             assert_eq!(counts.get(&p).copied(), Some(expected), "{p:?}");
         }
+    }
+}
+
+#[cfg(test)]
+mod ai_tests {
+    //! The AI phase wired through the real tick (§10).
+    use super::*;
+
+    #[test]
+    fn the_ai_phase_never_draws_from_the_worlds_rng() {
+        let mut w = World::new(businesses_tests::shipped(), 7, 2);
+        assert_eq!(w.ai_seats()[0].personality, "grocer");
+        // Through the opening, the build-out and a day's trading.
+        for _ in 0..(w.clock.rules().ticks_per_day() + 3_000) {
+            w.tick();
+            let before = w.rng.get_word_pos();
+            w.ai_phase();
+            assert_eq!(w.rng.get_word_pos(), before, "tick {}", w.clock.tick());
+        }
+        assert!(
+            w.businesses
+                .owned_by(AccountId::Player(PlayerId(1)))
+                .next()
+                .is_some(),
+            "the Grocer built nothing"
+        );
+    }
+
+    #[test]
+    fn a_bankrupt_ai_seat_issues_nothing() {
+        let mut w = World::new(businesses_tests::shipped(), 7, 2);
+        w.players[1].1 = PlayerStatus::Bankrupt;
+        w.ai_phase();
+        assert_eq!(w.queued, Vec::new());
     }
 }

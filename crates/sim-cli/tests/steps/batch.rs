@@ -159,6 +159,33 @@ fn a_new_game(w: &mut HarnessWorld, preset: String) {
     w.batch.world = Some(World::new(w.config.load_ok(), 7, 2));
 }
 
+#[given(expr = "a new game of the {string} preset with no AI opponents")]
+fn a_new_game_without_ai(w: &mut HarnessWorld, preset: String) {
+    let dir = super::repo_root().join("config");
+    let mut sources = sim_core::ConfigSources::read_dir(&dir).unwrap();
+    sources.insert(
+        "ai.yaml",
+        without_opponents(sources.get("ai.yaml").unwrap()),
+    );
+    w.config.sources = Some(sources);
+    w.config.preset = Some(preset);
+    w.batch.world = Some(World::new(w.config.load_ok(), 7, 2));
+}
+
+/// `ai.yaml` with `opponents: []`, so every seat is free for a harness brain.
+fn without_opponents(text: &str) -> String {
+    text.lines()
+        .map(|l| {
+            if l.starts_with("opponents:") {
+                "opponents: []"
+            } else {
+                l
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 #[when(expr = "the {string} brain plays seat {int} for one day")]
 fn brain_plays(w: &mut HarnessWorld, brain: String, seat: u8) {
     let kind: BrainKind = brain.parse().unwrap();
@@ -190,6 +217,56 @@ fn first_command(w: &mut HarnessWorld, name: String, pounds: i64) {
             assert_eq!(*bid, Money::from_pounds(pounds));
         }
         other => panic!("expected an opening bid, got {other:?}"),
+    }
+}
+
+#[then(expr = "its second command builds a {string} on {string}")]
+fn second_command(w: &mut HarnessWorld, type_id: String, name: String) {
+    let world = w.batch.world.as_ref().unwrap();
+    match &w.batch.issued[1].0 {
+        Command::Build {
+            block, type_id: t, ..
+        } => {
+            assert_eq!(world.map().block(*block).unwrap().name, name);
+            assert_eq!(*t, type_id);
+        }
+        other => panic!("expected a build, got {other:?}"),
+    }
+}
+
+fn player_shops(
+    world: &World,
+    player: u8,
+) -> Vec<(
+    sim_core::businesses::BusinessId,
+    &sim_core::businesses::Business,
+)> {
+    world
+        .businesses()
+        .owned_by(sim_core::economy::AccountId::Player(PlayerId(player)))
+        .collect()
+}
+
+#[then(expr = "player {int} owns {int} shop on {string}, touching the lot edge")]
+fn owns_one_shop(w: &mut HarnessWorld, player: u8, n: usize, name: String) {
+    let world = w.batch.world.as_ref().unwrap();
+    let shops = player_shops(world, player);
+    assert_eq!(shops.len(), n);
+    let [lw, ld] = world.config().game.world.lot_size;
+    for (_, b) in shops {
+        assert_eq!(world.map().block(b.block).unwrap().name, name);
+        assert!(b.footprint.touches_edge(lw, ld));
+        assert!(b.height <= world.config().businesses.types[&b.type_id].max_height);
+    }
+}
+
+#[then(expr = "player {int}'s shop has a standing order for its full capacity")]
+fn full_order(w: &mut HarnessWorld, player: u8) {
+    let world = w.batch.world.as_ref().unwrap();
+    let (_, shop) = player_shops(world, player)[0];
+    assert!(shop.capacity_per_good > 0);
+    for units in shop.standing_order.values() {
+        assert_eq!(*units, shop.capacity_per_good);
     }
 }
 

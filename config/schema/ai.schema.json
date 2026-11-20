@@ -1,5 +1,83 @@
 {
   "$defs": {
+    "GrocerConfig": {
+      "additionalProperties": false,
+      "description": "The Grocer's tunables (§10). Money is decimal pounds; shares are decimals.",
+      "properties": {
+        "cash_buffer": {
+          "description": "Cash it keeps in hand: it never spends (land, buildings) below this balance, so the\n06:00 bills don't take it under zero by midnight (R3).",
+          "type": "number"
+        },
+        "initial_order_share": {
+          "description": "A new shop's first order, as a share of its capacity. Above 0, at most 1.",
+          "type": "number"
+        },
+        "max_bid_share": {
+          "description": "The most it will pay for a lot, as a share of its bid ceiling (`balance + credit\nlimit`, R7). Above 0, at most 1.",
+          "type": "number"
+        },
+        "min_tier_weight": {
+          "description": "Tiers whose `grocer` personality weight is at least this are worth bidding on\n(`tier_low: 1.0` passes, `tier_high: 0.1` does not). Between 0 and 1.",
+          "type": "number"
+        },
+        "order_margin": {
+          "description": "Tomorrow's order = today's sales × (1 + this), capped at capacity (R2, R10). At most 1.",
+          "type": "number"
+        },
+        "price_jitter": {
+          "description": "Random spread either side of its price, from its own RNG stream. Below `1 −\nworking_class_discount`.",
+          "type": "number"
+        },
+        "rescue_after": {
+          "description": "From this time until midnight, a negative balance makes it sell a shop back to the\ncity (R5) rather than take a strike (R3). Must be after day trade closes.",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+          "type": "string"
+        },
+        "shop_footprint": {
+          "description": "Footprint of each shop, `[width, depth]` in lot units.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "shop_height": {
+          "description": "Height of each shop in units; capped at the type's `max_height` (R58).",
+          "format": "uint32",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "shop_types": {
+          "description": "Day-trade shop types it builds, in rotation (`businesses.yaml` ids).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "working_class_discount": {
+          "description": "Working-class bias: price this far under the reference price (0.05 = 95% of\n`ref_price`). At least 0, below 1.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "min_tier_weight",
+        "max_bid_share",
+        "cash_buffer",
+        "shop_types",
+        "shop_footprint",
+        "shop_height",
+        "working_class_discount",
+        "price_jitter",
+        "initial_order_share",
+        "order_margin",
+        "rescue_after"
+      ],
+      "type": "object"
+    },
     "Personality": {
       "additionalProperties": false,
       "description": "An AI personality.",
@@ -80,6 +158,10 @@
       "minimum": 1,
       "type": "integer"
     },
+    "grocer": {
+      "$ref": "#/$defs/GrocerConfig",
+      "description": "How the Grocer plays (§10: \"opens many cheap Low-tier shops\"). Its tier choice comes\nfrom the `grocer` personality's weights; these are its operating rules."
+    },
     "opponents": {
       "description": "Personality ids seated by default (v1: one Grocer).",
       "items": {
@@ -98,7 +180,8 @@
   "required": [
     "decision_interval_ticks",
     "opponents",
-    "personalities"
+    "personalities",
+    "grocer"
   ],
   "title": "AiConfig",
   "type": "object"

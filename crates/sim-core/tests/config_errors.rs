@@ -167,3 +167,92 @@ fn economy_keys_reject_negative_and_out_of_range_values() {
         assert_names(load_with("game.yaml", pointer, value), "game.yaml", pointer);
     }
 }
+
+/// `ai.yaml` `grocer` (§10): each bad value fails the load and names its key.
+#[test]
+fn grocer_tunables_out_of_range_are_rejected() {
+    let cases = [
+        ("/grocer/max_bid_share", "0", "/grocer/max_bid_share"),
+        ("/grocer/max_bid_share", "1.1", "/grocer/max_bid_share"),
+        ("/grocer/min_tier_weight", "1.5", "/grocer/min_tier_weight"),
+        ("/grocer/cash_buffer", "-1", "/grocer/cash_buffer"),
+        (
+            "/grocer/working_class_discount",
+            "1",
+            "/grocer/working_class_discount",
+        ),
+        ("/grocer/price_jitter", "0.95", "/grocer/price_jitter"),
+        (
+            "/grocer/initial_order_share",
+            "0",
+            "/grocer/initial_order_share",
+        ),
+        ("/grocer/order_margin", "2", "/grocer/order_margin"),
+        ("/grocer/rescue_after", "\"12:00\"", "/grocer/rescue_after"),
+        (
+            "/grocer/shop_footprint",
+            "[0, 3]",
+            "/grocer/shop_footprint/0",
+        ),
+        (
+            "/grocer/shop_footprint",
+            "[3, 10]",
+            "/grocer/shop_footprint/1",
+        ),
+        ("/grocer/shop_types", "[]", "/grocer/shop_types"),
+    ];
+    for (pointer, value, names) in cases {
+        assert_names(load_with("ai.yaml", pointer, value), "ai.yaml", names);
+    }
+}
+
+#[test]
+fn grocer_shops_must_be_known_day_trade_types_that_fit() {
+    assert_names(
+        load_with("ai.yaml", "/grocer/shop_types", "[corner_shop]"),
+        "ai.yaml",
+        "/grocer/shop_types/0",
+    );
+    assert_names(
+        load_with("ai.yaml", "/grocer/shop_types", "[bar]"),
+        "ai.yaml",
+        "not a day-trade shop",
+    );
+    assert_names(
+        load_with("ai.yaml", "/grocer/shop_types", "[apartments]"),
+        "ai.yaml",
+        "/grocer/shop_types/0",
+    );
+    // A grocery is at least 2×3 (businesses.yaml).
+    assert_names(
+        load_with("ai.yaml", "/grocer/shop_footprint", "[2, 2]"),
+        "ai.yaml",
+        "min_footprint",
+    );
+    // R58: a grocery is at most 16 high.
+    assert_names(
+        load_with("ai.yaml", "/grocer/shop_height", "17"),
+        "ai.yaml",
+        "/grocer/shop_height",
+    );
+    assert_names(
+        load_with("ai.yaml", "/grocer/unknown_knob", "1"),
+        "ai.yaml",
+        "unknown_knob",
+    );
+}
+
+#[test]
+fn grocer_at_its_limits_is_accepted() {
+    let mut sources = common::shipped_sources();
+    for (pointer, value) in [
+        ("/grocer/max_bid_share", "1"),
+        ("/grocer/shop_height", "16"),
+        ("/grocer/order_margin", "0"),
+        ("/grocer/rescue_after", "\"17:00\""),
+        ("/grocer/shop_footprint", "[9, 9]"),
+    ] {
+        common::set_key(&mut sources, "ai.yaml", pointer, value);
+    }
+    Config::load(&sources).unwrap();
+}
