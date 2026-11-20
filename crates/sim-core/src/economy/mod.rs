@@ -1,15 +1,57 @@
 //! Economy: accounts, the ledger, overdraft, settlement, solvency/bankruptcy, net worth
-//! (§2.3, §3; R3, R4, R7, R19, R31, R32, R39).
+//! (§2.3, §3; R3, R4, R5 sell-back, R7, R19, R31, R32, R39).
 //!
 //! Owner boundary: every movement of money goes through [`Ledger::transfer`], which conserves
 //! the total. Other modules compute *what* is owed (rent, bills, stock) and hand it here as
 //! [`Bill`]s; they never touch balances directly.
+//!
+//! Submodules:
+//! - [`settlement`]: the 06:00 bills (rent, utilities, stock orders, overdraft interest; R32).
+//! - [`net_worth`]: the win metric, recalculated every midnight before the write-off (R19,
+//!   R31, R39).
+//! - [`bankruptcy`]: the hand-over to the city (R4) and the instant sell-back (R5).
+
+pub mod bankruptcy;
+pub mod net_worth;
+pub mod settlement;
+
+/// Unit-test helper: the shipped config, embedded at compile time (no runtime I/O).
+#[cfg(test)]
+pub(crate) mod test_support {
+    use crate::config::{Config, ConfigSources};
+
+    macro_rules! shipped {
+        ($($file:literal),* $(,)?) => {
+            ConfigSources::new()
+                $(.with($file, include_str!(concat!("../../../../config/", $file))))*
+        };
+    }
+
+    /// The repo's shipped `config/`, loaded and validated.
+    #[allow(clippy::expect_used, reason = "test helper")]
+    pub(crate) fn shipped_config() -> Config {
+        let sources = shipped!(
+            "game.yaml",
+            "map.yaml",
+            "auctions.yaml",
+            "utilities.yaml",
+            "businesses.yaml",
+            "customers.yaml",
+            "events.yaml",
+            "ai.yaml",
+        );
+        Config::load(&sources).expect("shipped config is valid")
+    }
+}
 
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::money::{Money, Rate};
+use crate::config::game::OverdraftSettings;
+use crate::money::Money;
+
+pub use net_worth::{HeldLot, NetWorthBoard, NetWorthInputs, net_worth};
 
 /// A player seat. `0` is the first seat; seats are stable for the life of a game.
 #[derive(
@@ -73,6 +115,27 @@ impl Ledger {
         *self.balances.entry(to).or_default() += amount;
     }
 
+    /// Moves `amount` only if the payer stays within its overdraft: a player's balance after
+    /// paying may not fall below `−credit_limit` (R7). The city has no limit (R4). Use this for
+    /// anything a player chooses to buy (a winning bid, a building); settlement uses
+    /// [`Ledger::settle`], which has no limit (R32).
+    pub fn pay_within_limit(
+        &mut self,
+        from: AccountId,
+        to: AccountId,
+        amount: Money,
+        credit_limit: Money,
+    ) -> Result<(), Overdrawn> {
+        if let AccountId::Player(_) = from {
+            let ceiling = spendable(self.balance(from), credit_limit);
+            if amount > ceiling {
+                return Err(Overdrawn { amount, ceiling });
+            }
+        }
+        self.transfer(from, to, amount);
+        Ok(())
+    }
+
     /// Pays every bill in order (06:00 settlement). Balances may go below the limit (R32).
     pub fn settle(&mut self, bills: &[Bill]) {
         for bill in bills {
@@ -86,12 +149,33 @@ impl Ledger {
     }
 }
 
+/// A payment refused because it would take the payer past its credit limit (R7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("{amount} is more than the {ceiling} this player can spend (balance + credit limit)")]
+pub struct Overdrawn {
+    /// What the payment was for.
+    pub amount: Money,
+    /// The most the payer could spend: balance + credit limit.
+    pub ceiling: Money,
+}
+
 /// Credit limit after `steps` year steps: `start + steps × increase` (R7).
 pub fn credit_limit(start_limit: Money, increase_per_step: Money, steps: u32) -> Money {
     start_limit + increase_per_step.saturating_mul(i64::from(steps))
 }
 
-/// How much a player can spend or bid: `balance + credit_limit` (R7).
+/// Credit limit on game day `day` (day 0 is the first day; each midnight is one 5-year step)
+/// from `game.yaml`'s overdraft settings (R7).
+pub fn credit_limit_on_day(overdraft: &OverdraftSettings, day: u32) -> Money {
+    credit_limit(
+        overdraft.start_limit.money(),
+        overdraft.increase_per_step.money(),
+        day,
+    )
+}
+
+/// How much a player can spend or bid: `balance + credit_limit` (R7). This is the bid ceiling
+/// of §5.1; it is negative when a player is already past the limit (R32).
 pub fn spendable(balance: Money, credit_limit: Money) -> Money {
     balance + credit_limit
 }
@@ -114,6 +198,11 @@ pub struct SolvencyTracker {
 }
 
 impl SolvencyTracker {
+    /// Consecutive failed midnights so far (0 after a passed midnight).
+    pub fn strikes(&self, player: PlayerId) -> u32 {
+        self.strikes.get(&player).copied().unwrap_or(0)
+    }
+
     /// Checks one player's midnight balance.
     pub fn check(
         &mut self,
@@ -134,44 +223,6 @@ impl SolvencyTracker {
             Solvency::Strike(*strikes)
         }
     }
-}
-
-/// The parts of one player's net worth (R19, R39), all already valued.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct NetWorthInputs {
-    /// Cash balance.
-    pub cash: Money,
-    /// Stock on hand at purchase price (before the midnight write-off, R31).
-    pub stock: Money,
-    /// Value of each property the player owns (build cost, R41).
-    pub owned_property_values: Vec<Money>,
-    /// For each lot the player leases: its land value and the values of every property on it,
-    /// whoever owns them.
-    pub held_lots: Vec<HeldLot>,
-}
-
-/// A leased lot's contribution to net worth.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct HeldLot {
-    /// `last auction price × remaining lease years / term` (§3).
-    pub land_value: Money,
-    /// Value of every property on the lot.
-    pub property_values: Vec<Money>,
-}
-
-/// `net_worth = cash + stock + Σ owned property + Σ held lots (land + uplift × Σ property)`
-/// (§3, R19, R39). Utilities add nothing directly (R19).
-pub fn net_worth(inputs: &NetWorthInputs, lot_property_uplift: Rate) -> Money {
-    let owned: Money = inputs.owned_property_values.iter().copied().sum();
-    let lots: Money = inputs
-        .held_lots
-        .iter()
-        .map(|lot| {
-            let on_lot: Money = lot.property_values.iter().copied().sum();
-            lot.land_value + lot_property_uplift.apply(on_lot)
-        })
-        .sum();
-    inputs.cash + inputs.stock + owned + lots
 }
 
 #[cfg(test)]
@@ -213,24 +264,6 @@ mod tests {
         assert_eq!(
             t.check(p, Money::from_pence(-1), Money::ZERO, 2),
             Solvency::Strike(1)
-        );
-    }
-
-    #[test]
-    fn owning_land_and_building_earns_the_uplift() {
-        let inputs = NetWorthInputs {
-            cash: Money::from_pounds(100),
-            stock: Money::from_pounds(10),
-            owned_property_values: vec![Money::from_pounds(1_000)],
-            held_lots: vec![HeldLot {
-                land_value: Money::from_pounds(500),
-                property_values: vec![Money::from_pounds(1_000)],
-            }],
-        };
-        // 100 + 10 + 1000 + 500 + 0.2 × 1000
-        assert_eq!(
-            net_worth(&inputs, Rate::from_bp(2_000)),
-            Money::from_pounds(1_810)
         );
     }
 

@@ -87,6 +87,20 @@ pub struct Businesses {
     pub next_id: u32,
 }
 
+/// The midnight write-off (§2.2, R1): unsold stock is waste. Economy calls this from the
+/// reckoning *after* net worth is scored (R31).
+///
+/// Interface stub added by the economy module (OTY-2 wave 2) with the minimal behaviour the
+/// spec requires; the businesses module owns it and may replace the body (e.g. to record
+/// waste for reporting).
+pub fn write_off_stock(businesses: &mut Businesses) {
+    for business in businesses.by_id.values_mut() {
+        for units in business.stock.values_mut() {
+            *units = 0;
+        }
+    }
+}
+
 /// `build_cost = volume × build_base_rate × desirability_mult × fit_out_mult` (§5.3, §7.1).
 pub fn build_cost(
     height: u32,
