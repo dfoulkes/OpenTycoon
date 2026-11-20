@@ -37,7 +37,7 @@ fn shipped_config_is_valid() {
 fn unknown_key_in_every_file_is_rejected_by_name() {
     for (file, pointer) in [
         ("game.yaml", "/clock/tick_secs"),
-        ("map.yaml", "/grid/depth"),
+        ("map.yaml", "/boards/v1/grid/depth"),
         ("auctions.yaml", "/countdown"),
         ("utilities.yaml", "/base_rates/steam"),
         ("businesses.yaml", "/types/bakery/staff"),
@@ -129,7 +129,7 @@ fn unknown_references_are_rejected() {
         "the_toff",
     );
     assert_names(
-        load_with("map.yaml", "/blocks/0/set", "purple"),
+        load_with("map.yaml", "/boards/v1/blocks/0/set", "purple"),
         "map.yaml",
         "purple",
     );
@@ -539,4 +539,19 @@ fn roster_at_its_limits_is_accepted() {
         common::set_key(&mut sources, "ai.yaml", pointer, value);
     }
     Config::load(&sources).unwrap();
+}
+
+#[test]
+fn selecting_a_board_the_file_does_not_have_is_rejected() {
+    let mut sources = common::shipped_sources();
+    let text = sources.get("map.yaml").unwrap().to_owned();
+    let mut doc: serde_yaml_ng::Value = serde_yaml_ng::from_str(&text).unwrap();
+    doc["boards"].as_mapping_mut().unwrap().remove("full");
+    doc["map"] = "full".into();
+    sources.insert("map.yaml", serde_yaml_ng::to_string(&doc).unwrap());
+    assert_names(
+        Config::load(&sources),
+        "map.yaml",
+        "/boards/full is missing",
+    );
 }

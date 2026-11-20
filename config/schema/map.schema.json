@@ -77,6 +77,64 @@
       ],
       "type": "object"
     },
+    "Board": {
+      "additionalProperties": false,
+      "description": "One board in `map.yaml`: its geography.",
+      "properties": {
+        "blocks": {
+          "description": "Every block on the grid, exactly one per cell.",
+          "items": {
+            "$ref": "#/$defs/BlockSettings"
+          },
+          "type": "array"
+        },
+        "city_apartments": {
+          "$ref": "#/$defs/CityApartments",
+          "description": "The city's starting apartment blocks: one in each Low-tier set (R28)."
+        },
+        "grid": {
+          "$ref": "#/$defs/GridSettings",
+          "description": "Grid size in blocks."
+        },
+        "sets": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SetSettings"
+          },
+          "description": "Colour sets (R14, R26), keyed by set id.",
+          "type": "object"
+        },
+        "tube_stations": {
+          "description": "Tube stations: spawn and despawn points (§4.3, R25).",
+          "items": {
+            "$ref": "#/$defs/TubeStation"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "grid",
+        "sets",
+        "blocks",
+        "tube_stations",
+        "city_apartments"
+      ],
+      "type": "object"
+    },
+    "Boards": {
+      "additionalProperties": false,
+      "description": "The boards in `map.yaml`, by name. A file needs only the board it selects; the shipped file\ncarries both.",
+      "properties": {
+        "full": {
+          "$ref": "#/$defs/Board",
+          "description": "The full 9×9 board (R26)."
+        },
+        "v1": {
+          "$ref": "#/$defs/Board",
+          "description": "The grey-box 3×3 test map."
+        }
+      },
+      "type": "object"
+    },
     "CityApartmentSite": {
       "additionalProperties": false,
       "description": "One city apartment block (R28).",
@@ -214,6 +272,21 @@
       ],
       "type": "object"
     },
+    "MapChoice": {
+      "description": "Which board a game is played on (R26).",
+      "oneOf": [
+        {
+          "const": "v1",
+          "description": "The grey-box 3×3 test map (§10c, §11).",
+          "type": "string"
+        },
+        {
+          "const": "full",
+          "description": "The full 9×9 board: 26 colour sets, 4 utilities and City Hall (§4.1, R26).",
+          "type": "string"
+        }
+      ]
+    },
     "SetSettings": {
       "additionalProperties": false,
       "description": "A colour set (R14, R26).",
@@ -323,53 +396,29 @@
   "additionalProperties": false,
   "description": "Root of `map.yaml`.",
   "properties": {
-    "blocks": {
-      "description": "Every block on the grid, exactly one per cell.",
-      "items": {
-        "$ref": "#/$defs/BlockSettings"
-      },
-      "type": "array"
-    },
-    "city_apartments": {
-      "$ref": "#/$defs/CityApartments",
-      "description": "The city's starting apartment blocks: one in each Low-tier set (R28)."
-    },
-    "grid": {
-      "$ref": "#/$defs/GridSettings",
-      "description": "Grid size in blocks."
+    "boards": {
+      "$ref": "#/$defs/Boards",
+      "description": "Every board, keyed by name."
     },
     "land_base_rate": {
       "description": "Land rent per unit of building volume per day, before the tier multiplier (§5.3, R10).",
       "type": "number"
     },
-    "sets": {
-      "additionalProperties": {
-        "$ref": "#/$defs/SetSettings"
-      },
-      "description": "Colour sets (R14, R26), keyed by set id.",
-      "type": "object"
+    "map": {
+      "$ref": "#/$defs/MapChoice",
+      "description": "The board this game is played on: a key of `boards`."
     },
     "tiers": {
       "$ref": "#/$defs/TierTable",
-      "description": "Per-tier multipliers (§5.3)."
-    },
-    "tube_stations": {
-      "description": "Tube stations: spawn and despawn points (§4.3, R25).",
-      "items": {
-        "$ref": "#/$defs/TubeStation"
-      },
-      "type": "array"
+      "description": "Per-tier multipliers (§5.3), shared by every board."
     }
   },
   "required": [
-    "grid",
+    "map",
     "tiers",
     "land_base_rate",
-    "sets",
-    "blocks",
-    "tube_stations",
-    "city_apartments"
+    "boards"
   ],
-  "title": "MapConfig",
+  "title": "MapFile",
   "type": "object"
 }
