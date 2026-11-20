@@ -14,7 +14,9 @@ use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use sim_core::businesses::{Business, BusinessId, Businesses, FitOutLevel};
 use sim_core::config::ConfigFile;
 use sim_core::economy::settlement::{resident_rent_bills, settlement_bills};
-use sim_core::economy::{AccountId, Ledger, PlayerId, net_worth, net_worth::net_worth_inputs};
+use sim_core::economy::{
+    AccountId, Ledger, PlayerId, net_worth, net_worth::LandPricing, net_worth::net_worth_inputs,
+};
 use sim_core::land::{BlockId, Footprint, Lease, Map};
 use sim_core::money::{Money, Rate};
 use sim_core::population::residential::{FlatListing, Residential, rent_due};
@@ -127,6 +129,7 @@ fn bench_net_worth(c: &mut Criterion) {
                                 &businesses,
                                 &config.businesses.goods,
                                 1930,
+                                LandPricing::BOOK,
                             );
                             net_worth(&inputs, uplift)
                         })

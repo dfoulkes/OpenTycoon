@@ -34,6 +34,7 @@ use crate::auctions::{
 use crate::businesses::{BuildRequest, Business, BusinessId, Businesses, FitOutLevel, LeverError};
 use crate::clock::{Clock, ClockEvents, ClockRules};
 use crate::config::Config;
+use crate::config::game::LandValueMethod;
 use crate::customers::{Customers, PhaseInputs};
 use crate::economy::{
     self, AccountId, Ledger, NetWorthBoard, PlayerId, Solvency, SolvencyTracker,
@@ -433,6 +434,18 @@ impl World {
         let years_per_day = i32::try_from(self.clock.rules().years_per_day).unwrap_or(0);
         let scoring_year = self.clock.year().saturating_sub(years_per_day);
         let uplift = self.config.game.net_worth.lot_property_uplift.rate();
+        let method = self.config.game.net_worth.land_value;
+        // The spec's book value reads no events; only the market methods need the factors.
+        let factors = match method {
+            LandValueMethod::BookDecay => Vec::new(),
+            LandValueMethod::Market | LandValueMethod::MarketNoDecay => {
+                self.events.land_value_factors(&self.config.events)
+            }
+        };
+        let land = economy::net_worth::LandPricing {
+            method,
+            factors: &factors,
+        };
         for (player, status) in &self.players {
             if *status != PlayerStatus::Active {
                 continue;
@@ -444,6 +457,7 @@ impl World {
                 &self.businesses,
                 &self.config.businesses.goods,
                 scoring_year,
+                land,
             );
             self.net_worth
                 .record(*player, economy::net_worth(&inputs, uplift));
