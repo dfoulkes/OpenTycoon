@@ -43,3 +43,17 @@ Feature: The Landlord
       | 5    | 2,000  | did    |
       | 20   | 2,000  | didn't |
       | 5    | 30,000 | didn't |
+
+  # §7.3: holding every block of a colour set unlocks one Hotel there. A full-set holder puts it
+  # up before anything else; anyone else never tries (the world would refuse it, R14).
+  @spec-7.3 @R14 @R29
+  Scenario: Holding a whole set, it puts up a Hotel first
+    Given the Landlord holds every lease in the "East End" set
+    When the Landlord plays for 1 game hour
+    Then the first building the Landlord put up is a Hotel in the "East End" set
+
+  @spec-7.3 @R14
+  Scenario: Without the whole set it never tries to build a Hotel
+    Given the Landlord holds the lease on "Old Kent Road"
+    When the Landlord plays for 6 game hours
+    Then the Landlord never tried to build a Hotel

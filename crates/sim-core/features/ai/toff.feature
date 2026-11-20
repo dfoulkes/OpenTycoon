@@ -45,3 +45,17 @@ Feature: The Toff
     And the Toff had at least its cash buffer after every lease it won
     And the Toff put up at least 1 shop
     And the Toff had at least its cash buffer after every building it put up
+
+  # §7.3: holding every block of a colour set unlocks one Hotel there. A full-set holder puts it
+  # up before anything else; anyone else never tries (the world would refuse it, R14).
+  @spec-7.3 @R14 @R29
+  Scenario: Holding a whole set, it puts up a Hotel first
+    Given the Toff holds every lease in the "Mayfair & Belgravia" set
+    When the Toff plays for 1 game hour
+    Then the first building the Toff put up is a Hotel in the "Mayfair & Belgravia" set
+
+  @spec-7.3 @R14
+  Scenario: Without the whole set it never tries to build a Hotel
+    Given the Toff holds the lease on "Mayfair"
+    When the Toff plays for 6 game hours
+    Then the Toff never tried to build a Hotel
