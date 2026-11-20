@@ -26,6 +26,10 @@ pub struct SimWorld {
     pub economy: steps::economy::EconomyState,
     /// Businesses under test (`steps::businesses`).
     pub businesses: steps::businesses::BusinessesState,
+    /// Lot under test (`steps::land`).
+    pub land: steps::land::LandState,
+    /// Game driven through auction commands (`steps::auctions`).
+    pub auctions: steps::auctions::AuctionState,
 }
 
 fn main() {

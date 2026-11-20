@@ -77,6 +77,73 @@
       ],
       "type": "object"
     },
+    "CityApartmentSite": {
+      "additionalProperties": false,
+      "description": "One city apartment block (R28).",
+      "properties": {
+        "block": {
+          "description": "Block id it stands on; must be in a Low-tier set.",
+          "type": "string"
+        },
+        "height": {
+          "description": "Height in units (at most the business type's `max_height`, R58).",
+          "format": "uint32",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "position": {
+          "description": "`[x, y]` of the near corner inside the lot.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "size": {
+          "description": "`[width, depth]` footprint; must touch the lot edge (R22).",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "block",
+        "position",
+        "size",
+        "height"
+      ],
+      "type": "object"
+    },
+    "CityApartments": {
+      "additionalProperties": false,
+      "description": "The apartment blocks the city owns at the start of the game (R28).",
+      "properties": {
+        "business_type": {
+          "description": "Business type id in `businesses.yaml` the blocks are built as.",
+          "type": "string"
+        },
+        "sites": {
+          "description": "Where each block stands: exactly one per Low-tier set.",
+          "items": {
+            "$ref": "#/$defs/CityApartmentSite"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "business_type",
+        "sites"
+      ],
+      "type": "object"
+    },
     "ColourBand": {
       "description": "Colour band, cheapest to dearest (§4.1, R26).",
       "oneOf": [
@@ -263,6 +330,10 @@
       },
       "type": "array"
     },
+    "city_apartments": {
+      "$ref": "#/$defs/CityApartments",
+      "description": "The city's starting apartment blocks: one in each Low-tier set (R28)."
+    },
     "grid": {
       "$ref": "#/$defs/GridSettings",
       "description": "Grid size in blocks."
@@ -296,7 +367,8 @@
     "land_base_rate",
     "sets",
     "blocks",
-    "tube_stations"
+    "tube_stations",
+    "city_apartments"
   ],
   "title": "MapConfig",
   "type": "object"
