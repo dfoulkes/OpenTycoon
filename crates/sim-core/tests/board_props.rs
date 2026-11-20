@@ -155,3 +155,45 @@ proptest! {
         prop_assert_eq!(north.len(), ((row + 1) * w) as usize);
     }
 }
+
+/// R64 needs the whole 1930–2050 span playable headless on the full board: the game ends in
+/// 2050, every shift has landed, and the same seed gives the same game.
+#[test]
+fn a_full_board_game_runs_from_1930_to_2050() {
+    let mut sources = common::shipped_sources();
+    common::set_key(&mut sources, "map.yaml", "/map", "full");
+    common::set_key(&mut sources, "game.yaml", "/clock/start_year", "1930");
+    common::set_key(&mut sources, "game.yaml", "/clock/end_year", "2050");
+    let config = sim_core::Config::load(&sources).unwrap();
+    let run = || {
+        let mut world = sim_core::World::new(config.clone(), 7, 3);
+        let mut midnights = 0;
+        loop {
+            let fired = world.tick();
+            midnights += u32::from(fired.midnight);
+            if fired.game_over {
+                break;
+            }
+        }
+        (world, midnights)
+    };
+    let (world, midnights) = run();
+    assert_eq!(world.clock().year(), 2050);
+    assert_eq!(midnights, 24);
+    let map = world.map();
+    for (key, tier) in [
+        ("docklands", Tier::High),
+        ("notting_hill", Tier::High),
+        ("shoreditch", Tier::High),
+        ("hackney", Tier::High),
+        ("brixton", Tier::Medium),
+        ("whitechapel", Tier::Low),
+    ] {
+        assert_eq!(
+            map.block(map.block_id(key).unwrap()).unwrap().tier,
+            tier,
+            "{key}"
+        );
+    }
+    assert_eq!(run().0.state_hash(), world.state_hash());
+}

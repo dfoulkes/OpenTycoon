@@ -35,7 +35,7 @@ the split for M1 parallel work.
 | `money` | `src/money.rs` | `Money` (i64 pence), `Rate` (basis points), rounding | §3 | **real** |
 | `clock` | `src/clock.rs` | ticks, days, the +5-year step, trading windows | R1, R30, R34 | **real** |
 | `economy` | `src/economy/` | ledger, settlement, overdraft, solvency, bankruptcy, net worth, sell-back | R3, R4, R5 (sell-back), R7, R19, R31, R32, R39 | **real** (M1): 06:00 settlement and midnight reckoning wired |
-| `land` | `src/land.rs` | map, blocks, sets, footprints, leases, land rent | R9, R10, R14, R22, R33 | primitives real |
+| `land` | `src/land/` | map, boards, roads and the river, blocks, sets, desirability shifts, tube stations, footprints, leases, land rent | R9, R10, R14, R16, R22, R23, R26, R33 | **real**: v1 and full boards |
 | `auctions` | `src/auctions.rs` | the one-at-a-time auction state machine | R5, R8, R23 | types only |
 | `businesses` | `src/businesses.rs` | buildings, types, prices, orders, stock, write-off | R2, R10, R13, R35, R41, R58 | types + cost formulas |
 | `utilities` | `src/utilities.rs` | utility bills, holders, auctions, nationalisation and privatisation | R11, R12, R24 | **real**: auctioned like land; elections move ownership |

@@ -1,4 +1,4 @@
-//! Tick benchmarks on the shipped v1 3×3 map. Run with `cargo bench -p sim-core`.
+//! Tick benchmarks on the shipped v1 3×3 map and the full 9×9 board. Run with `cargo bench -p sim-core`.
 //! Budgets live in docs/engineering.md §Performance; record results there as features land.
 #![allow(
     missing_docs,
@@ -55,6 +55,47 @@ fn bench_tick(c: &mut Criterion) {
     group.finish();
 }
 
+/// The full 9×9 board (R26): the same scenario on 81 blocks, then 20,000 adults for the
+/// worst-tick budget (docs/engineering.md §4).
+fn bench_tick_9x9(c: &mut Criterion) {
+    let mut config = shipped_config();
+    let file: sim_core::config::MapFile = serde_yaml_ng::from_str(
+        &std::fs::read_to_string(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../config/map.yaml"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    config.map = file.board(sim_core::config::MapChoice::Full).unwrap();
+    let mut group = c.benchmark_group("tick_9x9");
+    group.bench_function("one_tick", |b| {
+        let mut world = World::new(config.clone(), 42, 2);
+        b.iter(|| black_box(world.tick()));
+    });
+    group.sample_size(10);
+    group.bench_function("one_day_8640_ticks", |b| {
+        b.iter(|| {
+            let mut world = World::new(config.clone(), 42, 2);
+            for _ in 0..8_640 {
+                black_box(world.tick());
+            }
+            black_box(world.state_hash())
+        });
+    });
+    let mut big = config.clone();
+    big.customers.initial_population = 20_000;
+    group.bench_function("one_day_8640_ticks_20k_agents", |b| {
+        b.iter(|| {
+            let mut world = World::new(big.clone(), 42, 2);
+            for _ in 0..8_640 {
+                black_box(world.tick());
+            }
+            black_box(world.state_hash())
+        });
+    });
+    group.finish();
+}
+
 fn bench_config_load(c: &mut Criterion) {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../config");
     let mut sources = ConfigSources::new();
@@ -69,5 +110,5 @@ fn bench_config_load(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_tick, bench_config_load);
+criterion_group!(benches, bench_tick, bench_tick_9x9, bench_config_load);
 criterion_main!(benches);
