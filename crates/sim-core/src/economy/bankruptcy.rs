@@ -14,7 +14,7 @@
 //! capacity).
 
 use super::{AccountId, Ledger, PlayerId};
-use crate::businesses::{Business, BusinessId, Businesses, stock_capacity};
+use crate::businesses::{Business, BusinessId, Businesses};
 use crate::config::Config;
 use crate::config::businesses::BusinessType;
 use crate::land::{BlockId, Map};
@@ -76,24 +76,11 @@ fn take_into_city_hands(business: &mut Business, config: &Config) {
     }
 }
 
-/// Default settings for a city-run business: reference prices (100%) for every good it sells,
-/// and an order for its full stock capacity split evenly across its goods, open for trade.
+/// Default settings for a city-run business (R4): reference prices, an order for its full
+/// stock capacity split evenly across its goods, open for trade. Owned by businesses
+/// ([`crate::businesses::city_defaults`]); kept here for the hand-over's call sites.
 pub fn city_defaults(business: &mut Business, business_type: &BusinessType) {
-    let capacity = stock_capacity(
-        business.height,
-        business.footprint,
-        business_type.stock_density.rate(),
-    );
-    let goods = i64::try_from(business_type.goods.len().max(1)).unwrap_or(1);
-    business.prices.clear();
-    business.tomorrow_order.clear();
-    for good in &business_type.goods {
-        business.prices.insert(good.clone(), Rate::ONE);
-        business
-            .tomorrow_order
-            .insert(good.clone(), capacity / goods);
-    }
-    business.open = true;
+    crate::businesses::city_defaults(business, business_type);
 }
 
 /// The price the city pays for a business: `sell_to_city_ratio × build cost` (R5, R41).
@@ -170,6 +157,12 @@ mod tests {
             stock: [("clothes".to_owned(), 12)].into(),
             tomorrow_order: BTreeMap::new(),
             open: false,
+            hours: crate::businesses::Hours::Day,
+            capacity_per_good: 45,
+            standing_order: BTreeMap::new(),
+            takings_today: Money::ZERO,
+            sold_today: BTreeMap::new(),
+            lost_sales_today: 0,
         }
     }
 

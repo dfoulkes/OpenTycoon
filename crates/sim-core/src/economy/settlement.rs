@@ -189,6 +189,12 @@ mod tests {
             stock: BTreeMap::new(),
             tomorrow_order: [("bread".to_owned(), 100)].into(),
             open: true,
+            hours: crate::businesses::Hours::Day,
+            capacity_per_good: 1_000,
+            standing_order: BTreeMap::new(),
+            takings_today: Money::ZERO,
+            sold_today: BTreeMap::new(),
+            lost_sales_today: 0,
         }
     }
 

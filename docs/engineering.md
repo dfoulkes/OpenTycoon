@@ -156,6 +156,7 @@ so the server can run 4× speed votes, serve clients and run 1,000-game balance 
 |---|---|---|---|
 | one tick, 3×3 map, 2 players, no agents | < 1 µs | 15.5 ns (M0, criterion) | `cargo bench` |
 | one game day (8,640 ticks), 3×3 map | < 50 ms | 0.147 ms (M1 wave 2) | `perf-budget` `game_day_ms` |
+| businesses: one day of sales, ~69k sale attempts over 10 / 100 / 1,000 shops | inside the day's 50 ms | 0.83 / 1.29 / 3.54 ms (M1) | `cargo bench --bench businesses` |
 | one tick, 3×3 map, 2,000 customers (p99) | < 1 ms | ≤ 42 ns, timer floor (M1 wave 2: customers stubbed) | `perf-budget` `tick_p99_us` |
 | one tick, 3×3 map, 10,000 agents (p99) | < 5 ms | ≤ 42 ns, timer floor (M1 wave 2: customers stubbed) | `perf-budget` `tick_p99_us_10k_agents` |
 | one tick, 9×9 map, 20,000 customers | < 10 ms | *post-v1: fill in* | — |
