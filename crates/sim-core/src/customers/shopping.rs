@@ -1,0 +1,82 @@
+//! Shopping lists: `P(good | age, class, sex, hour, year)` from `customers.yaml` `desires`
+//! (§8.2, R55).
+//!
+//! Rules apply in order; every rule whose match fits the shopper sets the weight of each good
+//! it names, so a later, narrower rule overrides an earlier, broader one. The "hour" is the
+//! trading window (day or night, §8.4). Each good is then rolled once: on the list with
+//! probability `P(good)`.
+#![allow(
+    clippy::float_arithmetic,
+    reason = "shopping-list probabilities are customer scoring inputs (docs/engineering.md)"
+)]
+
+use std::collections::BTreeMap;
+
+use super::shops::{GoodId, GoodsIndex};
+use crate::businesses::Hours;
+use crate::config::CustomersConfig;
+use crate::config::customers::DesireMatch;
+use crate::population::{Cohort, band_id};
+use crate::rng::{SimRng, unit_f64};
+
+/// True if a desire rule's match covers this shopper, window and year.
+pub fn rule_matches(
+    m: &DesireMatch,
+    rules: &CustomersConfig,
+    cohort: Cohort,
+    window: Hours,
+    year: i32,
+) -> bool {
+    m.class.is_none_or(|c| c == cohort.class)
+        && m.sex.is_none_or(|s| s == cohort.sex)
+        && m.age
+            .as_deref()
+            .is_none_or(|a| a == band_id(rules, cohort.band))
+        && m.window.is_none_or(|w| w == window)
+        && m.from_year.is_none_or(|y| year >= y)
+        && m.until_year.is_none_or(|y| year <= y)
+}
+
+/// `P(good)` for every good this shopper might want in this window and year (§8.2, R55).
+pub fn desire_weights<'a>(
+    rules: &'a CustomersConfig,
+    cohort: Cohort,
+    window: Hours,
+    year: i32,
+) -> BTreeMap<&'a str, f64> {
+    let mut out = BTreeMap::new();
+    for rule in &rules.desires {
+        if rule_matches(&rule.matcher, rules, cohort, window, year) {
+            for (good, p) in &rule.goods {
+                out.insert(good.as_str(), *p);
+            }
+        }
+    }
+    out
+}
+
+/// Rolls a shopping list: each good with `P > 0` is on it with probability `P`, in catalogue
+/// order. One draw per candidate good.
+pub fn roll_list(
+    rules: &CustomersConfig,
+    goods: &GoodsIndex,
+    cohort: Cohort,
+    window: Hours,
+    year: i32,
+    rng: &mut SimRng,
+) -> Vec<GoodId> {
+    let mut list: Vec<GoodId> = Vec::new();
+    for (name, p) in desire_weights(rules, cohort, window, year) {
+        if p <= 0.0 {
+            continue;
+        }
+        let Some(id) = goods.id(name) else {
+            continue;
+        };
+        if unit_f64(rng) < p {
+            list.push(id);
+        }
+    }
+    list.sort();
+    list
+}

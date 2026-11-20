@@ -373,6 +373,116 @@ fn check_customers(config: &Config, errors: &mut Vec<ConfigError>) {
             "must be between 0 and 1".into(),
         );
     }
+    check_customers_m1(config, &bands, errors);
+}
+
+/// Population and customer rules added in M1 (§7.2, §8; R50–R55, R61).
+fn check_customers_m1(config: &Config, bands: &BTreeSet<&str>, errors: &mut Vec<ConfigError>) {
+    use crate::businesses::Hours;
+    let c = &config.customers;
+    let file = ConfigFile::Customers;
+    for (pointer, share) in [
+        ("/allowance/day_share", c.allowance.day_share),
+        (
+            "/residential/comfortable_share",
+            c.residential.comfortable_share,
+        ),
+        ("/residential/stretch_share", c.residential.stretch_share),
+    ] {
+        if share.rate() > Rate::ONE {
+            err(
+                errors,
+                file,
+                pointer.into(),
+                "must be between 0 and 1".into(),
+            );
+        }
+    }
+    if c.residential.stretch_share.rate() < c.residential.comfortable_share.rate() {
+        err(
+            errors,
+            file,
+            "/residential/stretch_share".into(),
+            "must be at least comfortable_share (R52)".into(),
+        );
+    }
+    match config.businesses.types.get(&c.residential.building_type) {
+        Some(kind) if kind.hours == Hours::None => {}
+        Some(_) => err(
+            errors,
+            file,
+            "/residential/building_type".into(),
+            "an apartment type must have hours: none (R56)".into(),
+        ),
+        None => err(
+            errors,
+            file,
+            "/residential/building_type".into(),
+            format!(
+                "unknown business type {:?} (not in businesses.yaml)",
+                c.residential.building_type
+            ),
+        ),
+    }
+    let start = config.game.clock.start_year;
+    for (name, keys) in [
+        (
+            "births_per_woman",
+            c.births_per_woman.keys().collect::<Vec<_>>(),
+        ),
+        ("demographics", c.demographics.keys().collect::<Vec<_>>()),
+    ] {
+        if !keys
+            .iter()
+            .any(|k| k.parse::<i32>().is_ok_and(|y| y <= start))
+        {
+            err(
+                errors,
+                file,
+                format!("/{name}"),
+                format!("needs an entry at or before the start year {start}"),
+            );
+        }
+    }
+    for (i, rule) in c.desires.iter().enumerate() {
+        let at = format!("/desires/{i}");
+        if let Some(age) = &rule.matcher.age {
+            if !bands.contains(age.as_str()) {
+                err(
+                    errors,
+                    file,
+                    format!("{at}/match/age"),
+                    format!("unknown age band {age:?}"),
+                );
+            }
+        }
+        if matches!(rule.matcher.window, Some(Hours::Hotel | Hours::None)) {
+            err(
+                errors,
+                file,
+                format!("{at}/match/window"),
+                "shopping windows are day or night".into(),
+            );
+        }
+        for (good, weight) in &rule.goods {
+            if !config.businesses.goods.contains_key(good) {
+                err(
+                    errors,
+                    file,
+                    format!("{at}/goods/{good}"),
+                    format!("unknown good {good:?} (not in businesses.yaml)"),
+                );
+            }
+            if !(0.0..=1.0).contains(weight) {
+                err(
+                    errors,
+                    file,
+                    format!("{at}/goods/{good}"),
+                    "P(good) must be between 0 and 1".into(),
+                );
+            }
+        }
+    }
 }
 
 fn check_events(config: &Config, errors: &mut Vec<ConfigError>) {

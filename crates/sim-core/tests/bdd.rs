@@ -30,6 +30,8 @@ pub struct SimWorld {
     pub land: steps::land::LandState,
     /// Game driven through auction commands (`steps::auctions`).
     pub auctions: steps::auctions::AuctionState,
+    /// City scene: population, apartments, shoppers (`steps::population`, `steps::customers`).
+    pub city: steps::population::CityState,
 }
 
 fn main() {

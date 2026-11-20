@@ -6,4 +6,6 @@ pub mod config;
 pub mod economy;
 // businesses
 pub mod businesses;
+pub mod customers;
 pub mod land;
+pub mod population;
