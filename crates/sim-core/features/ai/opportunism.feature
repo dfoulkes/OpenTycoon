@@ -64,12 +64,16 @@ Feature: Opportunism
 
   @spec-10 @R66
   Scenario: The Grocer never builds apartments, whatever the yields
+    # At the shipped rents flats earn several times what its shops do.
     Given the Grocer plays seat 1 against a scripted rival in seat 0
     And every player starts with £60,000
     And 2000 people live in the city
-    And flats let at £9.00 a day
     And the Grocer holds the lease on "Old Kent Road"
-    When seat 1 plays for 3 game days
+    # By its first reading of the yields it has filled every Low lot it can win with shops, so
+    # it is handed an empty Medium lot once it knows flats pay.
+    When seat 1 plays for 1 game day
+    And the Grocer is handed the lease on "Soho"
+    And seat 1 plays for 2 game days
     Then the Grocer put up at least 1 shop
     And the Grocer never put up an apartment block
 

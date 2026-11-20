@@ -1022,6 +1022,11 @@ fn flats_let_at(w: &mut SimWorld, pounds: u32, pence: u32) {
     );
 }
 
+#[when(regex = r#"^(the Grocer|the Toff) is handed the lease on "([^"]+)"$"#)]
+fn handed_lease(w: &mut SimWorld, who: String, name: String) {
+    focus_holds(w, who, name);
+}
+
 #[given("the rival holds every lease")]
 fn rival_holds_every_lease(w: &mut SimWorld) {
     rival_holds_all(w, String::new());
