@@ -12,7 +12,7 @@ use sim_core::config::ConfigFile;
 
 use super::def::{StudyDef, StudyError};
 use super::metrics::{GameOutcome, ModelMetrics};
-use super::models::{ModelSpec, model_sources, value_text};
+use super::models::{ModelSpec, model_sources};
 use super::seats::Roster;
 
 /// Splits one CSV line into fields (RFC 4180 quoting: `"a,b"`, `""` for a quote).
@@ -135,7 +135,7 @@ pub fn model_row(
             Some(v) => Some(v[i]),
             None => baseline.get(i).copied().flatten(),
         };
-        row.push(v.map(|v| value_text(v, p.places())).unwrap_or_default());
+        row.push(v.map(|v| p.label(v)).unwrap_or_default());
     }
     let metric_cols = MODEL_METRICS.len() - usize::from(!wall);
     let entry_cols = ENTRY_METRICS.len() * roster.len();

@@ -6,7 +6,7 @@ use serde_yaml_ng::Value;
 use sim_core::{Config, ConfigSources};
 
 use super::def::{Mode, Parameter, StudyDef, StudyError};
-use super::lhs::{round_to, unit_samples, value_at};
+use super::lhs::{category_at, round_to, unit_samples, value_at};
 use crate::overrides::{self, LoadError, Override};
 
 /// One model of a study.
@@ -37,7 +37,18 @@ pub fn generate(def: &StudyDef) -> Result<Vec<ModelSpec>, StudyError> {
             .parameters
             .iter()
             .zip(&u)
-            .map(|(p, x)| value_at(p, *x))
+            .map(|(p, x)| {
+                if p.is_categorical() {
+                    #[allow(
+                        clippy::cast_precision_loss,
+                        reason = "a category index is far below 2^52"
+                    )]
+                    let i = category_at(*x, sampled, p.values.len()) as f64;
+                    i
+                } else {
+                    value_at(p, *x)
+                }
+            })
             .collect();
         models.push(ModelSpec {
             id,
@@ -125,11 +136,11 @@ fn parameter_overrides(
             continue;
         }
         match p.mode {
-            Mode::Set => out.push(parse(&format!("{key}={}", value_text(value, p.places())))?),
+            Mode::Set => out.push(parse(&format!("{key}={}", p.label(value)))?),
             Mode::Scale => {
                 let Some(node) = node_at(base, key) else {
                     // Let the normal path name the missing key.
-                    out.push(parse(&format!("{key}={}", value_text(value, p.places())))?);
+                    out.push(parse(&format!("{key}={}", p.label(value)))?);
                     continue;
                 };
                 let mut leaves = Vec::new();
@@ -171,11 +182,18 @@ pub fn overrides_for(
 }
 
 /// Each parameter's value in the base config: the number at its first key for `set`, 1 for a
-/// `scale` factor; `None` if the key holds no single number (or is missing).
+/// `scale` factor, the index of the base value among a categorical parameter's `values`;
+/// `None` if the key holds no single number (or is missing, or a category not listed).
 pub fn baseline_values(def: &StudyDef, base: &ConfigSources) -> Vec<Option<f64>> {
     def.parameters
         .iter()
         .map(|p| match p.mode {
+            _ if p.is_categorical() => {
+                let node = p.all_keys().first().and_then(|k| node_at(base, k))?;
+                let text = node.as_str()?;
+                let i = p.values.iter().position(|v| v == text)?;
+                u32::try_from(i).ok().map(f64::from)
+            }
             Mode::Scale => Some(1.0),
             Mode::Set => p
                 .all_keys()

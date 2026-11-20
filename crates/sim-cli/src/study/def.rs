@@ -109,10 +109,17 @@ pub struct Parameter {
     /// Several keys that all take the same value (or factor).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keys: Vec<String>,
-    /// Lower bound (inclusive).
-    pub min: f64,
-    /// Upper bound (inclusive).
-    pub max: f64,
+    /// Lower bound (inclusive). Required for a numeric parameter, absent for a categorical one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min: Option<f64>,
+    /// Upper bound (inclusive). Required for a numeric parameter, absent for a categorical one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max: Option<f64>,
+    /// The values of a **categorical** parameter (e.g. `[book_decay, market]`): each model sets
+    /// the key to one of them, and the hypercube gives each an equal share of the models.
+    /// Empty for a numeric parameter.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub values: Vec<String>,
     /// `uniform` (default) or `log_uniform`.
     #[serde(default)]
     pub distribution: Distribution,
@@ -148,8 +155,9 @@ impl Parameter {
             name: name.to_owned(),
             key: Some(key.to_owned()),
             keys: Vec::new(),
-            min,
-            max,
+            min: Some(min),
+            max: Some(max),
+            values: Vec::new(),
             distribution,
             kind,
             decimals: None,
@@ -163,6 +171,42 @@ impl Parameter {
         Parameter {
             mode: Mode::Scale,
             ..Parameter::set(name, key, min, max, Distribution::Uniform, Kind::Decimal)
+        }
+    }
+
+    /// A categorical parameter on one key: each model sets it to one of `values`.
+    pub fn categorical(name: &str, key: &str, values: &[&str]) -> Self {
+        Parameter {
+            min: None,
+            max: None,
+            values: values.iter().map(|v| (*v).to_owned()).collect(),
+            ..Parameter::set(name, key, 0.0, 0.0, Distribution::Uniform, Kind::Integer)
+        }
+    }
+
+    /// True for a categorical parameter (it lists `values`).
+    pub fn is_categorical(&self) -> bool {
+        !self.values.is_empty()
+    }
+
+    /// The numeric range `[min, max]` (`(0, 0)` for a categorical parameter, which has none).
+    pub fn range(&self) -> (f64, f64) {
+        (self.min.unwrap_or(0.0), self.max.unwrap_or(0.0))
+    }
+
+    /// A model's value as written in the config and `models.csv`: the category name for a
+    /// categorical parameter (the value is its index), otherwise the number to its places.
+    pub fn label(&self, value: f64) -> String {
+        if self.is_categorical() {
+            #[allow(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "a category index is a small whole number"
+            )]
+            let i = value.max(0.0) as usize;
+            self.values.get(i).cloned().unwrap_or_default()
+        } else {
+            super::models::value_text(value, self.places())
         }
     }
 
@@ -341,16 +385,26 @@ impl StudyDef {
                     ));
                 }
             }
-            if !p.min.is_finite() || !p.max.is_finite() {
+            if p.is_categorical() {
+                check_categorical(p, &at)?;
+                continue;
+            }
+            let (Some(min), Some(max)) = (p.min, p.max) else {
+                return Err(StudyError::def(
+                    at("min"),
+                    "give min and max (or `values` for a categorical parameter)",
+                ));
+            };
+            if !min.is_finite() || !max.is_finite() {
                 return Err(StudyError::def(at("min"), "min and max must be numbers"));
             }
-            if p.min > p.max {
+            if min > max {
                 return Err(StudyError::def(at("min"), "must not exceed max"));
             }
-            if p.distribution == Distribution::LogUniform && p.min <= 0.0 {
+            if p.distribution == Distribution::LogUniform && min <= 0.0 {
                 return Err(StudyError::def(at("min"), "log_uniform needs min > 0"));
             }
-            if p.kind == Kind::Integer && (p.min.fract() != 0.0 || p.max.fract() != 0.0) {
+            if p.kind == Kind::Integer && (min.fract() != 0.0 || max.fract() != 0.0) {
                 return Err(StudyError::def(
                     at("min"),
                     "integer parameters need whole min and max",
@@ -365,6 +419,46 @@ impl StudyDef {
         }
         Ok(())
     }
+}
+
+/// A categorical parameter: plain distinct values, no range, set mode, nothing numeric.
+fn check_categorical(p: &Parameter, at: &dyn Fn(&str) -> String) -> Result<(), StudyError> {
+    if p.min.is_some() || p.max.is_some() {
+        return Err(StudyError::def(
+            at("min"),
+            "a categorical parameter has `values`, not min and max",
+        ));
+    }
+    if p.mode == Mode::Scale {
+        return Err(StudyError::def(
+            at("mode"),
+            "a categorical parameter sets its key",
+        ));
+    }
+    if p.distribution != Distribution::Uniform || p.decimals.is_some() {
+        return Err(StudyError::def(
+            at("values"),
+            "a categorical parameter takes no distribution or decimals",
+        ));
+    }
+    for (j, v) in p.values.iter().enumerate() {
+        let plain = v
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+        if v.is_empty() || !plain {
+            return Err(StudyError::def(
+                at(&format!("values[{j}]")),
+                format!("{v:?}: use letters, digits, _ and -"),
+            ));
+        }
+        if p.values[..j].contains(v) {
+            return Err(StudyError::def(
+                at(&format!("values[{j}]")),
+                format!("{v:?} is listed twice"),
+            ));
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -393,6 +487,21 @@ mod tests {
         assert_eq!(
             d.parameters[1].all_keys(),
             vec!["customers.price_sensitivity.working"]
+        );
+    }
+
+    #[test]
+    fn parses_a_categorical_parameter() {
+        let d = StudyDef::from_yaml(
+            "parameters:\n  - { name: land, key: game.net_worth.land_value, values: [book_decay, market] }\n",
+        )
+        .unwrap();
+        let p = &d.parameters[0];
+        assert!(p.is_categorical());
+        assert_eq!((p.min, p.max), (None, None));
+        assert_eq!(
+            (p.label(0.0), p.label(1.0)),
+            ("book_decay".into(), "market".into())
         );
     }
 
@@ -431,6 +540,30 @@ mod tests {
             (
                 "parameters: [{ name: x, key: game.a, min: 0, max: 1, colour: red }]",
                 "parameters[0]",
+            ),
+            (
+                "parameters: [{ name: x, key: game.a, max: 1 }]",
+                "parameters[0].min",
+            ),
+            (
+                "parameters: [{ name: x, key: game.a, values: [a, b], min: 0, max: 1 }]",
+                "parameters[0].min",
+            ),
+            (
+                "parameters: [{ name: x, key: game.a, values: [a, b], mode: scale }]",
+                "parameters[0].mode",
+            ),
+            (
+                "parameters: [{ name: x, key: game.a, values: [a, a] }]",
+                "parameters[0].values[1]",
+            ),
+            (
+                "parameters: [{ name: x, key: game.a, values: [a, 'b c'] }]",
+                "parameters[0].values[1]",
+            ),
+            (
+                "parameters: [{ name: x, key: game.a, values: [a, b], distribution: log_uniform }]",
+                "parameters[0].values",
             ),
         ] {
             let err = StudyDef::from_yaml(yaml).unwrap_err().to_string();

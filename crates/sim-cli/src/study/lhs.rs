@@ -47,6 +47,12 @@ pub fn unit_samples(dims: usize, count: usize, seed: u64) -> Vec<Vec<f64>> {
     points
 }
 
+/// The category index of unit sample `u` when `strata` models share `categories` values.
+pub fn category_at(u: f64, strata: usize, categories: usize) -> usize {
+    let _ = (u, strata, categories);
+    0
+}
+
 /// Rounds `v` to `places` decimals (half away from zero).
 pub fn round_to(v: f64, places: u32) -> f64 {
     let scale = (0..places).fold(1.0, |s, _| s * 10.0);
@@ -61,7 +67,7 @@ pub fn round_to(v: f64, places: u32) -> f64 {
 /// - log-uniform decimal: `exp(ln min + u (ln max − ln min))`;
 /// - log-uniform integer: `⌊exp(ln min + u (ln (max + 1) − ln min))⌋`.
 pub fn value_at(p: &Parameter, u: f64) -> f64 {
-    let (lo, hi) = (p.min, p.max);
+    let (lo, hi) = p.range();
     let top = match p.kind {
         Kind::Integer => hi + 1.0,
         Kind::Decimal => hi,
@@ -144,7 +150,34 @@ mod tests {
         }
     }
 
+    #[test]
+    fn categories_split_the_strata_evenly() {
+        let shares = |strata: usize, k: usize| {
+            let mut n = vec![0usize; k];
+            for pt in unit_samples(1, strata, 2) {
+                n[category_at(pt[0], strata, k)] += 1;
+            }
+            n
+        };
+        assert_eq!(shares(12, 3), vec![4, 4, 4]);
+        assert_eq!(shares(11, 3), vec![3, 4, 4]);
+        assert_eq!(shares(99, 3), vec![33, 33, 33]);
+        assert_eq!(shares(5, 1), vec![5]);
+    }
+
     proptest! {
+        #[test]
+        fn categories_differ_by_at_most_one(strata in 1usize..200, k in 1usize..8, seed in any::<u64>()) {
+            let mut n = vec![0usize; k];
+            for pt in unit_samples(1, strata, seed) {
+                let c = category_at(pt[0], strata, k);
+                prop_assert!(c < k);
+                n[c] += 1;
+            }
+            let (lo, hi) = (n.iter().min().unwrap(), n.iter().max().unwrap());
+            prop_assert!(hi - lo <= 1, "{n:?}");
+        }
+
         #[test]
         fn every_stratum_is_hit_once(dims in 1usize..5, count in 1usize..60, seed in any::<u64>()) {
             let pts = unit_samples(dims, count, seed);

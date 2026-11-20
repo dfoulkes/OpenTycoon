@@ -139,6 +139,15 @@ fn a_scale_parameter(w: &mut HarnessWorld, name: String, key: String, min: f64, 
         .push(Parameter::scale(&name, &key, min, max));
 }
 
+#[given(expr = "the categorical parameter {string} on {string} with values {string}")]
+fn a_categorical_parameter(w: &mut HarnessWorld, name: String, key: String, values: String) {
+    let values: Vec<&str> = values.split(',').map(str::trim).collect();
+    w.study
+        .def()
+        .parameters
+        .push(Parameter::categorical(&name, &key, &values));
+}
+
 #[when("I generate the models twice")]
 fn generate_twice(w: &mut HarnessWorld) {
     let def = w.study.def.clone().unwrap();
@@ -202,6 +211,44 @@ fn one_per_stratum(w: &mut HarnessWorld, n: usize, name: String, strata: usize) 
     }
     assert_eq!(hits.iter().sum::<usize>(), n);
     assert!(hits.iter().all(|h| *h == 1), "strata hit: {hits:?}");
+}
+
+#[then(expr = "the {int} sampled models of {string} take each value between {int} and {int} times")]
+fn categories_evenly(w: &mut HarnessWorld, n: usize, name: String, least: usize, most: usize) {
+    let i = param_index(w, &name);
+    let p = w.study.def.as_ref().unwrap().parameters[i].clone();
+    let mut count: BTreeMap<String, usize> = p.values.iter().map(|v| (v.clone(), 0)).collect();
+    for m in w.study.models.iter().filter(|m| m.id != 0) {
+        let label = p.label(m.values.as_ref().unwrap()[i]);
+        *count
+            .get_mut(&label)
+            .unwrap_or_else(|| panic!("{label} is not a value")) += 1;
+    }
+    assert_eq!(count.values().sum::<usize>(), n);
+    assert!(
+        count.values().all(|c| (least..=most).contains(c)),
+        "{count:?}"
+    );
+}
+
+#[then(expr = "every sampled model of {string} sets {string} to its value")]
+fn categories_set(w: &mut HarnessWorld, name: String, key: String) {
+    let def = w.study.def.clone().unwrap();
+    let i = param_index(w, &name);
+    let sources = base(w);
+    for m in w.study.models.iter().filter(|m| m.id != 0) {
+        let label = def.parameters[i].label(m.values.as_ref().unwrap()[i]);
+        let ovs = overrides_for(&def, &sources, m).unwrap();
+        assert_eq!(
+            ovs.iter().map(ToString::to_string).collect::<Vec<_>>(),
+            vec![format!("{key}={label}")]
+        );
+        let config = model_config(&def, &sources, m, "v1").unwrap();
+        assert_eq!(
+            serde_json::to_value(config.game.net_worth.land_value).unwrap(),
+            serde_json::Value::String(label)
+        );
+    }
 }
 
 #[then("model 0 has no overrides")]
@@ -585,6 +632,33 @@ fn models_invalid(w: &mut HarnessWorld, a: u32, b: u32, status: String, key: Str
         assert!(row["error"].contains(&key), "{row:?}");
     }
     assert_eq!(w.study.reports.last().unwrap().invalid, 2);
+}
+
+#[then(expr = "models.csv shows {string} as {string} for model {int}")]
+fn csv_category(w: &mut HarnessWorld, name: String, value: String, id: u32) {
+    let rows = rows(w);
+    let row = rows
+        .iter()
+        .find(|r| r["model_id"] == id.to_string())
+        .unwrap();
+    assert_eq!(row[&format!("param_{name}")], value, "{row:?}");
+}
+
+#[then(expr = "models.csv shows {string} as one of {string} for models {int} to {int}")]
+fn csv_categories(w: &mut HarnessWorld, name: String, values: String, from: u32, to: u32) {
+    let allowed: Vec<&str> = values.split(',').map(str::trim).collect();
+    let rows = rows(w);
+    for id in from..=to {
+        let row = rows
+            .iter()
+            .find(|r| r["model_id"] == id.to_string())
+            .unwrap();
+        assert_eq!(row["status"], "ok", "{row:?}");
+        assert!(
+            allowed.contains(&row[&format!("param_{name}")].as_str()),
+            "{row:?}"
+        );
+    }
 }
 
 #[then(expr = "models.csv has {int} models")]
