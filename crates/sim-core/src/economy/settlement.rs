@@ -294,21 +294,26 @@ mod tests {
 
     proptest! {
         /// Residents' rent moves money from the shoppers' purse to landlords: the purse pays
-        /// exactly what is due, landlords get it, and the total is unchanged.
+        /// exactly what is due, the city gets each building's rent tax, each landlord the rest,
+        /// and the total is unchanged.
         #[test]
         fn resident_rent_conserves_money(
-            due in prop::collection::vec((0u8..3, 0u32..500, 0i64..100_000), 0..30),
+            due in prop::collection::vec((0u8..3, 0u32..500, 0i64..100_000, 0i64..=10_000), 0..30),
             purse in 0i64..10_000_000,
         ) {
             let acct = |i: u8| match i { 0 => AccountId::City, 1 => P0, _ => P1 };
             let due: Vec<RentDue> = due
                 .into_iter()
                 .enumerate()
-                .map(|(i, (who, flats, pence))| RentDue {
-                    building: crate::businesses::BusinessId(u32::try_from(i).unwrap()),
-                    landlord: acct(who),
-                    flats_let: flats,
-                    amount: Money::from_pence(pence),
+                .map(|(i, (who, flats, pence, tax_bp))| {
+                    let amount = Money::from_pence(pence);
+                    RentDue {
+                        building: crate::businesses::BusinessId(u32::try_from(i).unwrap()),
+                        landlord: acct(who),
+                        flats_let: flats,
+                        amount,
+                        tax: Rate::from_bp(tax_bp).apply(amount),
+                    }
                 })
                 .collect();
             let mut ledger = Ledger::new();
@@ -319,6 +324,17 @@ mod tests {
             ledger.settle(&bills);
             let owed: Money = due.iter().map(|d| d.amount).sum();
             prop_assert_eq!(ledger.balance(AccountId::Shoppers), Money::from_pence(purse) - owed);
+            for who in [AccountId::City, P0, P1] {
+                let expected: Money = due
+                    .iter()
+                    .map(|d| {
+                        let to_city = if who == AccountId::City { d.tax } else { Money::ZERO };
+                        let to_owner = if d.landlord == who { d.amount - d.tax } else { Money::ZERO };
+                        to_city + to_owner
+                    })
+                    .sum();
+                prop_assert_eq!(ledger.balance(who), expected, "{:?}", who);
+            }
             prop_assert_eq!(ledger.total(), before);
         }
 

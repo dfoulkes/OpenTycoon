@@ -10,6 +10,7 @@ use proptest::prelude::*;
 use sim_core::World;
 use sim_core::businesses::{BuildRequest, Business, BusinessId, Businesses, FitOutLevel};
 use sim_core::clock::{Clock, ClockRules};
+use sim_core::config::types::Ratio;
 use sim_core::customers::{Customers, PhaseInputs, run_phase};
 use sim_core::economy::AccountId;
 use sim_core::land::{BlockId, Footprint, Map};
@@ -81,6 +82,41 @@ proptest! {
         for listing in &l {
             prop_assert!(occupancy.get(&listing.building).copied().unwrap_or(0) <= listing.flats);
         }
+    }
+
+    /// The commute-preference lever (docs/economy.md "Residential levers"): the house-hunt
+    /// never houses more than `⌊adults × (1 − commute_preference)⌋`, and still conserves people.
+    #[test]
+    fn commute_preference_caps_the_housed_share(
+        seed in any::<u64>(),
+        preference_bp in 0i64..=10_000,
+        arriving in prop::collection::vec((0u8..4, 0u8..2, 0u8..3, 0u64..60), 0..12),
+        pool in prop::collection::vec((0u8..4, 0u8..2, 0u8..3, 0u64..60), 0..12),
+        blocks in prop::collection::vec((0u32..9, 1u32..20), 1..5),
+    ) {
+        let mut config = common::shipped_config();
+        config.customers.residential.commute_preference = Ratio(Rate::from_bp(preference_bp));
+        let map = Map::from_config(&config.map);
+        let mut businesses = Businesses::default();
+        let mut pop = Population::default();
+        for (i, (block, height)) in blocks.iter().enumerate() {
+            let id = BusinessId(u32::try_from(i).unwrap());
+            businesses.by_id.insert(id, building("apartments", *block, 0, *height));
+            pop.residential.rents.insert(id, Money::from_pence(100));
+        }
+        for (b, s, c, n) in arriving {
+            *pop.pending.entry(cohort(b, s, c)).or_insert(0) += n;
+        }
+        for (b, s, c, n) in pool {
+            *pop.pool.entry(cohort(b, s, c)).or_insert(0) += n;
+        }
+        let adults = pop.total_adults() + pop.pending_arrivals();
+        let l = listings(&businesses, &map, &config, &pop.residential);
+        let mut rng = seeded(seed);
+        arrivals(&mut pop, &l, &config.customers, 1950, &mut rng);
+        let keep = u64::try_from(10_000 - preference_bp).unwrap();
+        prop_assert_eq!(pop.total_adults(), adults);
+        prop_assert!(pop.housed() <= adults * keep / 10_000, "{} housed of {}", pop.housed(), adults);
     }
 
     #[test]

@@ -190,3 +190,64 @@ Feature: Apartments and who lives in them
       | grand | lives |
       | 66.00 | Grand |
       | 66.01 | Home  |
+
+  # Study levers (docs/economy.md "Residential levers"): configurable rules that are off by
+  # default, for the balance study to search. Not rulings; tagged with the ruling they adjust.
+
+  @R51 @R17
+  Scenario: A rent cap limits what residents see and pay, whatever the owner sets
+    # A working man aged 30–49 gets £22.00: £6.00 is over his 20% (£4.40), the £4.00 cap is not.
+    Given the shipped config with "customers.yaml" key "/residential/max_rent_per_flat" set to "4.00"
+    And an apartment block "Flats" on "old_kent_road" 3×3×12 owned by player 0
+    And the rent at "Flats" is £6.00
+    And 1 working man aged "30-49" arrives on the morning train
+    When the 05:30 arrivals house-hunt
+    Then 1 person lives in "Flats"
+    And at the 06:00 settlement "Flats" is owed £4.00 by its residents
+    And the rent at "Flats" is £6.00
+
+  @R51
+  Scenario: With no rent cap (the default) the owner's rent stands
+    Given an apartment block "Flats" on "old_kent_road" 3×3×12 owned by player 0
+    And a working man aged "30-49" has lived in "Flats" since 1930
+    And the rent at "Flats" is £6.00
+    Then at the 06:00 settlement "Flats" is owed £6.00 by its residents
+
+  @R51 @R63 @R17
+  Scenario Outline: A rent tax sends a share of residents' rent to the city
+    Given the shipped config with "customers.yaml" key "/residential/rent_tax" set to "<tax>"
+    And an apartment block "Flats" on "old_kent_road" 3×3×12 owned by player 0
+    And a working man aged "30-49" has lived in "Flats" since 1930
+    And a working woman aged "30-49" has lived in "Flats" since 1930
+    And the rent at "Flats" is £3.00
+    Then at the 06:00 settlement "Flats" is owed £6.00 by its residents
+    And £<city> of the rent at "Flats" is paid to the city as rent tax
+
+    Examples:
+      | tax   | city |
+      | 0.0   | 0.00 |
+      | 0.2   | 1.20 |
+      | 0.125 | 0.75 |
+      | 1.0   | 6.00 |
+
+  @R52 @R53 @R17
+  Scenario: Some adults would rather commute, even when they can afford a flat
+    # 10 adults, 30% prefer to commute: at most 7 are housed, and the re-hunt the next
+    # morning does not fill the empty flats with the other 3.
+    Given the shipped config with "customers.yaml" key "/residential/commute_preference" set to "0.3"
+    And an apartment block "Flats" on "old_kent_road" 3×3×12
+    And 10 working men aged "30-49" arrive on the morning train
+    When the 05:30 arrivals house-hunt
+    Then 7 people live in "Flats"
+    And 3 arrivals are commuting or visiting
+    When the 05:30 arrivals house-hunt
+    Then 7 people live in "Flats"
+    And 3 people in the city are commuting or visiting
+
+  @R52 @R53
+  Scenario: By default everyone who can afford a flat takes one
+    Given an apartment block "Flats" on "old_kent_road" 3×3×12
+    And 10 working men aged "30-49" arrive on the morning train
+    When the 05:30 arrivals house-hunt
+    Then 10 people live in "Flats"
+    And 0 arrivals are commuting or visiting

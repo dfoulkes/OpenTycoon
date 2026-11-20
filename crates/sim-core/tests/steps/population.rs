@@ -716,6 +716,27 @@ fn owed(w: &mut SimWorld, name: String, amount: String) {
     assert_eq!(bill.landlord, w.city.businesses.by_id[&id].owner);
 }
 
+#[then(regex = r#"^£([\d.]+) of the rent at "([^"]+)" is paid to the city as rent tax$"#)]
+fn rent_tax_to_city(w: &mut SimWorld, amount: String, name: String) {
+    let config = CityState::config(w);
+    let map = CityState::map(w);
+    let id = w.city.building(&name);
+    let l = listings(
+        &w.city.businesses,
+        &map,
+        &config,
+        &w.city.population.residential,
+    );
+    let due = rent_due(&w.city.population.residential, &l, &config.customers);
+    let bill = due.iter().find(|d| d.building == id).unwrap();
+    assert_eq!(bill.tax, pounds(&amount));
+}
+
+#[then(expr = "{int} people in the city are commuting or visiting")]
+fn visitors_in_city(w: &mut SimWorld, n: u64) {
+    assert_eq!(w.city.population.visitors(), n);
+}
+
 #[then(
     regex = r#"^an? (working|middle|upper) (man|woman) aged "([^"]+)" would consider "([^"]+)"$"#
 )]
