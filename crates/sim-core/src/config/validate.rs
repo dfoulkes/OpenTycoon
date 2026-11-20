@@ -731,6 +731,7 @@ fn check_ai(config: &Config, errors: &mut Vec<ConfigError>) {
         }
     }
     check_grocer(config, errors);
+    check_roster(config, errors);
 }
 
 /// `ai.yaml` `grocer` (§10): shares in range, and every shop it builds is a known day-trade
@@ -1169,4 +1170,234 @@ fn check_tourists_and_online(config: &Config, errors: &mut Vec<ConfigError>) {
             "must be at most brand.max".into(),
         );
     }
+}
+
+// --- ai.yaml: the Landlord, the Toff, the Speculator and Sir Penny Sugar (§10) ---------------
+
+/// One personality block's errors, each under `/<block>/<key>`.
+struct Block<'a> {
+    errors: &'a mut Vec<ConfigError>,
+    name: &'static str,
+}
+
+impl Block<'_> {
+    fn bad(&mut self, key: &str, message: impl Into<String>) {
+        err(
+            self.errors,
+            ConfigFile::Ai,
+            format!("/{}/{key}", self.name),
+            message.into(),
+        );
+    }
+
+    /// A share in `lo..=hi` basis points.
+    fn share(&mut self, key: &str, value: super::Ratio, lo: i64, hi: i64, what: &str) {
+        if !(lo..=hi).contains(&value.rate().bp()) {
+            self.bad(key, format!("must be {what}"));
+        }
+    }
+
+    fn common(&mut self, aggression: super::Ratio, buffer: super::Pounds) {
+        self.share(
+            "aggression",
+            aggression,
+            1,
+            BASIS_POINTS_PER_UNIT,
+            "above 0 and at most 1: a bid can never pass the ceiling (R7)",
+        );
+        if buffer.money().is_negative() {
+            self.bad("cash_buffer", "must not be negative");
+        }
+    }
+
+    fn rescue(&mut self, config: &Config, after: super::ClockTime) {
+        let day_close = config.game.clock.trading_hours.day.close;
+        if after.seconds_since_midnight() < day_close.seconds_since_midnight() {
+            self.bad(
+                "rescue_after",
+                format!("must be at or after day trade closes ({day_close}) in game.yaml"),
+            );
+        }
+    }
+
+    /// A building's footprint and height fit the lot and the type (R22, R58).
+    fn building(
+        &mut self,
+        config: &Config,
+        prefix: &str,
+        type_id: &str,
+        size: [u32; 2],
+        height: u32,
+    ) {
+        let lot = config.game.world.lot_size;
+        for (axis, (n, lot)) in size.iter().zip(lot.iter()).enumerate() {
+            if *n == 0 || n > lot {
+                self.bad(
+                    &format!("{prefix}_footprint/{axis}"),
+                    format!("{n} must be between 1 and the lot size {lot} (R22)"),
+                );
+            }
+        }
+        let Some(kind) = config.businesses.types.get(type_id) else {
+            return;
+        };
+        let footprint = crate::land::Footprint {
+            x: 0,
+            y: 0,
+            w: size[0],
+            d: size[1],
+        };
+        if !crate::businesses::placement::meets_min_footprint(footprint, kind.min_footprint) {
+            self.bad(
+                &format!("{prefix}_footprint"),
+                format!(
+                    "smaller than {type_id:?}'s min_footprint {:?}",
+                    kind.min_footprint
+                ),
+            );
+        }
+        if height > kind.max_height {
+            self.bad(
+                &format!("{prefix}_height"),
+                format!(
+                    "{height} is taller than {type_id:?}'s max_height {} (R58)",
+                    kind.max_height
+                ),
+            );
+        }
+    }
+}
+
+/// `ai.yaml` `landlord`, `toff`, `speculator`, `sir_penny_sugar` (§10): shares in range, rents
+/// ordered, and every building they would put up fits the lot and its type (R22, R58).
+fn check_roster(config: &Config, errors: &mut Vec<ConfigError>) {
+    check_landlord(config, errors);
+    check_toff(config, errors);
+    check_speculator(config, errors);
+    check_sir_penny_sugar(config, errors);
+}
+
+const UNIT: &str = "between 0 and 1";
+
+fn check_landlord(config: &Config, errors: &mut Vec<ConfigError>) {
+    let one = BASIS_POINTS_PER_UNIT;
+    let apartments = config.customers.residential.building_type.as_str();
+    let cfg = &config.ai.landlord;
+    let mut block = Block {
+        errors,
+        name: "landlord",
+    };
+    block.common(cfg.aggression, cfg.cash_buffer);
+    block.share("min_tier_weight", cfg.min_tier_weight, 0, one, UNIT);
+    block.share("rent", cfg.rent, 0, 10 * one, "between 0 and 10");
+    block.building(
+        config,
+        "apartment",
+        apartments,
+        cfg.apartment_footprint,
+        cfg.apartment_height,
+    );
+    block.rescue(config, cfg.rescue_after);
+}
+
+fn check_toff(config: &Config, errors: &mut Vec<ConfigError>) {
+    let one = BASIS_POINTS_PER_UNIT;
+    let cfg = &config.ai.toff;
+    let mut block = Block {
+        errors,
+        name: "toff",
+    };
+    block.common(cfg.aggression, cfg.cash_buffer);
+    block.share("min_tier_weight", cfg.min_tier_weight, 0, one, UNIT);
+    block.share(
+        "price_premium",
+        cfg.price_premium,
+        0,
+        4 * one,
+        "between 0 and 4",
+    );
+    block.share(
+        "initial_order_share",
+        cfg.initial_order_share,
+        1,
+        one,
+        "above 0 and at most 1",
+    );
+    block.share("order_margin", cfg.order_margin, 0, one, UNIT);
+    block.rescue(config, cfg.rescue_after);
+    for (i, id) in cfg.shop_types.iter().enumerate() {
+        match config.businesses.types.get(id) {
+            None => block.bad(
+                &format!("shop_types/{i}"),
+                format!("unknown business type {id:?} in businesses.yaml"),
+            ),
+            Some(kind) if kind.goods.is_empty() => block.bad(
+                &format!("shop_types/{i}"),
+                format!("{id:?} is not a shop with goods"),
+            ),
+            Some(_) => block.building(config, "shop", id, cfg.shop_footprint, cfg.shop_height),
+        }
+    }
+    if cfg.shop_types.is_empty() {
+        block.building(config, "shop", "", cfg.shop_footprint, cfg.shop_height);
+    }
+}
+
+fn check_speculator(config: &Config, errors: &mut Vec<ConfigError>) {
+    let one = BASIS_POINTS_PER_UNIT;
+    let cfg = &config.ai.speculator;
+    let mut block = Block {
+        errors,
+        name: "speculator",
+    };
+    block.common(cfg.aggression, cfg.cash_buffer);
+    block.share("min_tier_weight", cfg.min_tier_weight, 0, one, UNIT);
+    block.share(
+        "bargain_share",
+        cfg.bargain_share,
+        1,
+        one,
+        "above 0 and at most 1",
+    );
+    block.rescue(config, cfg.rescue_after);
+}
+
+fn check_sir_penny_sugar(config: &Config, errors: &mut Vec<ConfigError>) {
+    let one = BASIS_POINTS_PER_UNIT;
+    let apartments = config.customers.residential.building_type.as_str();
+    let cfg = &config.ai.sir_penny_sugar;
+    let mut block = Block {
+        errors,
+        name: "sir_penny_sugar",
+    };
+    block.common(cfg.aggression, cfg.cash_buffer);
+    block.share("min_tier_weight", cfg.min_tier_weight, 0, one, UNIT);
+    block.share("station_premium", cfg.station_premium, 0, one, UNIT);
+    block.share(
+        "rent_step",
+        cfg.rent_step,
+        1,
+        10 * one,
+        "above 0 and at most 10",
+    );
+    block.share("raise_at", cfg.raise_at, 0, one, UNIT);
+    if cfg.cut_at.rate() >= cfg.raise_at.rate() || cfg.cut_at.rate().bp() < 0 {
+        block.bad("cut_at", "must be at least 0 and below raise_at");
+    }
+    block.share("min_rent", cfg.min_rent, 0, 10 * one, "between 0 and 10");
+    block.share("max_rent", cfg.max_rent, 0, 10 * one, "between 0 and 10");
+    if cfg.min_rent.rate() > cfg.max_rent.rate() {
+        block.bad("min_rent", "must be at most max_rent");
+    }
+    if cfg.start_rent.rate() < cfg.min_rent.rate() || cfg.start_rent.rate() > cfg.max_rent.rate() {
+        block.bad("start_rent", "must be between min_rent and max_rent");
+    }
+    block.building(
+        config,
+        "apartment",
+        apartments,
+        cfg.apartment_footprint,
+        cfg.apartment_height,
+    );
+    block.rescue(config, cfg.rescue_after);
 }

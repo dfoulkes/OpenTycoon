@@ -1,5 +1,25 @@
 {
   "$defs": {
+    "FitOutLevel": {
+      "description": "Fit-out quality (§7.1). Post-v1 except as a stored field and its build-cost multiplier.",
+      "oneOf": [
+        {
+          "const": "low",
+          "description": "Low.",
+          "type": "string"
+        },
+        {
+          "const": "medium",
+          "description": "Medium.",
+          "type": "string"
+        },
+        {
+          "const": "high",
+          "description": "High.",
+          "type": "string"
+        }
+      ]
+    },
     "GrocerConfig": {
       "additionalProperties": false,
       "description": "The Grocer's tunables (§10). Money is decimal pounds; shares are decimals.",
@@ -78,6 +98,183 @@
       ],
       "type": "object"
     },
+    "LandlordConfig": {
+      "additionalProperties": false,
+      "description": "The Landlord's tunables (§10). Tiers come from the `landlord` personality's weights.",
+      "properties": {
+        "aggression": {
+          "description": "Strength knob: the most it pays for one lease, as a share of its bid ceiling\n(`balance + credit limit`, R7). Above 0, at most 1.",
+          "type": "number"
+        },
+        "apartment_footprint": {
+          "description": "Footprint of each apartment block it builds, `[width, depth]` in lot units.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "apartment_height": {
+          "description": "Height of each apartment block; capped at the type's `max_height` (R58).",
+          "format": "uint32",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "apartments_per_lot": {
+          "description": "Apartment blocks it puts up per lease at most (0: pure land, no building at all).",
+          "format": "uint32",
+          "maximum": 81,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cash_buffer": {
+          "description": "Cash it never spends below (R3).",
+          "type": "number"
+        },
+        "max_leases": {
+          "description": "Leases it holds at most at once.",
+          "format": "uint32",
+          "maximum": 1000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "min_tier_weight": {
+          "description": "Tiers whose personality weight is at least this are worth a lease. Between 0 and 1.",
+          "type": "number"
+        },
+        "rent": {
+          "description": "Its rent per flat, as a share of `customers.yaml` `residential.reference_rent` (R51).",
+          "type": "number"
+        },
+        "rescue_after": {
+          "description": "From this time to midnight, a negative balance makes it sell (R5) or offer a lease.",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+          "type": "string"
+        },
+        "sell_within_years": {
+          "description": "Late in a lease (this many years or fewer left) it offers the lease at auction (R33)\nwhen the reserve beats what holding to expiry is worth. 0 never sells.",
+          "format": "uint32",
+          "maximum": 1000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "aggression",
+        "cash_buffer",
+        "min_tier_weight",
+        "max_leases",
+        "apartment_footprint",
+        "apartment_height",
+        "apartments_per_lot",
+        "rent",
+        "sell_within_years",
+        "rescue_after"
+      ],
+      "type": "object"
+    },
+    "PennySugarConfig": {
+      "additionalProperties": false,
+      "description": "Sir Penny Sugar's tunables (§10, §7.2). Tiers come from the `sir_penny_sugar` weights.",
+      "properties": {
+        "aggression": {
+          "description": "Strength knob: the most he pays for one lease, as a share of his bid ceiling (R7).\nAbove 0, at most 1.",
+          "type": "number"
+        },
+        "apartment_footprint": {
+          "description": "Footprint of each apartment block, `[width, depth]` in lot units.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "apartment_height": {
+          "description": "Height of each apartment block; capped at the type's `max_height` (R58).",
+          "format": "uint32",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "apartments_per_lot": {
+          "description": "Apartment blocks he puts up per lease at most.",
+          "format": "uint32",
+          "maximum": 81,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "buy_city_blocks": {
+          "description": "Buys the city's apartment blocks at auction when he can (R28).",
+          "type": "boolean"
+        },
+        "cash_buffer": {
+          "description": "Cash he never spends below (R3).",
+          "type": "number"
+        },
+        "cut_at": {
+          "description": "Occupancy at or below which he cuts the rent. Below `raise_at`.",
+          "type": "number"
+        },
+        "max_rent": {
+          "description": "The highest rent he sets, as a share of `reference_rent`.",
+          "type": "number"
+        },
+        "min_rent": {
+          "description": "The lowest rent he sets, as a share of `reference_rent`. At most `max_rent`.",
+          "type": "number"
+        },
+        "min_tier_weight": {
+          "description": "Tiers whose personality weight is at least this are worth a lease. Between 0 and 1.",
+          "type": "number"
+        },
+        "raise_at": {
+          "description": "Occupancy (flats let ÷ flats) at or above which he raises the rent. At most 1.",
+          "type": "number"
+        },
+        "rent_step": {
+          "description": "How far he moves the rent each morning, as a share of `reference_rent`. Above 0.",
+          "type": "number"
+        },
+        "rescue_after": {
+          "description": "From this time to midnight, a negative balance makes him sell a block to the city (R5).",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+          "type": "string"
+        },
+        "start_rent": {
+          "description": "A new block's rent, as a share of `residential.reference_rent` (R51).",
+          "type": "number"
+        },
+        "station_premium": {
+          "description": "Extra share of his bid ceiling he pays for a lot with an open tube station (§4.3). He\nalso bids on station lots first. Between 0 and 1.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "aggression",
+        "cash_buffer",
+        "min_tier_weight",
+        "station_premium",
+        "apartment_footprint",
+        "apartment_height",
+        "apartments_per_lot",
+        "start_rent",
+        "rent_step",
+        "raise_at",
+        "cut_at",
+        "min_rent",
+        "max_rent",
+        "buy_city_blocks",
+        "rescue_after"
+      ],
+      "type": "object"
+    },
     "Personality": {
       "additionalProperties": false,
       "description": "An AI personality.",
@@ -145,6 +342,143 @@
         "tier_high"
       ],
       "type": "object"
+    },
+    "SpeculatorConfig": {
+      "additionalProperties": false,
+      "description": "The Speculator's tunables (§10). Tiers come from the `speculator` personality's weights.",
+      "properties": {
+        "aggression": {
+          "description": "Strength (and risk) knob: the most it pays for one lease, as a share of its bid\nceiling (R7), which includes its credit. Above 0, at most 1.",
+          "type": "number"
+        },
+        "bargain_share": {
+          "description": "On an item a player offers (a lease part-way through its term, or a business), the most\nit bids as a share of book value (land value, R39; build cost, R41). Above 0, at most 1.",
+          "type": "number"
+        },
+        "cash_buffer": {
+          "description": "Cash it keeps when it opens an auction: small, by temperament.",
+          "type": "number"
+        },
+        "hold_hours": {
+          "description": "Game hours it holds a purchase before putting it back up for auction.",
+          "format": "uint32",
+          "maximum": 10000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_holdings": {
+          "description": "Leases and businesses it holds at most at once.",
+          "format": "uint32",
+          "maximum": 1000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "min_tier_weight": {
+          "description": "Tiers whose personality weight is at least this are worth a punt. Between 0 and 1.",
+          "type": "number"
+        },
+        "rescue_after": {
+          "description": "From this time to midnight, a negative balance makes it sell (R5) or offer a lease.",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "aggression",
+        "cash_buffer",
+        "min_tier_weight",
+        "max_holdings",
+        "hold_hours",
+        "bargain_share",
+        "rescue_after"
+      ],
+      "type": "object"
+    },
+    "ToffConfig": {
+      "additionalProperties": false,
+      "description": "The Toff's tunables (§10). Tiers come from the `toff` personality's weights.",
+      "properties": {
+        "aggression": {
+          "description": "Strength knob: the most it pays for one lease, as a share of its bid ceiling (R7).\nAbove 0, at most 1.",
+          "type": "number"
+        },
+        "cash_buffer": {
+          "description": "Cash it never spends below (R3): large, by temperament.",
+          "type": "number"
+        },
+        "fit_out": {
+          "$ref": "#/$defs/FitOutLevel",
+          "description": "Fit-out of every shop (§7.1)."
+        },
+        "initial_order_share": {
+          "description": "A new shop's first order, as a share of capacity. Above 0, at most 1.",
+          "type": "number"
+        },
+        "min_tier_weight": {
+          "description": "Tiers whose personality weight is at least this are worth a lease (High only).",
+          "type": "number"
+        },
+        "order_margin": {
+          "description": "Tomorrow's order = today's sales × (1 + this), capped at capacity (R2, R10). At most 1.",
+          "type": "number"
+        },
+        "price_premium": {
+          "description": "Prices this far over the reference price (0.3 = 130% of `ref_price`). Between 0 and 4.",
+          "type": "number"
+        },
+        "rescue_after": {
+          "description": "From this time to midnight, a negative balance makes it sell a shop to the city (R5).",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+          "type": "string"
+        },
+        "shop_footprint": {
+          "description": "Footprint of each shop, `[width, depth]` in lot units.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "shop_height": {
+          "description": "Height of each shop; capped at the type's `max_height` (R58).",
+          "format": "uint32",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "shop_types": {
+          "description": "Shop types it prefers, best first (`businesses.yaml` ids). Only types unlocked and not\nobsolete in the current year are built; when none of these is, it builds any available\nretail type, dearest goods first.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "shops_per_lot": {
+          "description": "Shops it builds per lease at most: fewer, finer shops.",
+          "format": "uint32",
+          "maximum": 81,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "aggression",
+        "cash_buffer",
+        "min_tier_weight",
+        "shop_types",
+        "shop_footprint",
+        "shop_height",
+        "shops_per_lot",
+        "fit_out",
+        "price_premium",
+        "initial_order_share",
+        "order_margin",
+        "rescue_after"
+      ],
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -162,6 +496,10 @@
       "$ref": "#/$defs/GrocerConfig",
       "description": "How the Grocer plays (§10: \"opens many cheap Low-tier shops\"). Its tier choice comes\nfrom the `grocer` personality's weights; these are its operating rules."
     },
+    "landlord": {
+      "$ref": "#/$defs/LandlordConfig",
+      "description": "How the Landlord plays (§10: \"hoards leases and never builds retail\")."
+    },
     "opponents": {
       "description": "Personality ids seated by default (v1: one Grocer).",
       "items": {
@@ -175,13 +513,29 @@
       },
       "description": "Personalities, keyed by id. All share one evaluation function with different weights.",
       "type": "object"
+    },
+    "sir_penny_sugar": {
+      "$ref": "#/$defs/PennySugarConfig",
+      "description": "How Sir Penny Sugar plays (§10: \"deals mostly in residential\", §7.2)."
+    },
+    "speculator": {
+      "$ref": "#/$defs/SpeculatorConfig",
+      "description": "How the Speculator plays (§10: \"bids hard and flips\")."
+    },
+    "toff": {
+      "$ref": "#/$defs/ToffConfig",
+      "description": "How the Toff plays (§10: \"only goes for High tier\")."
     }
   },
   "required": [
     "decision_interval_ticks",
     "opponents",
     "personalities",
-    "grocer"
+    "grocer",
+    "landlord",
+    "toff",
+    "speculator",
+    "sir_penny_sugar"
   ],
   "title": "AiConfig",
   "type": "object"

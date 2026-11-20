@@ -6,6 +6,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::types::{ClockTime, Pounds, Ratio};
+use crate::businesses::FitOutLevel;
 
 /// Root of `ai.yaml`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -21,6 +22,14 @@ pub struct AiConfig {
     /// How the Grocer plays (§10: "opens many cheap Low-tier shops"). Its tier choice comes
     /// from the `grocer` personality's weights; these are its operating rules.
     pub grocer: GrocerConfig,
+    /// How the Landlord plays (§10: "hoards leases and never builds retail").
+    pub landlord: LandlordConfig,
+    /// How the Toff plays (§10: "only goes for High tier").
+    pub toff: ToffConfig,
+    /// How the Speculator plays (§10: "bids hard and flips").
+    pub speculator: SpeculatorConfig,
+    /// How Sir Penny Sugar plays (§10: "deals mostly in residential", §7.2).
+    pub sir_penny_sugar: PennySugarConfig,
 }
 
 /// The Grocer's tunables (§10). Money is decimal pounds; shares are decimals.
@@ -55,6 +64,137 @@ pub struct GrocerConfig {
     pub order_margin: Ratio,
     /// From this time until midnight, a negative balance makes it sell a shop back to the
     /// city (R5) rather than take a strike (R3). Must be after day trade closes.
+    pub rescue_after: ClockTime,
+}
+
+/// The Landlord's tunables (§10). Tiers come from the `landlord` personality's weights.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct LandlordConfig {
+    /// Strength knob: the most it pays for one lease, as a share of its bid ceiling
+    /// (`balance + credit limit`, R7). Above 0, at most 1.
+    pub aggression: Ratio,
+    /// Cash it never spends below (R3).
+    pub cash_buffer: Pounds,
+    /// Tiers whose personality weight is at least this are worth a lease. Between 0 and 1.
+    pub min_tier_weight: Ratio,
+    /// Leases it holds at most at once.
+    #[schemars(range(min = 1, max = 1000))]
+    pub max_leases: u32,
+    /// Footprint of each apartment block it builds, `[width, depth]` in lot units.
+    pub apartment_footprint: [u32; 2],
+    /// Height of each apartment block; capped at the type's `max_height` (R58).
+    #[schemars(range(min = 1, max = 100))]
+    pub apartment_height: u32,
+    /// Apartment blocks it puts up per lease at most (0: pure land, no building at all).
+    #[schemars(range(max = 81))]
+    pub apartments_per_lot: u32,
+    /// Its rent per flat, as a share of `customers.yaml` `residential.reference_rent` (R51).
+    pub rent: Ratio,
+    /// Late in a lease (this many years or fewer left) it offers the lease at auction (R33)
+    /// when the reserve beats what holding to expiry is worth. 0 never sells.
+    #[schemars(range(max = 1000))]
+    pub sell_within_years: u32,
+    /// From this time to midnight, a negative balance makes it sell (R5) or offer a lease.
+    pub rescue_after: ClockTime,
+}
+
+/// The Toff's tunables (§10). Tiers come from the `toff` personality's weights.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ToffConfig {
+    /// Strength knob: the most it pays for one lease, as a share of its bid ceiling (R7).
+    /// Above 0, at most 1.
+    pub aggression: Ratio,
+    /// Cash it never spends below (R3): large, by temperament.
+    pub cash_buffer: Pounds,
+    /// Tiers whose personality weight is at least this are worth a lease (High only).
+    pub min_tier_weight: Ratio,
+    /// Shop types it prefers, best first (`businesses.yaml` ids). Only types unlocked and not
+    /// obsolete in the current year are built; when none of these is, it builds any available
+    /// retail type, dearest goods first.
+    pub shop_types: Vec<String>,
+    /// Footprint of each shop, `[width, depth]` in lot units.
+    pub shop_footprint: [u32; 2],
+    /// Height of each shop; capped at the type's `max_height` (R58).
+    #[schemars(range(min = 1, max = 100))]
+    pub shop_height: u32,
+    /// Shops it builds per lease at most: fewer, finer shops.
+    #[schemars(range(min = 1, max = 81))]
+    pub shops_per_lot: u32,
+    /// Fit-out of every shop (§7.1).
+    pub fit_out: FitOutLevel,
+    /// Prices this far over the reference price (0.3 = 130% of `ref_price`). Between 0 and 4.
+    pub price_premium: Ratio,
+    /// A new shop's first order, as a share of capacity. Above 0, at most 1.
+    pub initial_order_share: Ratio,
+    /// Tomorrow's order = today's sales × (1 + this), capped at capacity (R2, R10). At most 1.
+    pub order_margin: Ratio,
+    /// From this time to midnight, a negative balance makes it sell a shop to the city (R5).
+    pub rescue_after: ClockTime,
+}
+
+/// The Speculator's tunables (§10). Tiers come from the `speculator` personality's weights.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SpeculatorConfig {
+    /// Strength (and risk) knob: the most it pays for one lease, as a share of its bid
+    /// ceiling (R7), which includes its credit. Above 0, at most 1.
+    pub aggression: Ratio,
+    /// Cash it keeps when it opens an auction: small, by temperament.
+    pub cash_buffer: Pounds,
+    /// Tiers whose personality weight is at least this are worth a punt. Between 0 and 1.
+    pub min_tier_weight: Ratio,
+    /// Leases and businesses it holds at most at once.
+    #[schemars(range(min = 1, max = 1000))]
+    pub max_holdings: u32,
+    /// Game hours it holds a purchase before putting it back up for auction.
+    #[schemars(range(max = 10_000))]
+    pub hold_hours: u32,
+    /// On an item a player offers (a lease part-way through its term, or a business), the most
+    /// it bids as a share of book value (land value, R39; build cost, R41). Above 0, at most 1.
+    pub bargain_share: Ratio,
+    /// From this time to midnight, a negative balance makes it sell (R5) or offer a lease.
+    pub rescue_after: ClockTime,
+}
+
+/// Sir Penny Sugar's tunables (§10, §7.2). Tiers come from the `sir_penny_sugar` weights.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PennySugarConfig {
+    /// Strength knob: the most he pays for one lease, as a share of his bid ceiling (R7).
+    /// Above 0, at most 1.
+    pub aggression: Ratio,
+    /// Cash he never spends below (R3).
+    pub cash_buffer: Pounds,
+    /// Tiers whose personality weight is at least this are worth a lease. Between 0 and 1.
+    pub min_tier_weight: Ratio,
+    /// Extra share of his bid ceiling he pays for a lot with an open tube station (§4.3). He
+    /// also bids on station lots first. Between 0 and 1.
+    pub station_premium: Ratio,
+    /// Footprint of each apartment block, `[width, depth]` in lot units.
+    pub apartment_footprint: [u32; 2],
+    /// Height of each apartment block; capped at the type's `max_height` (R58).
+    #[schemars(range(min = 1, max = 100))]
+    pub apartment_height: u32,
+    /// Apartment blocks he puts up per lease at most.
+    #[schemars(range(min = 1, max = 81))]
+    pub apartments_per_lot: u32,
+    /// A new block's rent, as a share of `residential.reference_rent` (R51).
+    pub start_rent: Ratio,
+    /// How far he moves the rent each morning, as a share of `reference_rent`. Above 0.
+    pub rent_step: Ratio,
+    /// Occupancy (flats let ÷ flats) at or above which he raises the rent. At most 1.
+    pub raise_at: Ratio,
+    /// Occupancy at or below which he cuts the rent. Below `raise_at`.
+    pub cut_at: Ratio,
+    /// The lowest rent he sets, as a share of `reference_rent`. At most `max_rent`.
+    pub min_rent: Ratio,
+    /// The highest rent he sets, as a share of `reference_rent`.
+    pub max_rent: Ratio,
+    /// Buys the city's apartment blocks at auction when he can (R28).
+    pub buy_city_blocks: bool,
+    /// From this time to midnight, a negative balance makes him sell a block to the city (R5).
     pub rescue_after: ClockTime,
 }
 

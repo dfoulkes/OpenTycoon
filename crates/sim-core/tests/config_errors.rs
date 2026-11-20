@@ -418,3 +418,122 @@ fn hotel_and_online_settings_are_checked_by_name() {
         assert_names(load_with(file, pointer, value), file, text);
     }
 }
+
+/// `ai.yaml` `landlord`, `toff`, `speculator`, `sir_penny_sugar` (§10): each bad value fails
+/// the load and names its key.
+#[test]
+fn roster_tunables_out_of_range_are_rejected() {
+    let cases = [
+        ("/landlord/aggression", "0", "/landlord/aggression"),
+        ("/landlord/aggression", "1.5", "/landlord/aggression"),
+        ("/landlord/cash_buffer", "-1", "/landlord/cash_buffer"),
+        (
+            "/landlord/min_tier_weight",
+            "2",
+            "/landlord/min_tier_weight",
+        ),
+        ("/landlord/rent", "-0.5", "/landlord/rent"),
+        ("/landlord/max_leases", "0", "/landlord/max_leases"),
+        (
+            "/landlord/apartment_height",
+            "101",
+            "/landlord/apartment_height",
+        ),
+        ("/landlord/apartment_footprint", "[1, 1]", "min_footprint"),
+        (
+            "/landlord/apartment_footprint",
+            "[10, 3]",
+            "/landlord/apartment_footprint/0",
+        ),
+        (
+            "/landlord/rescue_after",
+            "\"09:00\"",
+            "/landlord/rescue_after",
+        ),
+        ("/toff/aggression", "0", "/toff/aggression"),
+        ("/toff/cash_buffer", "-5", "/toff/cash_buffer"),
+        ("/toff/price_premium", "5", "/toff/price_premium"),
+        (
+            "/toff/initial_order_share",
+            "0",
+            "/toff/initial_order_share",
+        ),
+        ("/toff/order_margin", "1.5", "/toff/order_margin"),
+        ("/toff/shop_types", "[corner_shop]", "/toff/shop_types/0"),
+        ("/toff/shop_types", "[apartments]", "/toff/shop_types/0"),
+        ("/toff/shop_height", "17", "/toff/shop_height"),
+        ("/toff/fit_out", "gold", "/toff/fit_out"),
+        ("/toff/shops_per_lot", "0", "/toff/shops_per_lot"),
+        ("/speculator/aggression", "1.01", "/speculator/aggression"),
+        (
+            "/speculator/bargain_share",
+            "0",
+            "/speculator/bargain_share",
+        ),
+        ("/speculator/max_holdings", "0", "/speculator/max_holdings"),
+        (
+            "/speculator/rescue_after",
+            "\"06:00\"",
+            "/speculator/rescue_after",
+        ),
+        (
+            "/sir_penny_sugar/aggression",
+            "0",
+            "/sir_penny_sugar/aggression",
+        ),
+        (
+            "/sir_penny_sugar/station_premium",
+            "1.2",
+            "/sir_penny_sugar/station_premium",
+        ),
+        (
+            "/sir_penny_sugar/rent_step",
+            "0",
+            "/sir_penny_sugar/rent_step",
+        ),
+        (
+            "/sir_penny_sugar/raise_at",
+            "1.1",
+            "/sir_penny_sugar/raise_at",
+        ),
+        ("/sir_penny_sugar/cut_at", "0.95", "/sir_penny_sugar/cut_at"),
+        (
+            "/sir_penny_sugar/min_rent",
+            "4",
+            "/sir_penny_sugar/min_rent",
+        ),
+        (
+            "/sir_penny_sugar/start_rent",
+            "0.1",
+            "/sir_penny_sugar/start_rent",
+        ),
+        (
+            "/sir_penny_sugar/apartments_per_lot",
+            "0",
+            "/sir_penny_sugar/apartments_per_lot",
+        ),
+        ("/sir_penny_sugar/unknown_knob", "1", "unknown_knob"),
+    ];
+    for (pointer, value, names) in cases {
+        assert_names(load_with("ai.yaml", pointer, value), "ai.yaml", names);
+    }
+}
+
+#[test]
+fn roster_at_its_limits_is_accepted() {
+    let mut sources = common::shipped_sources();
+    for (pointer, value) in [
+        ("/landlord/aggression", "1"),
+        ("/landlord/apartments_per_lot", "0"),
+        ("/landlord/sell_within_years", "0"),
+        ("/toff/shop_types", "[]"),
+        ("/toff/price_premium", "0"),
+        ("/speculator/cash_buffer", "0"),
+        ("/speculator/bargain_share", "1"),
+        ("/sir_penny_sugar/cut_at", "0"),
+        ("/sir_penny_sugar/apartment_height", "100"),
+    ] {
+        common::set_key(&mut sources, "ai.yaml", pointer, value);
+    }
+    Config::load(&sources).unwrap();
+}
