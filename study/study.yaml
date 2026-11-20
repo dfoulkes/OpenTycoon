@@ -108,11 +108,5 @@ parameters:
     expect:
       - { key: customers.desires.10.match,  equals: { window: day,   from_year: 2030, until_year: 2050 } }
       - { key: customers.desires.11.match,  equals: { window: night, from_year: 2030, until_year: 2050 } }
-  # AI tunables
-  - { name: grocer_bid,     key: ai.grocer.max_bid_share,           min: 0.1,  max: 0.6 }   # shipped 0.3 of the bid ceiling
-  - { name: grocer_buffer,  key: ai.grocer.cash_buffer,             min: 100,  max: 1000,  distribution: log_uniform, kind: integer }   # shipped £300
-  # Each personality's aggression: the share of its bid ceiling it will pay for a lease (R7).
-  - { name: landlord_aggression,   key: ai.landlord.aggression,        min: 0.1, max: 0.9 }   # shipped 0.31
-  - { name: toff_aggression,       key: ai.toff.aggression,            min: 0.1, max: 0.9 }   # shipped 0.8
-  - { name: speculator_aggression, key: ai.speculator.aggression,      min: 0.1, max: 0.9 }   # shipped 0.51
-  - { name: sir_penny_aggression,  key: ai.sir_penny_sugar.aggression, min: 0.1, max: 0.9 }   # shipped 0.34
+  # AI behaviour is held at its shipped values here, so a balanced model is balanced by the
+  # economy, not by handicapping an AI. study/study-with-ai.yaml also varies the AI tunables.
