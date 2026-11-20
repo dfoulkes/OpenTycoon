@@ -161,6 +161,9 @@ pub enum BusinessCommandError {
     Build(crate::businesses::BuildError),
     /// A lever refused it.
     Lever(LeverError),
+    /// The Hotel rules refused it: the set isn't held in full, or already has its Hotel
+    /// (R14, R29).
+    Hotel(crate::hotels::HotelRefusal),
 }
 
 impl From<LeverError> for BusinessCommandError {
@@ -774,10 +777,17 @@ impl World {
             &mut self.businesses,
             &mut self.rng,
         );
-        for sale in &report.sales {
-            if let Some(shop) = self.businesses.by_id.get(&sale.shop) {
+        // Walk-in and online sales alike (§7.5), and room nights booked at check-in (R29).
+        let takings = report
+            .sales
+            .iter()
+            .chain(&report.online_sales)
+            .map(|s| (s.shop, s.amount))
+            .chain(report.check_ins.iter().map(|c| (c.hotel, c.amount)));
+        for (shop, amount) in takings {
+            if let Some(shop) = self.businesses.by_id.get(&shop) {
                 self.ledger
-                    .transfer(AccountId::Shoppers, shop.owner, sale.amount);
+                    .transfer(AccountId::Shoppers, shop.owner, amount);
             }
         }
     }
@@ -822,6 +832,19 @@ impl World {
                 business,
                 good,
                 price,
+            } if owns(&self.businesses, business)
+                && self
+                    .businesses
+                    .get(business)
+                    .is_some_and(|b| crate::hotels::is_hotel(&self.config, &b.type_id))
+                && good == self.config.businesses.hotel.room_good =>
+            {
+                crate::hotels::set_room_price(&mut self.businesses, &self.config, business, price)?;
+            }
+            Command::SetPrice {
+                business,
+                good,
+                price,
             } if owns(&self.businesses, business) => {
                 self.businesses.set_price(business, &good, price)?;
             }
@@ -849,6 +872,16 @@ impl World {
                     .is_some_and(|l| l.holder == me);
                 if !holds {
                     return Err(BusinessCommandError::NotLeaseholder);
+                }
+                if crate::hotels::is_hotel(&self.config, &type_id) {
+                    crate::hotels::check_build(
+                        &self.config,
+                        &self.map,
+                        &self.businesses,
+                        block,
+                        me,
+                    )
+                    .map_err(BusinessCommandError::Hotel)?;
                 }
                 let request = BuildRequest {
                     type_id,

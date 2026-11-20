@@ -1086,45 +1086,41 @@ fn check_eras(config: &Config, errors: &mut Vec<ConfigError>) {
     }
 }
 
-/// `businesses.yaml` `hotel`: the Hotel type exists, trades in the hotel window, holds no stock
-/// and sells rooms, not goods (§7.3; R29, R30).
+/// `businesses.yaml` `hotel`: the room good exists, and every Hotel type (`hours: hotel`) holds
+/// no stock and sells rooms, not goods (§7.3; R29, R30).
 fn check_hotel(config: &Config, errors: &mut Vec<ConfigError>) {
     use crate::businesses::Hours;
     let file = ConfigFile::Businesses;
-    let at = "/hotel/building_type";
-    let id = &config.businesses.hotel.building_type;
-    let Some(kind) = config.businesses.types.get(id) else {
+    let room = &config.businesses.hotel.room_good;
+    if !config.businesses.goods.contains_key(room) {
         err(
             errors,
             file,
-            at.into(),
-            format!("unknown business type {id:?}"),
-        );
-        return;
-    };
-    if kind.hours != Hours::Hotel {
-        err(
-            errors,
-            file,
-            at.into(),
-            "a Hotel type must have hours: hotel (R30)".into(),
+            "/hotel/room_good".into(),
+            format!("unknown good {room:?}"),
         );
     }
-    if kind.stock_density.rate() != Rate::ZERO {
-        err(
-            errors,
-            file,
-            at.into(),
-            "a Hotel type must have stock_density: 0 (R30)".into(),
-        );
-    }
-    if !kind.goods.is_empty() {
-        err(
-            errors,
-            file,
-            at.into(),
-            "a Hotel type sells rooms, not goods: goods: []".into(),
-        );
+    for (id, kind) in &config.businesses.types {
+        if kind.hours != Hours::Hotel {
+            continue;
+        }
+        let at = format!("/types/{id}");
+        if kind.stock_density.rate() != Rate::ZERO {
+            err(
+                errors,
+                file,
+                format!("{at}/stock_density"),
+                "a Hotel type must have stock_density: 0 (R30)".into(),
+            );
+        }
+        if !kind.goods.is_empty() {
+            err(
+                errors,
+                file,
+                format!("{at}/goods"),
+                "a Hotel type sells rooms, not goods: goods: []".into(),
+            );
+        }
     }
 }
 

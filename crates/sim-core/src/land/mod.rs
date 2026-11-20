@@ -208,8 +208,13 @@ impl Map {
     /// True if `holder` holds the lease on every block of colour set `set` (R14: that unlocks
     /// the set's Hotel). False for an unknown or empty set.
     pub fn holds_full_set(&self, holder: AccountId, set: &str) -> bool {
-        let _ = (holder, set);
-        false
+        let mut blocks = self
+            .blocks
+            .iter()
+            .filter(|b| b.set.as_deref() == Some(set))
+            .peekable();
+        blocks.peek().is_some()
+            && blocks.all(|b| b.lease.as_ref().is_some_and(|l| l.holder == holder))
     }
 
     /// The id of the block with config id `key` (e.g. `old_kent_road`).

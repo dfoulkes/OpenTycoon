@@ -17,23 +17,50 @@
     reason = "online shares and brand are customer scoring inputs (docs/engineering.md)"
 )]
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::businesses::{BusinessId, Businesses};
 use crate::config::businesses::Channel;
 use crate::config::{Config, CustomersConfig};
 use crate::money::{Money, Rate};
 use crate::population::Class;
-use crate::rng::SimRng;
+use crate::rng::{SimRng, unit_f64};
 
+use super::scoring::{k_class, pence_f64, price_factor, rate_f64, unit_to_rate, weighted_pick};
 use super::shops::{GoodId, GoodsIndex};
+use super::{Customer, PhaseInputs, Sale};
 
 /// `online_share(year, good)`: `share_by_year(year) × good_multiplier(good)`, capped at 1.
 /// `share_by_year` is a straight line between the years given, flat after the last, 0 before
 /// the first (§7.5).
 pub fn online_share(rules: &CustomersConfig, year: i32, good: &str) -> f64 {
-    let _ = (rules, year, good);
-    0.0
+    let online = &rules.online;
+    let curve = share_by_year(&online.share_by_year, year);
+    let mult = online.good_multiplier.get(good).copied().unwrap_or(1.0);
+    (curve * mult).clamp(0.0, 1.0)
+}
+
+/// The `share_by_year` curve at `year`: 0 before the first year given, straight lines between
+/// years, flat after the last. Keys that are not years are ignored (config rejects them).
+pub fn share_by_year(points: &BTreeMap<String, f64>, year: i32) -> f64 {
+    let mut points: Vec<(i32, f64)> = points
+        .iter()
+        .filter_map(|(k, v)| k.parse::<i32>().ok().map(|y| (y, *v)))
+        .collect();
+    points.sort_by_key(|p| p.0);
+    let mut before: Option<(i32, f64)> = None;
+    for (y, v) in points {
+        if y == year {
+            return v;
+        }
+        if y > year {
+            return before.map_or(0.0, |(y0, v0)| {
+                v0 + (v - v0) * f64::from(year - y0) / f64::from(y - y0)
+            });
+        }
+        before = Some((y, v));
+    }
+    before.map_or(0.0, |(_, v)| v)
 }
 
 /// True once the telephone exchange has become the Internet (R11): online sellers need it
@@ -79,8 +106,53 @@ pub fn online_offers(
     goods: &GoodsIndex,
     brand: &BTreeMap<BusinessId, Rate>,
 ) -> Vec<OnlineOffer> {
-    let _ = (businesses, config, year, goods, brand);
-    Vec::new()
+    let mut out = Vec::new();
+    if !internet_is_live(config, year) {
+        return out;
+    }
+    for (id, b) in &businesses.by_id {
+        if !b.open || !is_online(config, &b.type_id) {
+            continue;
+        }
+        let rate = brand_of(brand, *id, &config.customers);
+        for name in b.prices.keys() {
+            let (Some(good), Some(catalogue)) = (goods.id(name), config.businesses.goods.get(name))
+            else {
+                continue;
+            };
+            let Some(price) = b.unit_price(name, &config.businesses) else {
+                continue;
+            };
+            out.push(OnlineOffer {
+                shop: *id,
+                good,
+                price,
+                ref_price: catalogue.ref_price.money(),
+                luxury: catalogue.luxury,
+                brand: rate,
+                stock: b.stock_of(name),
+            });
+        }
+    }
+    out
+}
+
+/// Grows every online seller's brand by one day (§7.5), once the Internet is live.
+pub fn grow_brands(
+    brand: &mut BTreeMap<BusinessId, Rate>,
+    businesses: &Businesses,
+    config: &Config,
+    year: i32,
+) {
+    if !internet_is_live(config, year) {
+        return;
+    }
+    for (id, b) in &businesses.by_id {
+        if is_online(config, &b.type_id) {
+            let now = brand_of(brand, *id, &config.customers);
+            brand.insert(*id, brand_after_day(now, &config.customers));
+        }
+    }
 }
 
 /// A seller's brand (absent: `brand.initial`).
@@ -89,14 +161,88 @@ pub fn brand_of(
     shop: BusinessId,
     rules: &CustomersConfig,
 ) -> Rate {
-    let _ = (brand, shop, rules);
-    Rate::ZERO
+    brand
+        .get(&shop)
+        .copied()
+        .unwrap_or_else(|| unit_to_rate(rules.online.brand.initial))
 }
 
 /// Brand after one more day: `min(max, brand + growth_per_day)` (§7.5).
 pub fn brand_after_day(brand: Rate, rules: &CustomersConfig) -> Rate {
-    let _ = rules;
-    brand
+    let b = &rules.online.brand;
+    unit_to_rate((rate_f64(brand) + b.growth_per_day).min(b.max))
+}
+
+/// Goods that only online sellers sell (`channel: online` types, no walk-in shop type): a
+/// shopper who wants one buys it online or not at all (§7.5).
+pub fn online_only_goods(config: &Config, goods: &GoodsIndex) -> BTreeSet<GoodId> {
+    let types = config.businesses.types.values();
+    let sold_by = |channel: Channel| -> BTreeSet<&str> {
+        types
+            .clone()
+            .filter(|t| t.channel == channel)
+            .flat_map(|t| t.goods.iter().map(String::as_str))
+            .collect()
+    };
+    let walk_in = sold_by(Channel::Shop);
+    sold_by(Channel::Online)
+        .into_iter()
+        .filter(|g| !walk_in.contains(g))
+        .filter_map(|g| goods.id(g))
+        .collect()
+}
+
+/// A shopper setting out buys online (§7.5): for each good on their list, one roll at
+/// `online_share(year, good)` (certain for goods only sold online); on a hit they buy it from an online seller
+/// ([`choose_online`]) and it comes off their list and out of their budget. A hit with no
+/// seller able to sell it leaves the good on the list, to be walked for. Returns the sales,
+/// in order; the world pays each from the shoppers' purse to the seller's owner.
+pub fn shop_online(
+    c: &mut Customer,
+    offers: &mut [OnlineOffer],
+    only_online: &BTreeSet<GoodId>,
+    inputs: PhaseInputs<'_>,
+    goods: &GoodsIndex,
+    businesses: &mut Businesses,
+    rng: &mut SimRng,
+) -> Vec<Sale> {
+    let config = inputs.config;
+    let rules = &config.customers;
+    let year = inputs.clock.year();
+    let mut sales = Vec::new();
+    let mut i = 0;
+    while i < c.list.len() {
+        let good = c.list[i];
+        let name = goods.name(good);
+        let share = if only_online.contains(&good) {
+            1.0
+        } else {
+            online_share(rules, year, name)
+        };
+        if share > 0.0 && unit_f64(rng) < share {
+            if let Some(k) = choose_online(rules, c.cohort.class, c.budget, good, offers, rng) {
+                let shop = offers[k].shop;
+                match businesses.try_sell_online(shop, name, 1, &config.businesses) {
+                    Ok(amount) => {
+                        offers[k].stock -= 1;
+                        c.budget -= amount;
+                        c.list.remove(i);
+                        sales.push(Sale {
+                            shop,
+                            good,
+                            qty: 1,
+                            amount,
+                            customer: c.id,
+                        });
+                        continue;
+                    }
+                    Err(_) => offers[k].stock = 0,
+                }
+            }
+        }
+        i += 1;
+    }
+    sales
 }
 
 /// Picks an online seller for `good` by weighted random over `price_factor × brand`, among
@@ -109,6 +255,80 @@ pub fn choose_online(
     offers: &[OnlineOffer],
     rng: &mut SimRng,
 ) -> Option<usize> {
-    let _ = (rules, class, budget, good, offers, rng);
-    None
+    let k = k_class(rules, class);
+    let mut index = Vec::new();
+    let mut scores = Vec::new();
+    for (i, o) in offers.iter().enumerate() {
+        if o.good != good || o.stock <= 0 || o.price > budget {
+            continue;
+        }
+        let k = if o.luxury {
+            -rules.luxury_price_boost
+        } else {
+            k
+        };
+        index.push(i);
+        scores.push(
+            price_factor(k, pence_f64(o.price), pence_f64(o.ref_price).max(1.0))
+                * rate_f64(o.brand),
+        );
+    }
+    weighted_pick(&scores, rng).and_then(|k| index.get(k).copied())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::economy::test_support::shipped_config;
+
+    fn points(p: &[(&str, f64)]) -> BTreeMap<String, f64> {
+        p.iter().map(|(k, v)| ((*k).to_owned(), *v)).collect()
+    }
+
+    #[test]
+    fn the_share_curve_is_zero_before_straight_between_and_flat_after() {
+        let p = points(&[("1995", 0.05), ("2020", 0.5)]);
+        assert!(share_by_year(&p, 1990).abs() < 1e-12);
+        assert!((share_by_year(&p, 1995) - 0.05).abs() < 1e-12);
+        assert!((share_by_year(&p, 2005) - 0.23).abs() < 1e-12);
+        assert!((share_by_year(&p, 2020) - 0.5).abs() < 1e-12);
+        assert!((share_by_year(&p, 2050) - 0.5).abs() < 1e-12);
+        assert!(share_by_year(&BTreeMap::new(), 2050).abs() < 1e-12);
+    }
+
+    #[test]
+    fn the_good_multiplier_scales_the_share_and_caps_it_at_one() {
+        let mut config = shipped_config();
+        config.customers.online.share_by_year = points(&[("1995", 0.6)]);
+        config.customers.online.good_multiplier = points(&[("bread", 0.5), ("meals", 3.0)]);
+        let rules = &config.customers;
+        assert!((online_share(rules, 2000, "bread") - 0.3).abs() < 1e-12);
+        assert!((online_share(rules, 2000, "meals") - 1.0).abs() < 1e-12);
+        assert!((online_share(rules, 2000, "clothes") - 0.6).abs() < 1e-12);
+        assert!(online_share(rules, 1990, "clothes").abs() < 1e-12);
+    }
+
+    #[test]
+    fn a_brand_grows_each_day_up_to_its_cap() {
+        let mut config = shipped_config();
+        config.customers.online.brand.initial = 0.2;
+        config.customers.online.brand.growth_per_day = 0.1;
+        config.customers.online.brand.max = 0.45;
+        let rules = &config.customers;
+        let shop = BusinessId(7);
+        let start = brand_of(&BTreeMap::new(), shop, rules);
+        assert_eq!(start, unit_to_rate(0.2));
+        let day1 = brand_after_day(start, rules);
+        assert_eq!(day1, unit_to_rate(0.3));
+        let day3 = brand_after_day(brand_after_day(day1, rules), rules);
+        assert_eq!(day3, unit_to_rate(0.45));
+    }
+
+    #[test]
+    fn the_internet_arrives_in_its_upgrade_year() {
+        let config = shipped_config();
+        let year = config.utilities.internet.upgrade_year;
+        assert!(!internet_is_live(&config, year - 5));
+        assert!(internet_is_live(&config, year));
+    }
 }

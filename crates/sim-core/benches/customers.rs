@@ -1,6 +1,7 @@
 //! Customer benchmarks on the shipped v1 3×3 map: shop choice for N shoppers × M shops, and
-//! one simulated day of the customers phase at 1k and 10k adults. Run with
-//! `cargo bench -p sim-core --bench customers`.
+//! one simulated day of the customers phase at 1k and 10k adults: the plain 1930 day, a day
+//! with a Hotel in every set (tourists' nights, §7.3), and a 2020 day with online sellers
+//! (§7.5). Run with `cargo bench -p sim-core --bench customers`.
 #![allow(
     missing_docs,
     clippy::unwrap_used,
@@ -16,6 +17,7 @@ use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use sim_core::businesses::{BuildRequest, Business, BusinessId, Businesses, FitOutLevel};
 use sim_core::clock::{Clock, ClockRules};
 use sim_core::config::ConfigFile;
+use sim_core::config::businesses::Channel;
 use sim_core::customers::movement::Geometry;
 use sim_core::customers::shops::{GoodsIndex, shop_offers};
 use sim_core::customers::{Customers, PhaseInputs, choose_shop, run_phase};
@@ -176,5 +178,116 @@ fn bench_day(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_choice, bench_day);
+/// One day of the customers phase over `businesses`, returning sales + check-ins.
+fn one_day(config: &Config, map: &Map, pop: &Population, mut businesses: Businesses) -> usize {
+    let mut customers = Customers::default();
+    let mut clock = Clock::new(ClockRules::from_config(&config.game.clock));
+    let mut rng = seeded(42);
+    let mut done = 0usize;
+    for _ in 0..8_640 {
+        clock.advance();
+        let report = run_phase(
+            &mut customers,
+            PhaseInputs {
+                config,
+                map,
+                clock: &clock,
+                population: pop,
+                modifiers: &sim_core::events::Modifiers::default(),
+            },
+            &mut businesses,
+            &mut rng,
+        );
+        done += report.sales.len() + report.online_sales.len() + report.check_ins.len();
+    }
+    done
+}
+
+/// Adds a 3×3×`height` building of `type_id` on `block` in the lot's last free slot.
+fn add(
+    config: &Config,
+    businesses: &mut Businesses,
+    type_id: &str,
+    block: u32,
+    height: u32,
+) -> BusinessId {
+    let request = BuildRequest {
+        type_id: type_id.to_owned(),
+        block: BlockId(block),
+        footprint: Footprint {
+            x: 6,
+            y: 6,
+            w: 3,
+            d: 3,
+        },
+        height,
+        owner: AccountId::City,
+        fit_out: FitOutLevel::Medium,
+    };
+    let id = BusinessId(businesses.next_id);
+    businesses.next_id += 1;
+    businesses.by_id.insert(
+        id,
+        Business::new(request, &config.businesses.types[type_id], Money::ZERO),
+    );
+    id
+}
+
+fn bench_day_with_hotels(c: &mut Criterion) {
+    let config = shipped_config();
+    let map = Map::from_config(&config.map);
+    let mut group = c.benchmark_group("customers_day_with_hotels");
+    group.sample_size(10);
+    for adults in [1_000u64, 10_000] {
+        let pop = population(adults);
+        let mut businesses = high_street(&config, 2, 100_000);
+        // One Hotel per set (rows 0, 1, 2 of the 3×3 map), 3×3×40 = 90 rooms each.
+        for block in [1, 4, 7] {
+            add(&config, &mut businesses, "hotel", block, 40);
+        }
+        group.bench_function(BenchmarkId::new("one_day_8640_ticks", adults), |b| {
+            b.iter(|| black_box(one_day(&config, &map, &pop, businesses.clone())));
+        });
+    }
+    group.finish();
+}
+
+fn bench_day_with_online(c: &mut Criterion) {
+    let mut config = shipped_config();
+    config.game.clock.start_year = 2020;
+    config.businesses.types.insert("web_bakery".into(), {
+        let mut t = config.businesses.types["bakery"].clone();
+        t.channel = Channel::Online;
+        t.max_height = 40;
+        t
+    });
+    let map = Map::from_config(&config.map);
+    let mut group = c.benchmark_group("customers_day_with_online_2020");
+    group.sample_size(10);
+    for adults in [1_000u64, 10_000] {
+        let pop = population(adults);
+        let mut businesses = high_street(&config, 2, 100_000);
+        for block in [0, 2] {
+            let id = add(&config, &mut businesses, "web_bakery", block, 40);
+            businesses
+                .by_id
+                .get_mut(&id)
+                .unwrap()
+                .stock
+                .insert("bread".into(), 100_000);
+        }
+        group.bench_function(BenchmarkId::new("one_day_8640_ticks", adults), |b| {
+            b.iter(|| black_box(one_day(&config, &map, &pop, businesses.clone())));
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    bench_choice,
+    bench_day,
+    bench_day_with_hotels,
+    bench_day_with_online
+);
 criterion_main!(benches);

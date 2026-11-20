@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use super::movement::{Cell, Geometry};
 use super::scoring;
 use super::shopping::availability;
-use crate::businesses::{BusinessId, Businesses};
+use crate::businesses::{BusinessId, Businesses, Hours};
 use crate::clock::Clock;
 use crate::config::Config;
 use crate::config::businesses::{Channel, Good};
@@ -104,7 +104,9 @@ pub fn shop_offers(
         let Some(kind) = config.businesses.types.get(&b.type_id) else {
             continue;
         };
-        if kind.channel != Channel::Shop || !b.is_trading(clock) {
+        // Only walk-in shops are on the high street: online sellers and infrastructure have no
+        // door (§7.5), and Hotels sell rooms to tourists (crate::hotels).
+        if kind.channel != Channel::Shop || b.hours == Hours::Hotel || !b.is_trading(clock) {
             continue;
         }
         let Some(block) = map.block(b.block) else {
