@@ -49,9 +49,11 @@ cargo run --release -p sim-cli -- batch config --brain scripted --set game.overd
   p10/median/p90 net worth, bankruptcy rate and wins. Percentiles are nearest-rank on integer
   pence, so summaries are exact and platform-independent.
 
-**Net worth today is cash only.** `game::player_net_worth` calls `economy::net_worth` with the
-cash balance; stock, property and held lots join when economy exposes a whole-world valuation.
-Change that one function when it lands.
+**Net worth** is the economy's nightly board (`World::net_worth()`, R19/R31/R39): cash, stock,
+owned property and held lots, scored at each midnight before the write-off, so after the final
+whistle it is the final score. A bankrupt player keeps their last scored value. The scenario
+"Players with different assets get different net worths in the CSV" (`batch.feature`) guards
+against the harness scoring cash only again.
 
 ## `sim-cli bench`
 
@@ -113,8 +115,9 @@ above, and state the change in the PR. Change a `limit` only with a reason in it
 
 ## Measured numbers (2026-11-20, a 10-core arm64 laptop, release)
 
-At M1 wave 2 (clock real; economy, land, auctions, businesses, population, customers phases
-stubbed):
+At M1 wave 2 (clock and economy real; land, auctions, businesses, population, customers phases
+stubbed). Re-measured after economy (#26) landed: 1,000 v1 games 0.14 s (~6,900 games/sec),
+0.146 ms per game day; no measurable change. Earlier, before economy:
 
 - `batch --games 1000` (v1, 2 players, idle): **0.23 s wall, ~4,300 games/sec**; scripted brain
   0.19 s, ~5,300 games/sec.

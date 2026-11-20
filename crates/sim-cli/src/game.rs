@@ -88,20 +88,22 @@ pub struct GameResult {
     pub wall: Duration,
 }
 
-/// A player's net worth as the harness scores it.
-///
-/// Uses `economy::net_worth` (R19, R39). Until economy exposes a whole-world valuation
-/// (stock, property, held lots) this counts cash only; swap the body for that call when it
-/// lands so batches score the real thing.
+/// A player's net worth as the harness scores it: the economy's nightly board
+/// (`World::net_worth`, R19, R31, R39), scored at each midnight before the write-off, so after
+/// the final whistle it is the final score. A bankrupt player keeps the value from their last
+/// scored midnight. Falls back to `economy::net_worth` of cash alone only if the player was never
+/// scored (the run stopped before the first midnight).
 pub fn player_net_worth(world: &World, player: PlayerId) -> Money {
-    let inputs = NetWorthInputs {
-        cash: world.ledger().balance(AccountId::Player(player)),
-        ..NetWorthInputs::default()
-    };
-    net_worth(
-        &inputs,
-        world.config().game.net_worth.lot_property_uplift.rate(),
-    )
+    world.net_worth().get(player).unwrap_or_else(|| {
+        let inputs = NetWorthInputs {
+            cash: world.ledger().balance(AccountId::Player(player)),
+            ..NetWorthInputs::default()
+        };
+        net_worth(
+            &inputs,
+            world.config().game.net_worth.lot_property_uplift.rate(),
+        )
+    })
 }
 
 /// The winner among solvent players.

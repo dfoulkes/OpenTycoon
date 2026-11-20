@@ -237,7 +237,9 @@ fn csv_cell(w: &HarnessWorld, column: &str) -> String {
 #[then(expr = "player {int}'s net worth in the CSV is higher than player {int}'s")]
 fn richer(w: &mut HarnessWorld, a: u8, b: u8) {
     let worth = |p: u8| -> i64 {
-        csv_cell(w, &format!("p{p}_net_worth_pence")).parse().unwrap()
+        csv_cell(w, &format!("p{p}_net_worth_pence"))
+            .parse()
+            .unwrap()
     };
     assert!(
         worth(a) > worth(b),
