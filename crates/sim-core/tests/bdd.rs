@@ -44,11 +44,25 @@ pub struct SimWorld {
     pub board: steps::board::BoardState,
 }
 
+/// Stack for the thread that runs the scenarios. Unoptimised builds keep every temporary of a
+/// step's `World` on the stack, and the steps run inside one deep future, so the default main
+/// thread stack (8 MiB) is too tight.
+const STACK_BYTES: usize = 64 * 1024 * 1024;
+
 fn main() {
     let features = concat!(env!("CARGO_MANIFEST_DIR"), "/features");
-    futures::executor::block_on(
-        SimWorld::cucumber()
-            .fail_on_skipped()
-            .run_and_exit(features),
-    );
+    let runner = std::thread::Builder::new()
+        .name("bdd".into())
+        .stack_size(STACK_BYTES)
+        .spawn(move || {
+            futures::executor::block_on(
+                SimWorld::cucumber()
+                    .fail_on_skipped()
+                    .run_and_exit(features),
+            );
+        })
+        .expect("spawn the scenario thread");
+    if runner.join().is_err() {
+        std::process::exit(1);
+    }
 }

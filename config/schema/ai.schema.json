@@ -40,6 +40,10 @@
           "description": "Tiers whose `grocer` personality weight is at least this are worth bidding on\n(`tier_low: 1.0` passes, `tier_high: 0.1` does not). Between 0 and 1.",
           "type": "number"
         },
+        "opportunism": {
+          "$ref": "#/$defs/OpportunismConfig",
+          "description": "When it moves into another line of business (R66). Shipped off: the Grocer stays pure\nretail."
+        },
         "order_margin": {
           "description": "Tomorrow's order = today's sales × (1 + this), capped at capacity (R2, R10). At most 1.",
           "type": "number"
@@ -94,7 +98,8 @@
         "price_jitter",
         "initial_order_share",
         "order_margin",
-        "rescue_after"
+        "rescue_after",
+        "opportunism"
       ],
       "type": "object"
     },
@@ -179,6 +184,93 @@
         "rent",
         "sell_within_years",
         "rescue_after"
+      ],
+      "type": "object"
+    },
+    "OpportunismConfig": {
+      "additionalProperties": false,
+      "description": "When a personality leaves its home line of business for another that is earning more (R66):\nthe switch rule, the cap on how far it strays, and how it builds and lets apartments when it\ndoes. The yields it compares are `ai::kit::line_yields`.",
+      "properties": {
+        "apartment_footprint": {
+          "description": "Footprint of each apartment block it builds, `[width, depth]` in lot units.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "apartment_height": {
+          "description": "Height of each apartment block; capped at the type's `max_height` (R58).",
+          "format": "uint32",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "apartments_per_lot": {
+          "description": "Apartment blocks it builds per lease at most (0: it never builds, it only buys).",
+          "format": "uint32",
+          "maximum": 81,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cut_at": {
+          "description": "Occupancy at or below which it cuts the rent. Below `raise_at`.",
+          "type": "number"
+        },
+        "enabled": {
+          "description": "Whether it ever leaves its home line.",
+          "type": "boolean"
+        },
+        "fit_out": {
+          "$ref": "#/$defs/FitOutLevel",
+          "description": "Fit-out of the blocks it builds (§7.1)."
+        },
+        "max_outside_share": {
+          "description": "The most of its holdings (build cost of its buildings, plus its leases' book value for a\nland dealer) it lets sit outside its home line. Between 0 and 1.",
+          "type": "number"
+        },
+        "max_rent": {
+          "description": "The highest rent it sets, as a share of `reference_rent`.",
+          "type": "number"
+        },
+        "min_rent": {
+          "description": "The lowest rent it sets, as a share of `reference_rent`. At most `max_rent`.",
+          "type": "number"
+        },
+        "raise_at": {
+          "description": "Occupancy at or above which it raises the rent. At most 1.",
+          "type": "number"
+        },
+        "rent_step": {
+          "description": "How far it moves the rent each morning, as a share of `reference_rent`. Above 0.",
+          "type": "number"
+        },
+        "start_rent": {
+          "description": "A new block's rent, as a share of `residential.reference_rent` (R51).",
+          "type": "number"
+        },
+        "threshold": {
+          "description": "How much more the other line must earn per pound tied up before it moves in: `0.25`\nmeans 25% more than its own line's daily yield. Between 0 and 10.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "enabled",
+        "threshold",
+        "max_outside_share",
+        "apartment_footprint",
+        "apartment_height",
+        "apartments_per_lot",
+        "fit_out",
+        "start_rent",
+        "rent_step",
+        "raise_at",
+        "cut_at",
+        "min_rent",
+        "max_rent"
       ],
       "type": "object"
     },
@@ -361,6 +453,13 @@
           "description": "Strength (and risk) knob: the most it pays for one lease, as a share of its bid\nceiling (R7), which includes its credit. Above 0, at most 1.",
           "type": "number"
         },
+        "apartment_hold_hours": {
+          "description": "Game hours it holds an apartment block before re-listing it: long enough to collect\nsome rent (R51) first. Otherwise `hold_hours` applies.",
+          "format": "uint32",
+          "maximum": 10000,
+          "minimum": 0,
+          "type": "integer"
+        },
         "bargain_share": {
           "description": "On an item a player offers (a lease part-way through its term, or a business), the most\nit bids as a share of book value (land value, R39; build cost, R41). Above 0, at most 1.",
           "type": "number"
@@ -395,6 +494,10 @@
           "description": "Tiers whose personality weight is at least this are worth a punt. Between 0 and 1.",
           "type": "number"
         },
+        "opportunism": {
+          "$ref": "#/$defs/OpportunismConfig",
+          "description": "When it buys, or builds and flips, apartment blocks (R66)."
+        },
         "rescue_after": {
           "description": "From this time to midnight, a negative balance makes it sell (R5) or offer a lease.",
           "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
@@ -410,7 +513,9 @@
         "max_holdings",
         "hold_hours",
         "bargain_share",
-        "rescue_after"
+        "rescue_after",
+        "apartment_hold_hours",
+        "opportunism"
       ],
       "type": "object"
     },
@@ -441,6 +546,10 @@
         "min_tier_weight": {
           "description": "Tiers whose personality weight is at least this are worth a lease (High only).",
           "type": "number"
+        },
+        "opportunism": {
+          "$ref": "#/$defs/OpportunismConfig",
+          "description": "When it moves into luxury apartments on its High-tier lots (R66)."
         },
         "order_margin": {
           "description": "Tomorrow's order = today's sales × (1 + this), capped at capacity (R2, R10). At most 1.",
@@ -501,7 +610,8 @@
         "price_premium",
         "initial_order_share",
         "order_margin",
-        "rescue_after"
+        "rescue_after",
+        "opportunism"
       ],
       "type": "object"
     }

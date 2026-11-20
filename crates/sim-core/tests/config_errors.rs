@@ -469,6 +469,46 @@ fn roster_tunables_out_of_range_are_rejected() {
         ("/toff/shops_per_lot", "0", "/toff/shops_per_lot"),
         ("/speculator/aggression", "1.01", "/speculator/aggression"),
         (
+            "/toff/opportunism/threshold",
+            "11",
+            "/toff/opportunism/threshold",
+        ),
+        (
+            "/toff/opportunism/max_outside_share",
+            "1.5",
+            "/toff/opportunism/max_outside_share",
+        ),
+        (
+            "/speculator/opportunism/cut_at",
+            "0.99",
+            "/speculator/opportunism/cut_at",
+        ),
+        (
+            "/speculator/opportunism/start_rent",
+            "9",
+            "/speculator/opportunism/start_rent",
+        ),
+        (
+            "/grocer/opportunism/apartment_height",
+            "101",
+            "/grocer/opportunism/apartment_height",
+        ),
+        (
+            "/grocer/opportunism/apartment_footprint",
+            "[1, 1]",
+            "min_footprint",
+        ),
+        (
+            "/grocer/opportunism/enabled",
+            "1",
+            "/grocer/opportunism/enabled",
+        ),
+        (
+            "/speculator/apartment_hold_hours",
+            "-1",
+            "/speculator/apartment_hold_hours",
+        ),
+        (
             "/speculator/bargain_share",
             "0",
             "/speculator/bargain_share",

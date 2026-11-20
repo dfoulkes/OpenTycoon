@@ -65,6 +65,9 @@ pub struct GrocerConfig {
     /// From this time until midnight, a negative balance makes it sell a shop back to the
     /// city (R5) rather than take a strike (R3). Must be after day trade closes.
     pub rescue_after: ClockTime,
+    /// When it moves into another line of business (R66). Shipped off: the Grocer stays pure
+    /// retail.
+    pub opportunism: OpportunismConfig,
 }
 
 /// The Landlord's tunables (§10). Tiers come from the `landlord` personality's weights.
@@ -138,6 +141,8 @@ pub struct ToffConfig {
     pub order_margin: Ratio,
     /// From this time to midnight, a negative balance makes it sell a shop to the city (R5).
     pub rescue_after: ClockTime,
+    /// When it moves into luxury apartments on its High-tier lots (R66).
+    pub opportunism: OpportunismConfig,
 }
 
 /// The Speculator's tunables (§10). Tiers come from the `speculator` personality's weights.
@@ -168,6 +173,12 @@ pub struct SpeculatorConfig {
     pub bargain_share: Ratio,
     /// From this time to midnight, a negative balance makes it sell (R5) or offer a lease.
     pub rescue_after: ClockTime,
+    /// Game hours it holds an apartment block before re-listing it: long enough to collect
+    /// some rent (R51) first. Otherwise `hold_hours` applies.
+    #[schemars(range(max = 10_000))]
+    pub apartment_hold_hours: u32,
+    /// When it buys, or builds and flips, apartment blocks (R66).
+    pub opportunism: OpportunismConfig,
 }
 
 /// Sir Penny Sugar's tunables (§10, §7.2). Tiers come from the `sir_penny_sugar` weights.
@@ -243,4 +254,42 @@ pub struct PersonalityWeights {
     pub tier_medium: Ratio,
     /// Preference for high-tier blocks.
     pub tier_high: Ratio,
+}
+
+/// When a personality leaves its home line of business for another that is earning more (R66):
+/// the switch rule, the cap on how far it strays, and how it builds and lets apartments when it
+/// does. The yields it compares are `ai::kit::line_yields`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunismConfig {
+    /// Whether it ever leaves its home line.
+    pub enabled: bool,
+    /// How much more the other line must earn per pound tied up before it moves in: `0.25`
+    /// means 25% more than its own line's daily yield. Between 0 and 10.
+    pub threshold: Ratio,
+    /// The most of its holdings (build cost of its buildings, plus its leases' book value for a
+    /// land dealer) it lets sit outside its home line. Between 0 and 1.
+    pub max_outside_share: Ratio,
+    /// Footprint of each apartment block it builds, `[width, depth]` in lot units.
+    pub apartment_footprint: [u32; 2],
+    /// Height of each apartment block; capped at the type's `max_height` (R58).
+    #[schemars(range(min = 1, max = 100))]
+    pub apartment_height: u32,
+    /// Apartment blocks it builds per lease at most (0: it never builds, it only buys).
+    #[schemars(range(max = 81))]
+    pub apartments_per_lot: u32,
+    /// Fit-out of the blocks it builds (§7.1).
+    pub fit_out: FitOutLevel,
+    /// A new block's rent, as a share of `residential.reference_rent` (R51).
+    pub start_rent: Ratio,
+    /// How far it moves the rent each morning, as a share of `reference_rent`. Above 0.
+    pub rent_step: Ratio,
+    /// Occupancy at or above which it raises the rent. At most 1.
+    pub raise_at: Ratio,
+    /// Occupancy at or below which it cuts the rent. Below `raise_at`.
+    pub cut_at: Ratio,
+    /// The lowest rent it sets, as a share of `reference_rent`. At most `max_rent`.
+    pub min_rent: Ratio,
+    /// The highest rent it sets, as a share of `reference_rent`.
+    pub max_rent: Ratio,
 }
