@@ -1003,13 +1003,22 @@ fn held_at_end(w: &mut SimWorld) {
 
 // --- R66: opportunism -----------------------------------------------------------------------
 
-#[given(regex = r"^the reference rent is £(\d+)\.(\d\d)$")]
-fn reference_rent(w: &mut SimWorld, pounds: u32, pence: u32) {
+#[given(regex = r"^flats let at £(\d+)\.(\d\d) a day$")]
+fn flats_let_at(w: &mut SimWorld, pounds: u32, pence: u32) {
+    // The city's default rent and the reference rent residents judge prices by, together.
+    let rent = format!("{pounds}.{pence:02}");
+    let sources = w.config.sources_mut();
     common::set_key(
-        w.config.sources_mut(),
+        sources,
+        "customers.yaml",
+        "/residential/default_rent",
+        &rent,
+    );
+    common::set_key(
+        sources,
         "customers.yaml",
         "/residential/reference_rent",
-        &format!("{pounds}.{pence:02}"),
+        &rent,
     );
 }
 
@@ -1047,24 +1056,19 @@ fn focus_blocks(st: &RosterState) -> Vec<(BusinessId, sim_core::businesses::Busi
         .collect()
 }
 
-#[then(regex = r#"^the Toff (did|didn't) put up an apartment block on "(.+)"$"#)]
-fn toff_flats_on(w: &mut SimWorld, did: String, name: String) {
-    let block = block_named(game(w), &name);
+#[then(regex = r"^the Toff (did|didn't) put up an apartment block, only ever on High tier$")]
+fn toff_flats(w: &mut SimWorld, did: String) {
     let st = &w.roster;
     let apartments = apartment_type(st);
     let world = st.game.as_ref().unwrap();
-    let count = st
-        .built
-        .iter()
-        .filter(|b| {
-            b.owner == AccountId::Player(FOCUS)
-                && b.type_id == apartments
-                && world
-                    .businesses()
-                    .get(b.id)
-                    .is_some_and(|x| x.block == block)
-        })
-        .count();
+    let mut count = 0;
+    for b in &st.built {
+        if b.owner == AccountId::Player(FOCUS) && b.type_id == apartments {
+            let block = world.businesses().get(b.id).unwrap().block;
+            assert_eq!(world.map().block(block).unwrap().tier, Tier::High, "{b:?}");
+            count += 1;
+        }
+    }
     assert_eq!(count > 0, did == "did", "{count} apartment blocks");
 }
 
