@@ -16,8 +16,8 @@ models: 300              # model 0 is always the shipped config
 games_per_model: 2000    # rounded up to whole seat rotations (2,004 for six seats)
 preset: full             # 1930–2050; falls back to the longest preset if missing
 seed: 0                  # drives the hypercube and the game seeds: same seed, same study
-# roster: [grocer, landlord, toff, speculator, sir_penny_sugar, idle]
-#   default: every personality in ai.yaml, then one idle seat
+# roster: not set, so the seats are the default: every personality in ai.yaml (the full
+#   roster: grocer, landlord, toff, speculator, sir_penny_sugar), then one idle seat
 top_n: 10                # balanced models that get a ready-to-copy overlay
 criteria:                # R65
   min_win_share: 0.10    # every AI personality wins at least 10% of games ...
@@ -112,8 +112,7 @@ parameters:
   - { name: grocer_bid,     key: ai.grocer.max_bid_share,           min: 0.1,  max: 0.6 }   # shipped 0.3 of the bid ceiling
   - { name: grocer_buffer,  key: ai.grocer.cash_buffer,             min: 100,  max: 1000,  distribution: log_uniform, kind: integer }   # shipped £300
   # Each personality's aggression: the share of its bid ceiling it will pay for a lease (R7).
-  # Optional until the full roster lands in ai.yaml; skipped with a warning before then.
-  - { name: landlord_aggression,   key: ai.landlord.aggression,        min: 0.1, max: 0.9, optional: true }
-  - { name: toff_aggression,       key: ai.toff.aggression,            min: 0.1, max: 0.9, optional: true }
-  - { name: speculator_aggression, key: ai.speculator.aggression,      min: 0.1, max: 0.9, optional: true }
-  - { name: sir_penny_aggression,  key: ai.sir_penny_sugar.aggression, min: 0.1, max: 0.9, optional: true }
+  - { name: landlord_aggression,   key: ai.landlord.aggression,        min: 0.1, max: 0.9 }   # shipped 0.31
+  - { name: toff_aggression,       key: ai.toff.aggression,            min: 0.1, max: 0.9 }   # shipped 0.8
+  - { name: speculator_aggression, key: ai.speculator.aggression,      min: 0.1, max: 0.9 }   # shipped 0.51
+  - { name: sir_penny_aggression,  key: ai.sir_penny_sugar.aggression, min: 0.1, max: 0.9 }   # shipped 0.34
