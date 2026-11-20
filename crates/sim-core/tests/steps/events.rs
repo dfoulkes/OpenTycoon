@@ -413,6 +413,46 @@ fn only_allowed_sold(w: &mut SimWorld) {
     );
 }
 
+#[then("the bakeries that may not open today had no bread delivered and none billed")]
+fn shut_bakeries_took_nothing(w: &mut SimWorld) {
+    let world = world(w);
+    let allowed = bakeries_allowed(world);
+    assert!(allowed.iter().any(|(_, ok)| !ok), "no bakery was kept shut");
+    for (id, ok) in &allowed {
+        if *ok {
+            continue;
+        }
+        let b = world.businesses().get(*id).unwrap();
+        // The 06:00 bill is the locked order at purchase price, and exactly that is delivered.
+        assert_eq!(
+            b.tomorrow_order.get("bread").copied(),
+            Some(0),
+            "shut {id:?} billed"
+        );
+        assert_eq!(b.stock_of("bread"), 0, "shut bakery {id:?} took a delivery");
+        assert_eq!(
+            b.standing_order.get("bread").copied(),
+            Some(300),
+            "order lost"
+        );
+    }
+}
+
+#[then(expr = "the bakeries allowed to open had {int} bread delivered")]
+fn open_bakeries_delivered(w: &mut SimWorld, units: i64) {
+    let world = world(w);
+    for (id, ok) in bakeries_allowed(world) {
+        if ok {
+            let b = world.businesses().get(id).unwrap();
+            assert_eq!(
+                b.tomorrow_order.get("bread").copied(),
+                Some(units),
+                "{id:?}"
+            );
+        }
+    }
+}
+
 #[then("both games held the same elections, events and incidents")]
 fn games_match(w: &mut SimWorld) {
     let [a, b] = &w.events.games[..] else {

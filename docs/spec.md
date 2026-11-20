@@ -629,6 +629,7 @@ OpenTycoon/
 | R65 | A balanced model: every AI personality wins 10–40% of games (seats rotated), bankruptcy under 15% of player-games, and an idle player finishes below every AI that is still solvent, in every game. Models are ranked by how even the win shares are. |
 | R66 | AI personalities are opportunistic: each keeps its preferences but moves into residential (or any line) when it is earning more than its own; the Grocer stays pure retail |
 | R67 | The Landlord is a real residential rival: rent set by vacancy and a larger lease book |
+| R68 | A competently run shop must be profitable in every era: retail is fixed in the economy, not by loosening the balance rule |
 | R40 | Client/server architecture: the server runs the simulation and clients display it |
 
 ### Open

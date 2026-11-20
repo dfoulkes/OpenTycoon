@@ -72,6 +72,25 @@ Feature: The Grocer
       | 238       | 238  | 238   |
       | 40        | 0    | 1     |
 
+  # R68: sales understate demand once a shop sells out. The Grocer adds the shoppers it turned
+  # away (lost sales, §8.3) before its margin, so a shop that sold out orders what it was asked
+  # for, not just what it had.
+  @spec-10 @R2 @R10 @R68
+  Scenario Outline: A shop that sold out orders for the shoppers it turned away too
+    Given nobody comes shopping
+    And the rival holds the lease on every Low-tier block except "Old Kent Road"
+    When the Grocer plays until 16:00 on day 1
+    And the Grocer's first shop had <delivered> delivered this morning, sold <sold> and turned away <lost> shoppers
+    And the Grocer plays until 18:00 on day 1
+    Then the Grocer's first shop's order for tomorrow is <order>
+
+    Examples:
+      | delivered | sold | lost | order |
+      | 40        | 40   | 10   | 55    |
+      | 40        | 40   | 0    | 44    |
+      | 100       | 100  | 150  | 238   |
+      | 0         | 0    | 0    | 238   |
+
   @spec-10 @R2 @R10
   Scenario: Over a whole game it never orders more than a shop can hold
     Given the "v1" game length

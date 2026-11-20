@@ -14,6 +14,7 @@ pub mod online;
 // land: the full board
 pub mod board;
 pub mod population;
+pub mod retail;
 // events and utilities
 pub mod events;
 pub mod roster;

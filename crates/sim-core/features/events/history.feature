@@ -90,6 +90,19 @@ Feature: History makes the front page and moves the market
     When the game runs to "17:00"
     Then only the bakeries allowed to open sold bread today
 
+  # R1, R68: a shop the three-day week keeps shut all day takes no delivery, so it is not billed
+  # for stock it could only bin at midnight. The order still stands for its next open day.
+  @R16 @R1 @R68
+  Scenario: A shop kept shut by the three-day week takes no delivery that day
+    Given the shipped config with "game.yaml" key "/clock/start_year" set to "1965"
+    And a new game with 2 players
+    And the game has run to "07:00"
+    And player 1 has a bakery selling bread on each of "Old Kent Road, Whitechapel, Bethnal Green, Soho, Holborn, Bloomsbury, Knightsbridge"
+    When the game runs to midnight
+    And the game runs to "07:00"
+    Then the bakeries that may not open today had no bread delivered and none billed
+    And the bakeries allowed to open had 300 bread delivered
+
   @R16
   Scenario: The Big Bang lifts the City's desirability
     Given the shipped config with "game.yaml" key "/clock/start_year" set to "1980"

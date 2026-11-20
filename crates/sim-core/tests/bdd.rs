@@ -42,6 +42,8 @@ pub struct SimWorld {
     pub roster: steps::roster::RosterState,
     /// The full board outside a game (`steps::board`).
     pub board: steps::board::BoardState,
+    /// One shop through the full game (`steps::retail`).
+    pub retail: steps::retail::RetailState,
 }
 
 /// Stack for the thread that runs the scenarios. Unoptimised builds keep every temporary of a

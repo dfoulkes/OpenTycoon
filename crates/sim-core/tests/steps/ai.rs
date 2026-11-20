@@ -294,6 +294,21 @@ fn first_shop_sales(w: &mut SimWorld, delivered: i64, sold: i64) {
     shop.stock.insert(good, delivered - sold);
 }
 
+#[when(
+    regex = r"^the Grocer's first shop had (\d+) delivered this morning, sold (\d+) and turned away (\d+) shoppers$"
+)]
+fn first_shop_turned_away(w: &mut SimWorld, delivered: i64, sold: i64, lost: u32) {
+    first_shop_sales(w, delivered, sold);
+    let world = game(w);
+    let id = first_shop(world);
+    world
+        .businesses_mut()
+        .by_id
+        .get_mut(&id)
+        .unwrap()
+        .lost_sales_today = lost;
+}
+
 #[when(regex = r"^the Grocer's balance drops to (-?£[\d,]+)$")]
 fn balance_drops(w: &mut SimWorld, to: String) {
     let world = game(w);

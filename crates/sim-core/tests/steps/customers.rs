@@ -105,6 +105,18 @@ fn reputation_is(w: &mut SimWorld, name: String, rep: f64) {
     );
 }
 
+#[when(regex = r#"^"([^"]+)" turns away (\d+) shoppers$"#)]
+fn turns_away(w: &mut SimWorld, name: String, n: u32) {
+    let config = CityState::config(w);
+    let id = w.city.building(&name);
+    let penalty = config.customers.reputation.lost_sale_penalty;
+    for _ in 0..n {
+        let rep = w.city.customers.reputation(id, &config.customers);
+        let after = scoring::reputation_after_lost_sale(rep, penalty);
+        w.city.customers.reputation.insert(id, after);
+    }
+}
+
 #[when(regex = r#"^"([^"]+)" sells out of (\w+)$"#)]
 fn sells_out(w: &mut SimWorld, name: String, good: String) {
     let id = w.city.building(&name);
