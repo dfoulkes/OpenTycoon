@@ -43,7 +43,7 @@ fn next_after(
 pub(super) fn start(auction: &mut Auction, bidders: &[PlayerId], now: u64, turn_ticks: u64) {
     let after = auction.opener.or(match auction.seller {
         AccountId::Player(p) => Some(p),
-        AccountId::City => None,
+        AccountId::City | AccountId::Shoppers => None,
     });
     give_turn(auction, after, bidders, now, turn_ticks);
 }
