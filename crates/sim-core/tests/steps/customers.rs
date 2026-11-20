@@ -16,6 +16,7 @@ use sim_core::customers::{
     station_cells,
 };
 use sim_core::economy::AccountId;
+use sim_core::events::Modifier;
 use sim_core::money::Rate;
 use sim_core::population::{AgeBand, Class, Cohort, Sex, allowance};
 
@@ -43,7 +44,7 @@ fn tick(w: &mut SimWorld) {
             map: &map,
             clock: &clock,
             population: &city.population,
-            modifiers: &sim_core::events::Modifiers::default(),
+            modifiers: &city.modifiers,
         },
         &mut city.businesses,
         &mut rng,
@@ -212,6 +213,32 @@ pub fn run_city_to(w: &mut SimWorld, time: &str) {
             break;
         }
     }
+}
+
+#[when(expr = "the lights go out until {string}")]
+fn lights_out_until(w: &mut SimWorld, time: String) {
+    let now = CityState::clock(w).second_of_day();
+    let day = CityState::clock(w).day();
+    w.city.modifiers.push(
+        "power_cut",
+        day + 1,
+        Modifier::PowerCut {
+            windows: vec![(now, parse_hms(&time))],
+        },
+    );
+}
+
+#[then("a shopper is waiting for the lights to come back on")]
+fn waiting_for_lights(w: &mut SimWorld) {
+    assert!(
+        w.city
+            .customers
+            .agents
+            .iter()
+            .any(|c| matches!(c.activity, Activity::WaitingForPower { .. })),
+        "{:?}",
+        w.city.customers.agents
+    );
 }
 
 #[when(expr = "the city runs for {int} tick(s)")]

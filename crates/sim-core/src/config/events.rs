@@ -3,15 +3,19 @@
 //! Every effect is a typed, configurable modifier from a closed set ([`Effect`]), so a typo
 //! fails loudly. Effects either change the world once when they fire (destroy buildings, move
 //! a block's tier, scale land or property values, shift class shares) or install a modifier on
-//! the events module's stack for a number of days (demand multipliers, supply caps, opening
-//! days, price noise, footfall), which other modules query.
+//! the events module's stack for a number of days (demand multipliers, supply caps, price noise,
+//! footfall) or for the day they fire (power cuts), which other modules query.
+//!
+//! R69: events act within a game day, never across whole days (a game day is a 5-year era).
+//! No effect shuts shops for whole days; a power cut darkens them for a few hours of the day it
+//! fires, and the locked stock order still arrives at 06:00.
 
 use std::collections::BTreeMap;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::types::{Pounds, Ratio};
+use super::types::{ClockTime, Pounds, Ratio};
 use crate::land::Tier;
 use crate::population::Class;
 
@@ -46,11 +50,60 @@ pub struct HistoricalEvent {
     /// Historical year; fires on the step that covers it.
     #[schemars(range(min = 1800, max = 2500))]
     pub year: i32,
-    /// Newspaper headline.
+    /// Newspaper headline. A power cut's headline names its hours with `{cut_windows}`
+    /// ([`CUT_WINDOWS`]), rendered from the windows when the paper comes out.
     pub headline: String,
     /// What it does.
     #[serde(default)]
     pub effects: Vec<Effect>,
+}
+
+/// The placeholder a power cut's headline uses for its hours, e.g. "from 07:00 to 10:00 and
+/// 13:00 to 15:30" ([`describe_cut_windows`]).
+pub const CUT_WINDOWS: &str = "{cut_windows}";
+
+/// One stretch of the day a power cut keeps the shops dark: `from` (inclusive) to `to`
+/// (exclusive), inside one day (it can't wrap midnight).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CutWindow {
+    /// The lights go out.
+    pub from: ClockTime,
+    /// The lights come back on.
+    pub to: ClockTime,
+}
+
+/// The windows in words, in time order: "from 07:00 to 10:00 and 13:00 to 15:30".
+pub fn describe_cut_windows(windows: &[CutWindow]) -> String {
+    let mut sorted = windows.to_vec();
+    sorted.sort_by_key(|w| w.from);
+    let spans: Vec<String> = sorted
+        .iter()
+        .map(|w| format!("{} to {}", w.from, w.to))
+        .collect();
+    let text = match spans.split_last() {
+        None => String::new(),
+        Some((last, [])) => last.clone(),
+        Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
+    };
+    format!("from {text}")
+}
+
+/// A headline with any power cut's windows written in place of [`CUT_WINDOWS`].
+pub fn render_headline(headline: &str, effects: &[Effect]) -> String {
+    let windows: Vec<CutWindow> = effects
+        .iter()
+        .filter_map(|e| match e {
+            Effect::PowerCut { windows } => Some(windows.as_slice()),
+            _ => None,
+        })
+        .flatten()
+        .copied()
+        .collect();
+    if windows.is_empty() {
+        return headline.to_owned();
+    }
+    headline.replace(CUT_WINDOWS, &describe_cut_windows(&windows))
 }
 
 /// An event effect. Tagged by `kind`.
@@ -81,15 +134,13 @@ pub enum Effect {
         /// How many in-game days it lasts.
         days: u32,
     },
-    /// Shops may open only `open` days in `of` (the three-day week). Shops rotate: on game
-    /// day `d`, shop `id` trades iff `(id + d) mod of < open`.
-    OpenDays {
-        /// Days open.
-        open: u32,
-        /// Out of.
-        of: u32,
-        /// How many in-game days it lasts.
-        days: u32,
+    /// Power cuts (the 1970s three-day week, R69): on the game day the event fires, every
+    /// walk-in shop is dark during each window, so nobody buys there. Shoppers wait for the
+    /// lights and then choose again. It lasts that one day only: an event never shuts shops
+    /// for whole days, so the windows must leave some of day trade lit.
+    PowerCut {
+        /// When the lights are out, inside one day, not overlapping.
+        windows: Vec<CutWindow>,
     },
     /// Every shop's price of every good is off by a random amount within `±spread` (Decimal
     /// Day's price confusion), drawn once when the event fires.

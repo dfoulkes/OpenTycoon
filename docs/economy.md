@@ -215,9 +215,10 @@ plus 10%.
   sales it falls to one unit and climbs by one a day. With reputation fixed alone, the
   Grocer's shops sold 30–55 of their 238 units a day from the 1980s, sold out and turning
   shoppers away, while city-run shops ordering their full capacity sold 130–200.
-- **A shut day was a dead loss.** The three-day week (§9) keeps 4 shops in 7 shut for the 1970
-  step, but they were billed for and binned that morning's delivery (R1), which no ordering
-  can avoid: the order locked at the midnight the headline came out.
+- **A shut day was a dead loss.** The three-day week (§9) kept 4 shops in 7 shut for the whole
+  1970 step, but they were billed for and binned that morning's delivery (R1), which no
+  ordering can avoid: the order locked at the midnight the headline came out. R69 has since
+  replaced whole-day closures with power cuts (below).
 
 ### The fix
 
@@ -227,9 +228,11 @@ plus 10%.
    that sold out is dented, not shut out for good; between rival shops it still settles where
    it reflects how often each turns shoppers away (`sales ÷ (sales + 4 × lost)` as shipped).
    The shipped 0.02 is kept and now reads as a share.
-2. **A shop an event keeps shut all day takes no delivery** (§9; R1, R2): the closures join
-   rationing as caps on the locked orders (`World::apply_supply_caps`), so the 06:00 bill and
-   delivery stay equal and the standing order stands for the next open day.
+2. **No shop is shut all day** (§9, R69). At first a shop the three-day week kept shut took no
+   delivery that day; R69 removed the whole-day closure instead. The 1970 step's power cuts
+   darken every walk-in shop for a few hours (07:00–10:00 and 13:00–15:30 as shipped), the
+   locked order arrives and is billed at 06:00 as on any day, and shoppers who find the lights
+   out wait for them, so the stock still has the rest of the day to sell.
 3. **AI orders count the shoppers turned away** (R2, R10). Tomorrow's order is
    `⌈(sold + lost sales) × (1 + order_margin)⌉`, lost sales counted only for goods that sold
    out (`ai::grocer::demand_seen`, used by every seat's evening orders). This is a fix to the
@@ -253,6 +256,25 @@ The 2020s dip is the pandemic step (§9: physical retail demand −70% for a day
 order can see coming. A lone reference shop (`features/economy/retail_eras.feature`) makes a
 profit in every decade 1930–2040: a greengrocer 19% of its build cost a day once its orders
 have grown to capacity, a bakery 21%, a clothes store 17%.
+
+### Power cuts instead of the three-day week (R69)
+
+The same probe after R69 replaced the whole-day closure with power cuts (shops dark 07:00–10:00
+and 13:00–15:30 on the 1970 step; the locked order arrives at 06:00):
+
+| Step | Three-day week, shut shops take no delivery | Power cuts |
+|---|---|---|
+| 1965 | 11.6% | 11.6% |
+| 1970 | 3.0% | 11.1% |
+| 1975 | 8.3% | 9.5% |
+| 1970s decade | 5.7% | 10.3% |
+
+The cuts barely bite: shoppers who find the lights out wait for them, so the day's spending is
+squeezed into the lit hours rather than lost, and a shop whose stock sells out in the lit hours
+loses nothing. The lone reference shops sell their whole order on the 1970 step as on any
+other. The 1970s are no longer the leanest decade for retail (the 2020s pandemic step is, at
+about 0%); how hard the cuts should bite is a design lever (for instance, a share of shoppers
+who give up and go home when the lights are out), not something R69 rules.
 
 Retail still earns less than flats (21–28% of build cost a day in the measurements that
 prompted R68), so this fixes R68, not R65: the residential seats still take every win on the

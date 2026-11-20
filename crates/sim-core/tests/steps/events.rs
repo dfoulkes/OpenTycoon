@@ -5,9 +5,8 @@
 use cucumber::{given, then, when};
 use sim_core::World;
 use sim_core::auctions::{AuctionError, AuctionItem, AuctionPhase};
-use sim_core::customers::Activity;
 use sim_core::economy::AccountId;
-use sim_core::events::Party;
+use sim_core::events::{Modifier, Party};
 use sim_core::land::Tier;
 use sim_core::money::Rate;
 use sim_core::population::Class;
@@ -376,14 +375,14 @@ fn bakeries(world: &World) -> Vec<&sim_core::businesses::Business> {
         .collect()
 }
 
-/// True if the three-day week's power cuts are on the modifier stack.
+/// True if a power cut is on the modifier stack.
 fn power_cuts_in_force(world: &World) -> bool {
     world
         .events()
         .modifiers()
         .active()
         .iter()
-        .any(|m| m.source == "three_day_week")
+        .any(|m| matches!(m.modifier, Modifier::PowerCut { .. }))
 }
 
 #[when(expr = "the game runs to {string} keeping the bakeries' books")]
@@ -403,17 +402,10 @@ fn runs_keeping_books(w: &mut SimWorld, time: String) {
             .iter()
             .map(|b| i64::from(b.lost_sales_today))
             .sum();
-        let out = world
-            .customers()
-            .agents
-            .iter()
-            .filter(|c| !matches!(c.activity, Activity::Waiting { .. }))
-            .count();
         books.push(Books {
             second: now,
             sold,
             lost,
-            out,
         });
         if now == target {
             w.events.books = books;
@@ -455,19 +447,6 @@ fn dark_between(w: &mut SimWorld, from: String, to: String) {
 fn sold_between(w: &mut SimWorld, from: String, to: String) {
     let (sold, _) = trade_between(w, &from, &to);
     assert!(sold > 0, "no bread sold between {from} and {to}");
-}
-
-#[then(expr = "shoppers were out on the street at {string}")]
-fn shoppers_out_at(w: &mut SimWorld, time: String) {
-    let at = parse_hm(&time);
-    let out = w
-        .events
-        .books
-        .iter()
-        .take_while(|b| b.second < at)
-        .last()
-        .map_or(0, |b| b.out);
-    assert!(out > 0, "nobody was out at {time}");
 }
 
 #[then("every bakery sold bread today")]
@@ -541,6 +520,4 @@ struct Books {
     second: u32,
     sold: i64,
     lost: i64,
-    /// Shoppers on the street (stepped out, not yet gone).
-    out: usize,
 }

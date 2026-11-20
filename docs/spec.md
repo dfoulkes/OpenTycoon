@@ -401,7 +401,7 @@ Announced on the year step as a newspaper front page. Some are fixed history, so
 | 1953 | Coronation | One-day souvenir and bar boom |
 | 1966 | World Cup | Pubs and bars ×2 for a day |
 | 1971 | Decimal Day | Currency display flips; one day of price confusion (random ±10%) |
-| 1973–74 | Oil crisis / three-day week | Electricity rationed: businesses can only open 3 of 7 days |
+| 1973–74 | Oil crisis / three-day week | Power cuts (R69): for the 1970 step's day, every walk-in shop is dark 07:00–10:00 and 13:00–15:30 (configurable), and the front page names the hours. Shoppers wait for the lights. The locked order still arrives at 06:00; night trade is lit |
 | 1986 | Big Bang | The City's desirability jumps; Upper-class share rises |
 | 1987 | Docklands / Canary Wharf | Docklands desirability: Low → High |
 | 2000 | Dot-com bubble → 2001 bust | Online business valuations swing |
@@ -411,6 +411,8 @@ Announced on the year step as a newspaper front page. Some are fixed history, so
 | 2030+ | Random: heatwave, AI boom, flood (Thames Barrier fails?) | Flavour |
 
 Random events (fire, burglary, health inspection) roll per building per day with a small chance. Insurance is an optional product.
+
+**Events act within a game day (R69).** A game day is a 5-year era, so no event shuts shops for whole days: config validation rejects a power cut that would black out the whole of day trade, and there is no open-days effect. Lasting effects that change demand, supply or footfall may run for `days` steps; closures only ever take hours.
 
 ### 9.1 Elections (ruled: go with the historically correct version)
 
