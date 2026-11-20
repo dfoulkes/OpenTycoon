@@ -125,8 +125,14 @@ fn brain_rng(seed: u64, player: PlayerId) -> SimRng {
 
 /// Plays one game to the final whistle (or `max_ticks`).
 pub fn play(config: &Config, seed: u64, spec: &GameSpec) -> GameResult {
+    play_from(World::new(config.clone(), seed, spec.players), spec)
+}
+
+/// Plays an already-built world (e.g. one set up by a test or tool) to the final whistle
+/// (or `max_ticks`). `spec.players` is ignored: the world's seats are used.
+pub fn play_from(mut world: World, spec: &GameSpec) -> GameResult {
     let watch = Stopwatch::start();
-    let mut world = World::new(config.clone(), seed, spec.players);
+    let seed = world.seed();
     let ai_held: Vec<PlayerId> = world.ai_seats().iter().map(|s| s.player).collect();
     let mut seats: Vec<(PlayerId, Box<dyn Brain>, SimRng)> = world
         .players()
