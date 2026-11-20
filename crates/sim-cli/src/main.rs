@@ -270,7 +270,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             for _ in 0..ticks {
                 world.tick();
             }
-            // CI compares this line across OSes (docs/ci/ci.yml.proposed): keep it stable.
+            // CI compares this line across OSes (.github/workflows/ci.yml): keep it stable.
             println!(
                 "ticks={ticks} seed={seed} year={} day={} hash={:016x}",
                 world.clock().year(),

@@ -128,7 +128,7 @@ stubbed). Re-measured after economy (#26) landed: 1,000 v1 games 0.14 s (~6,900 
 ## Determinism checks
 
 - `sim-cli run config --seed 42 --ticks 17280` prints the state hash; CI compares it between
-  Linux x86_64 and macOS aarch64 (`docs/ci/ci.yml.proposed`). The output line is a contract.
+  Linux x86_64 and macOS aarch64 (`.github/workflows/ci.yml`). The output line is a contract.
 - `crates/sim-cli/tests/determinism.rs`: a 32-game batch on 1 thread and on 8 threads gives
   byte-identical CSVs (both brains).
 - `crates/sim-cli/features/determinism.feature`: the same at 1 vs 4 threads in-process, 1 vs 3

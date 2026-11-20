@@ -1,6 +1,6 @@
 //! Determinism: same seed + config ⇒ identical state hash after N ticks (docs/engineering.md).
 //! Cross-platform: CI runs `sim-cli run` on Linux x86_64 and macOS aarch64 and compares the
-//! printed hashes (docs/ci/ci.yml.proposed), so no constant here needs pinning per feature.
+//! printed hashes (.github/workflows/ci.yml), so no constant here needs pinning per feature.
 #![allow(clippy::unwrap_used, missing_docs, reason = "tests")]
 
 mod common;

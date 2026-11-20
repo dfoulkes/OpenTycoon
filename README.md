@@ -12,7 +12,7 @@ view. Single-player is multiplayer against a server on your own machine.
 - **Spec**: [`docs/spec.md`](docs/spec.md) (rulings cited as R1–R61)
 - **Architecture, module owners, tick order**: [`docs/architecture.md`](docs/architecture.md)
 - **Engineering standards (BDD/TDD, determinism, lints, perf)**: [`docs/engineering.md`](docs/engineering.md)
-- **Proposed CI**: [`docs/ci/ci.yml.proposed`](docs/ci/ci.yml.proposed)
+- **CI**: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
 
 Status: **M0 skeleton** (v1 plan in spec §10c). The workspace, config system, clock, BDD harness
 and Godot project are real; the rest of the simulation lands in M1.

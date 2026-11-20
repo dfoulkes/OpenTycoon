@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=schema/businesses.schema.json
 # businesses.yaml: §7. The five v1 businesses from 1930 (§10c M1). Every number here is our
-# own placeholder (OTY-8: regenerate stats from our own formulas, not the original manual).
+# own placeholder, to be regenerated from our own formulas via the balance harness.
 build_base_rate: 10             # placeholder: £ per unit of building volume (§5.3)
 fit_out:                        # §7.1
   low:    { build_cost_mult: 0.8, appeal: 0.8 }   # placeholder

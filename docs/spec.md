@@ -1,20 +1,9 @@
-> Snapshot of the canonical spec in Dan's vault (Projects/opentycoon/spec.md), taken 2026-11-19. Rulings are cited by ID (R1–R61).
-
----
-type: spec
-status: draft
-created: 2026-11-19
-updated: 2026-11-19
-tags: [project, project/monopoly-tycoon, game-design, OpenTycoon]
-source: "[[Game Loop]]"
----
+> Design spec for OpenTycoon v2. Rulings are cited by ID (R1, R2, …) in §12; tests are tagged with them.
 
 # London Tycoon: Game Spec (expanded draft)
 
-> Expanded from [[Game Loop]] (Dan's original, left untouched). Repo: `dfoulkes/OpenTycoon` (dormant since 2019).
-> Anything marked **[PROPOSED]** is Bob's suggestion and isn't ruled yet. Anything marked **(Dan)** was ruled on 2026-11-19. **[OPEN n]** points at the open list in §12. - hehe thats where it started one random evening,
 >
-> **Every constant in this spec is configurable in YAML** (Dan). The numbers here are the defaults shipped in `config/*.yaml`, never hard-coded. See §10b.
+> **Every constant in this spec is configurable in YAML**. The numbers here are the defaults shipped in `config/*.yaml`, never hard-coded. See §10b.
 
 ## 1. Premise
 
@@ -28,14 +17,14 @@ The original game this borrows from was about Manhattan-style blocks. This one i
 
 | Unit        | Value                                          | Notes                                                                                  |
 | ----------- | ---------------------------------------------- | -------------------------------------------------------------------------------------- |
-| In-game day | 24 game-hours                                  | **1 day = 20 real minutes** (Dan), so 1 game-hour = 50 real seconds. Configurable. |
-| Year step   | **+5 years every midnight** (Dan). Every day is a new 5-year era. |
+| In-game day | 24 game-hours                                  | **1 day = 20 real minutes**, so 1 game-hour = 50 real seconds. Configurable. |
+| Year step   | **+5 years every midnight**. Every day is a new 5-year era. |
 | Full game   | 1930 → 2050 = 120 yrs = 24 steps = **24 days** | At 20 min/day that's **8 real hours**, so see 2.4 |
-| Pause       | Single-player only                             | **Single-player and multiplayer are both in scope** (Dan). **[PROPOSED]** Multiplayer gets speed votes (1×, 2×, 4×) instead of pause. |
+| Pause       | Single-player only                             | **Single-player and multiplayer are both in scope**. **[PROPOSED]** Multiplayer gets speed votes (1×, 2×, 4×) instead of pause. |
 
 ### 2.2 Daily cycle
 
-Trading hours (Dan): **day trade 07:00–17:00, night trade 19:00–23:50**. Every shop is shut by midnight, so midnight works as the single day boundary.
+Trading hours: **day trade 07:00–17:00, night trade 19:00–23:50**. Every shop is shut by midnight, so midnight works as the single day boundary.
 
 | Time | Event |
 |---|---|
@@ -45,23 +34,23 @@ Trading hours (Dan): **day trade 07:00–17:00, night trade 19:00–23:50**. Eve
 | **07:00–17:00** | Day trade |
 | 17:00–19:00 | Changeover. Nothing trades. Last chance to set night prices. |
 | **19:00–23:50** | Night trade |
-| **23:30–03:00** | **Hotels** (Dan): rooms on sale. The 20-minute overlap with night trade is deliberate: shoppers who are done for the night start looking for a bed. Hotels have no stock, so nothing gets written off at midnight. |
+| **23:30–03:00** | **Hotels**: rooms on sale. The 20-minute overlap with night trade is deliberate: shoppers who are done for the night start looking for a bed. Hotels have no stock, so nothing gets written off at midnight. |
 | During trade | Players adjust prices and **tomorrow's** stock order |
 
-So "restock can be adjusted during the day" means *tomorrow's order*. Stock only ever arrives at 06:00, and **there's no emergency mid-day restock** (Dan). Night shops get their stock at 06:00 too and sit on it until 19:00.
+So "restock can be adjusted during the day" means *tomorrow's order*. Stock only ever arrives at 06:00, and **there's no emergency mid-day restock**. Night shops get their stock at 06:00 too and sit on it until 19:00.
 
 ### 2.3 Bankruptcy
 
-- At 00:00 each player's **cash balance** is checked. A balance **≥ £0 passes**, so exactly zero is solvent (Dan).
+- At 00:00 each player's **cash balance** is checked. A balance **≥ £0 passes**, so exactly zero is solvent.
 - Two consecutive failed midnights means the player is **bankrupt** and out of the game.
-- The counter only resets on a *passed midnight*. Going positive during the day and spending it again doesn't count (Dan's rule).
-- Warning UI: **deferred** until the engine conversation (Dan). Working idea: the balance flashes.
-- **What happens to a bankrupt player's assets** (Dan):
+- The counter only resets on a *passed midnight*. Going positive during the day and spending it again doesn't count (The rule).
+- Warning UI: **deferred** until the engine conversation. Working idea: the balance flashes.
+- **What happens to a bankrupt player's assets**:
   - land leases go **back to the city**
   - buildings become **city-owned**
   - stock **goes to the city**
   - **The city runs those businesses at default settings** (default prices, default orders). **The city can't go bust.** The leases it takes over can be auctioned like any other unowned land, as **land only** (the buildings stay city-run). **[PROPOSED]** The city also puts its businesses up for auction one at a time.
-- **Selling up** (Dan). This applies any time, not just in distress:
+- **Selling up**. This applies any time, not just in distress:
   - **Sell back to the city:** one click, instant, for **50% of true value** (property value, §3). The 50% is configurable.
   - **Auction a business:** businesses are auctioned **on their own, separately from land**. Same rules as land auctions (§5.1): same one-at-a-time queue, same 120 s countdown, **no shortcuts for distressed sellers**. The buyer takes over the business and pays rent to whoever holds the land.
   - **Auction land:** a land auction sells **the land only**. Any businesses on it keep their owners and pay rent to the new holder.
@@ -80,21 +69,22 @@ Saving and resuming is mandatory for the Full preset.
 ## 3. Money
 
 - **Currency: £, not $.** **[PROPOSED]** Pre-1971 prices show in £sd (pounds, shillings, pence) and flip to decimal on **Decimal Day, 15 Feb 1971**. That's display only: the engine stores pence internally.
-- **No inflation** (Dan). Prices, rents and budgets don't drift over time. The economy grows because **population grows every morning**, which puts more money into circulation (§8.1). Every `I(year)` term from the earlier draft has been removed.
-- **Overdraft** (Dan):
+- **No inflation**. Prices, rents and budgets don't drift over time. The economy grows because **population grows every morning**, which puts more money into circulation (§8.1). Every `I(year)` term from the earlier draft has been removed.
+- **Starting cash**: every player starts with **£7,000**, configurable (`game.yaml` → `players.starting_cash`).
+- **Overdraft**:
   - Every player has a credit limit of **£10,000**, rising by a **flat £2,500 every 5-year step (every day)** (25% of the starting limit). That reaches £70,000 by 2050.
   - Nothing in this draft charges interest on an overdraft.
   - Players can spend and bid down to `−credit_limit`.
-  - **The 06:00 bills *can* push a player past the limit** (Dan). There's **no interest** on overdrafts. The midnight check is the punishment.
-- **Net worth, the win metric** (Dan): **land value + property value + cash in the bank + stock**.
-  - **Net worth is recalculated every midnight**, before waste is written off (Dan). That gives a nightly leaderboard, and the last one is the final score, so stock on hand on the final night counts.
-  - **Utilities have no separate asset value.** What they're worth is what they save the holder and what they generate (Dan), and that already shows up in cash (§6).
-  - **Lot value** (Dan): `lot_value = land_value + 20% × Σ value of every property on the lot`, whoever owns those properties. It goes to the **leaseholder**.
+  - **The 06:00 bills *can* push a player past the limit**. There's **no interest** on overdrafts. The midnight check is the punishment.
+- **Net worth, the win metric**: **land value + property value + cash in the bank + stock**.
+  - **Net worth is recalculated every midnight**, before waste is written off. That gives a nightly leaderboard, and the last one is the final score, so stock on hand on the final night counts.
+  - **Utilities have no separate asset value.** What they're worth is what they save the holder and what they generate, and that already shows up in cash (§6).
+  - **Lot value**: `lot_value = land_value + 20% × Σ value of every property on the lot`, whoever owns those properties. It goes to the **leaseholder**.
   - **Property value** goes to the **property's owner**.
   - If you hold the land *and* own the buildings on it, you count the property value plus the 20% uplift. That's the reward for owning both.
-  - **Base values** (Dan: buildings don't wear):
+  - **Base values** (ruled: buildings don't wear):
     - land_value = `last auction price × remaining lease years / 30`
-    - property value (also the "true value" used by sell-back) = `build cost`. **Buildings don't wear** (Dan).
+    - property value (also the "true value" used by sell-back) = `build cost`. **Buildings don't wear**.
     - stock = units on hand × purchase price
 
   ```
@@ -109,14 +99,14 @@ Saving and resuming is mandatory for the Full preset.
 
 - 9×9 = **81 blocks**, each with a district name, a **desirability tier** (Low / Medium / High) and a type (buildable, utility or special).
 - Height cap: **100 units**.
-- **Every block is a 9×9 lot** (Dan), and a lot holds **several businesses**. Each business takes a w×d footprint inside the lot.
+- **Every block is a 9×9 lot**, and a lot holds **several businesses**. Each business takes a w×d footprint inside the lot.
   - **Every business must touch the edge of the lot** (street frontage).
   - Example: Old Kent Road as eight 3×3 businesses around the rim, with an unbuildable 3×3 gap in the middle.
   - One business can take the whole 9×9. With the 100 height cap, that's at most 8,100 units of volume.
   - The land auction is for the whole lot. The leaseholder collects rent from every business on it.
-- Road segments between blocks carry the pedestrian pathfinding (Dan: yes).
-- **Sets** (Dan): blocks are grouped into colour sets, **laid out like a traditional board**. Eight colour bands run in price order. The cheapest and dearest bands are 2-block sets, and the six in between are 3-block sets. **Holding the leases on every block of a set unlocks the Hotel.**
-- **Fitting the board onto 81 blocks** (Dan: makes sense):
+- Road segments between blocks carry the pedestrian pathfinding.
+- **Sets**: blocks are grouped into colour sets, **laid out like a traditional board**. Eight colour bands run in price order. The cheapest and dearest bands are 2-block sets, and the six in between are 3-block sets. **Holding the leases on every block of a set unlocks the Hotel.**
+- **Fitting the board onto 81 blocks**:
 
   | Band | Tier | Sets | Blocks |
   |---|---|---|---|
@@ -148,15 +138,15 @@ These are real places, chosen to give a spread of tiers. The centre of the grid 
 | Low | Whitechapel, Bethnal Green, Hackney, Shoreditch, Bermondsey, Peckham, Brixton, Stepney, Poplar, Deptford, Old Kent Road, Elephant & Castle, Lambeth, Battersea, Wapping … |
 | Special | The City (finance), Docklands (industrial → Canary Wharf after 1987), the Thames (non-buildable river row/column with bridges) |
 
-**Desirability changes over time** (Dan: yes):
+**Desirability changes over time**:
 - Shoreditch, Hackney and Brixton gentrify from Low to Medium/High between 1990 and 2010.
 - Docklands goes from industrial to High after 1987.
 - Notting Hill climbs during the 1980s.
 - Blitz damage (1940–41) knocks East End blocks down.
 
-Each shift is announced on the year step with a newspaper headline (Dan: yes).
+Each shift is announced on the year step with a newspaper headline.
 
-### 4.3 Transport nodes (Dan: yes)
+### 4.3 Transport nodes
 
 Tube stations on fixed blocks are the **spawn and despawn points**. Customers arrive, shop, and leave. More lines open over time:
 - Victoria line 1968
@@ -170,15 +160,15 @@ Each new line boosts footfall on the blocks it serves.
 
 ### 5.1 Auctions
 
-- Any player can trigger an auction on an **unowned buildable block** by placing an opening bid. **The minimum opening bid is the district's land base price** (Dan). That price is set per district by how affluent it is: Mayfair very expensive, Old Kent Road cheap. It tracks the district's desirability.
+- Any player can trigger an auction on an **unowned buildable block** by placing an opening bid. **The minimum opening bid is the district's land base price**. That price is set per district by how affluent it is: Mayfair very expensive, Old Kent Road cheap. It tracks the district's desirability.
 - **Only one auction may be scheduled or running at a time** across the whole game.
 - The auction starts **120 real seconds** after the opening bid. All players are notified and can see the countdown.
 - Bidding goes **round the table, left to right**, starting with the player after the opener. On their turn a player raises by **£50 / £100 / £500 / £1,000** or passes.
-- **Passing** (Dan):
+- **Passing**:
   - A pass only counts for **that round**, so a player who passes can come back in next round.
   - If a full round goes by with **no new bids**, the auction closes and the highest bidder wins.
 - Each turn has a **10-second timer**. If it runs out, that counts as a pass.
-- **Bid ceiling** (Dan): `current balance + credit limit` (§3). The winner pays at once.
+- **Bid ceiling**: `current balance + credit limit` (§3). The winner pays at once.
 - The game doesn't pause during an auction. Shops keep trading.
 
 ### 5.2 Leases
@@ -186,8 +176,8 @@ Each new line boosts footfall on the blocks it serves.
 - The winner holds the land **for 30 in-game years** (6 days).
 - The leaseholder **collects land rent** from every building on the block, their own included. Rent on their own buildings nets to zero.
 - **Unleased land** pays rent to the city.
-- **When a lease expires, the block simply goes back to auction** (Dan). The old holder gets no bonus. Buildings stay put and pay rent to the new holder.
-- **Leases can't be sold directly between players. They can only be auctioned** (Dan). The buyer gets the years left on the lease.
+- **When a lease expires, the block simply goes back to auction**. The old holder gets no bonus. Buildings stay put and pay rent to the new holder.
+- **Leases can't be sold directly between players. They can only be auctioned**. The buyer gets the years left on the lease.
 
 ### 5.3 Formulas
 
@@ -198,30 +188,30 @@ build_cost       = (h × w × d)_building × build_base_rate × desirability_mul
 stock_capacity   = (h × w × d)_building × business.stock_density
 ```
 
-- The volume in these formulas is the **building's volume, not the plot's** (Dan). Volume also sets **how much stock the building can hold** (Dan).
+- The volume in these formulas is the **building's volume, not the plot's**. Volume also sets **how much stock the building can hold**.
 - `desirability_mult` defaults: Low 0.6, Medium 1.0, High 1.8 (configurable).
 - Utilities ignore desirability (from the original).
 
 ## 6. Utilities
 
-- Pre-built from 1930: **Electricity, Gas, Water and a Telephone Exchange**. The exchange **upgrades to the Internet in 1995** (Dan). The telecoms column in the original tables stays valid.
-- Each utility earns income from every building's utility bill (5.3), paid at the 06:00 settlement (Dan).
-- **Each utility is a special block auctioned like land** (Dan). Its holder collects that utility's revenue across the whole map. **Their own buildings' bills for that utility net to zero**, so a utility both **generates** and **saves** money (Dan). Revenue from unheld utilities goes to the city.
-- **Nationalisation and privatisation depend on who wins elections in the news cycle** (Dan). The proposed mechanic is §9.1.
-- From **1995** every building pays a small internet bill, and online businesses need it (Dan).
+- Pre-built from 1930: **Electricity, Gas, Water and a Telephone Exchange**. The exchange **upgrades to the Internet in 1995**. The telecoms column in the original tables stays valid.
+- Each utility earns income from every building's utility bill (5.3), paid at the 06:00 settlement.
+- **Each utility is a special block auctioned like land**. Its holder collects that utility's revenue across the whole map. **Their own buildings' bills for that utility net to zero**, so a utility both **generates** and **saves** money. Revenue from unheld utilities goes to the city.
+- **Nationalisation and privatisation depend on who wins elections in the news cycle**. The proposed mechanic is §9.1.
+- From **1995** every building pays a small internet bill, and online businesses need it.
 
 ## 7. Businesses
 
 ### 7.1 Model
 
-**One building = one business** (Dan). The whole volume of a building serves its business type, with no stacking of floors.
+**One building = one business**. The whole volume of a building serves its business type, with no stacking of floors.
 
 Every business type has:
 
 | Field | Meaning |
 |---|---|
 | `min_footprint` | Minimum w × d footprint within the 9×9 lot (must touch the lot edge) |
-| `max_height` | **Maximum height for this business type, in units** (Dan). Configurable per type in `businesses.yaml`, capped by the global 100. E.g. a News Stand can't be a tower, but apartments and hotels can. |
+| `max_height` | **Maximum height for this business type, in units**. Configurable per type in `businesses.yaml`, capped by the global 100. E.g. a News Stand can't be a tower, but apartments and hotels can. |
 | `stock_density` | Units of stock per unit of building volume |
 | `hours` | Day (07:00–17:00) or Night (19:00–23:50) |
 | `goods[]` | What it sells. Multi-good stores split their capacity. |
@@ -229,15 +219,15 @@ Every business type has:
 | `unlock_year` | First year it can be built |
 | `obsolete_year` | **[PROPOSED]** Optional. Demand fades after this year (News Stand 2010, Video Store 2008, Music Store 2010) |
 
-**Daily running cost:** `rent + utilities + stock`. **There are no staff costs** (Dan).
+**Daily running cost:** `rent + utilities + stock`. **There are no staff costs**.
 
 **Player levers per shop:**
 - price per good, as a % of the reference price
 - tomorrow's order quantity
 - open/closed toggle
-- **fit-out quality** Low/Med/High (Dan: yes). This shifts the shop's appeal to each class and its build cost.
+- **fit-out quality** Low/Med/High. This shifts the shop's appeal to each class and its build cost.
 
-### 7.2 Residential (designed with Dan, 2026-11-19, OTY-7)
+### 7.2 Residential
 
 **Residential is a building type: always apartments, never houses.** One building, one type. **There are no offices or office jobs in OpenTycoon.** Sir Penny Sugar (§10) lives here.
 
@@ -265,7 +255,7 @@ Every business type has:
 
 ### 7.3 The Hotel
 
-Unlocked by holding every block of a set (§4.1). The Hotel serves a niche market: **tourists** (Dan).
+Unlocked by holding every block of a set (§4.1). The Hotel serves a niche market: **tourists**.
 
 **Tourists are the part of the population that doesn't live in the city:**
 
@@ -277,15 +267,15 @@ tourist_pool = total_population − housed_population
 
 This creates a real tension: **every apartment built shrinks the tourist pool.** Sir Penny Sugar's residential empire and the hotel owners are working against each other. That's good conflict.
 
-**Hotels are open 23:30–03:00, and they're the only business open in that window** (Dan).
+**Hotels are open 23:30–03:00, and they're the only business open in that window**.
 - **No stock.** Like an apartment block, a hotel's **capacity (rooms) is set by its volume**.
 - It sells rooms in that window. Rooms don't need restocking, so nothing is ever written off.
 - **[PROPOSED]** Room revenue is booked at check-in. A room sold at 23:45 counts towards that night's midnight solvency check, and one sold at 01:00 counts towards the next day.
 
-**How Hotels earn** (Dan: yes):
-- **Finding a bed** (Dan): a bed is a tourist's **last need of the day**. Once nothing left on their list can be bought that evening, they look for somewhere to sleep.
+**How Hotels earn**:
+- **Finding a bed**: a bed is a tourist's **last need of the day**. Once nothing left on their list can be bought that evening, they look for somewhere to sleep.
   - **They prefer a hotel.** Hotels compete for them on price, fit-out and the set's desirability.
-  - **Before hotels open at 23:30**, a tourist who has finished their list **wanders the streets** (Dan). They still count as footfall but have nothing left to buy.
+  - **Before hotels open at 23:30**, a tourist who has finished their list **wanders the streets**. They still count as footfall but have nothing left to buy.
   - If no hotel room is available, **they take the train home** and leave at a tube station.
   - Residents go back to their apartments.
 - A hotel earns room revenue per tourist it houses.
@@ -294,7 +284,6 @@ This creates a real tension: **every apartment built shrinks the tourist pool.**
 
 ### 7.4 Unlock tables
 
-The 1930–1980 tables in [[Game Loop]] cover these eras. Clean-up needed:
 - The first table is headed "Starting 1940" but lists the 1930 set.
 - The 1980 table is pasted twice.
 - The tables use $ and ¢.
@@ -305,7 +294,7 @@ Filling in the gaps **[PROPOSED]**:
 | Year | New businesses | Notes |
 |---|---|---|
 | 1990 | Games Software House, Betting Shop, Charity Shop, Chicken Shop, **Coffee Chain**, **Mobile Phone Shop** (replaces Phone Shop) | Charity Shop: Low tier, discounted clothes, cheap stock from donations |
-| 1995 | **Internet Café**, **E-commerce*** | E-commerce from 1995 (Dan) |
+| 1995 | **Internet Café**, **E-commerce*** | E-commerce from 1995 |
 | 2000 | Online Casino*, Gym, Music Streaming* | *Online (see 7.5) |
 | 2005 | **Boutique Hotel**, **Craft Brewery/Taproom** | Night-time, High tier |
 | 2010 | Vape Shop, Online Video Streaming*, **Food Delivery Platform*** | Delivery platform takes a cut from restaurants that opt in |
@@ -318,7 +307,7 @@ Every new entry needs the full field set from 7.1 before it's buildable.
 
 ### 7.5 Online businesses
 
-Dan's rule: **from 1995, customers can spend part of their daily budget at e-commerce businesses**. They don't travel to do it, and they can do it at any point in the day *instead of* walking to a shop. Whatever they spend online comes off what they have left for the high street.
+The rule: **from 1995, customers can spend part of their daily budget at e-commerce businesses**. They don't travel to do it, and they can do it at any point in the day *instead of* walking to a shop. Whatever they spend online comes off what they have left for the high street.
 
 **[PROPOSED]** mechanics:
 - The share of each budget that goes online is `online_share(year, good)`. It starts small in 1995 and grows. Rather than every customer buying a bit online, each customer rolls once per good: buy online or walk.
@@ -329,18 +318,18 @@ Dan's rule: **from 1995, customers can spend part of their daily budget at e-com
 
 ### 8.1 Population
 
-- `population(year)` follows a rough Greater London curve: dips around WW2 and in the 1970s–80s, then climbs. **It grows every morning at 06:00** (Dan). With no inflation, that daily growth is what drives the economy.
+- `population(year)` follows a rough Greater London curve: dips around WW2 and in the 1970s–80s, then climbs. **It grows every morning at 06:00**. With no inflation, that daily growth is what drives the economy.
 - Spawn sources:
-  - **residences (apartments):** residents leave home for the day (Dan)
+  - **residences (apartments):** residents leave home for the day
   - **05:30 train arrivals:** the day's new population, house-hunting first (§7.2)
-  - **tube stations:** shoppers arrive by travel (Dan)
-  - **visitors** (everyone not housed) arrive by tube and split into (Dan):
+  - **tube stations:** shoppers arrive by travel
+  - **visitors** (everyone not housed) arrive by tube and split into:
     - **commuters**, a configurable **70%** by default: they always take the train home at night and never want a hotel
     - **tourists**, the other 30%: they want a hotel and fall back to the train. **Only tourists count towards the hotel pool** (§7.3).
-- Each customer has a **class**: Working / Middle / Upper. Class split by era, from 1930 W60/M30/U10 to 2050 W40/M45/U15 (Dan: yes).
-- **Age bands** (Dan): **18–29, 30–49, 50–64, 65+**. Children aren't shoppers. Configurable.
+- Each customer has a **class**: Working / Middle / Upper. Class split by era, from 1930 W60/M30/U10 to 2050 W40/M45/U15.
+- **Age bands**: **18–29, 30–49, 50–64, 65+**. Children aren't shoppers. Configurable.
 
-#### Births (Dan: births per woman follow history)
+#### Births (ruled: births per woman follow history)
 
 Population is a **cohort model**: counts per age band and sex. Only adults are walking agents on the map. At each midnight year step (+5 years):
 - **Births** = women aged 18–49 × the **historical births per woman** for that era ÷ the childbearing span (32 years, 18–49) × the 5 years in each step. Children are tracked as numbers only, not agents.
@@ -348,7 +337,7 @@ Population is a **cohort model**: counts per age band and sex. Only adults are w
 - **Deaths:** a mortality rate per band and era. **Migration** (configurable) tops up the rest of the arrivals.
 - The **inputs are historical; the population is not.** Total population comes out of the cohort model, so a city that can't house people doesn't grow the same way real London did.
 
-Default births per woman by step: **approximate figures for England & Wales, accepted as defaults** (Dan, 2026-11-19). They're configurable in `customers.yaml`. 2025+ are projections:
+Default births per woman by step: **approximate figures for England & Wales, accepted as defaults**. They're configurable in `customers.yaml`. 2025+ are projections:
 
 ```yaml
 # customers.yaml
@@ -363,7 +352,7 @@ births_per_woman:
 
 ### 8.2 Shopping list
 
-Every person has a **daily allowance**. The **size of the allowance and what they want to buy both depend on age group, class and sex** (Dan). Defaults go in `customers.yaml`:
+Every person has a **daily allowance**. **It's new money created each morning**: there are no household accounts or wages, so allowances enter the economy fresh every day. The **size of the allowance and what they want to buy both depend on age group, class and sex**. Defaults go in `customers.yaml`:
 
 ```yaml
 allowance:            # daily, before rent
@@ -395,13 +384,13 @@ price_factor = exp(-k_class × (price/ref_price - 1))
 - `k_class` is price sensitivity, defaulting to Working 3.0, Middle 1.5, Upper 0.5. Upper-class shoppers barely notice prices. Luxury goods (Jewellery, Antiques) get a mild boost from a higher price.
 - The shop is picked by weighted random over the scores, not by taking the top score.
 - If the chosen shop runs out before the customer arrives, that's a **lost sale**. It dents the shop's reputation and the customer re-scores.
-- `reputation` is a 0–1 rolling stat (Dan: yes).
+- `reputation` is a 0–1 rolling stat.
 
 ### 8.4 Day/night
 
 Night businesses only score while open. Customer generation shifts to the night-out goods (drinks, meals, dancing, movies) from 19:00. Day-only shoppers still on the map at 17:00 despawn. After night trade, tourists look for a bed or leave by train (§7.3), and residents go home.
 
-## 9. Events (Dan: yes to all)
+## 9. Events
 
 Announced on the year step as a newspaper front page. Some are fixed history, some random. The in-game year only moves in 5-year jumps, so **each event fires on the step that covers its year**: the Blitz on 1940, Decimal Day on 1970 (covering 1970–74), the crash on 2005 (covering 2005–09). Events live in `events.yaml`.
 
@@ -423,7 +412,7 @@ Announced on the year step as a newspaper front page. Some are fixed history, so
 
 Random events (fire, burglary, health inspection) roll per building per day with a small chance. Insurance is an optional product.
 
-### 9.1 Elections (Dan: go with the historically correct version)
+### 9.1 Elections (ruled: go with the historically correct version)
 
 Each 5-year step happens to match the length of a UK parliament, so **every year step is a general election**. The result is a weighted roll and is the paper's headline. Utility ownership follows the winner:
 - **Labour win:** utilities are **nationalised**. Holders are bought out at book value and the revenue goes to the city.
@@ -439,13 +428,13 @@ Personalities give variety without much complexity:
 - **The Grocer** opens many cheap Low-tier shops.
 - **The Toff** only goes for High tier.
 - **The Speculator** bids hard and flips.
-- **Sir Penny Sugar** deals mostly in residential (Dan). Waits on §7.2.
+- **Sir Penny Sugar** deals mostly in residential. Waits on §7.2.
 
 All of them share one evaluation function with different weights. Putting an LLM in the loop could come later. Not for v1.
 
 ## 10a. Architecture and engine
 
-**Ruled (Dan):**
+**Ruled:**
 - **An immersive 3D world** that you can walk around in at street level *and* manage from a bird's-eye RTS view. Manor Lords is the reference.
 - **One architecture for both modes.** Single-player is multiplayer against a server on `127.0.0.1`. The split between client and server is invisible to someone playing alone.
 
@@ -453,28 +442,28 @@ All of them share one evaluation function with different weights. Putting an LLM
 
 ```
  sim-core (Rust library, headless, deterministic, 1 tick = 10 game-seconds = 7.2 ticks/real second)
-   ├── server   : authoritative game server (multiplayer on k3s; single-player on 127.0.0.1, started and stopped by the client)
+   ├── server   : authoritative game server (multiplayer on a hosted server; single-player on 127.0.0.1, started and stopped by the client)
    └── sim-cli  : balance harness, 1,000 AI-vs-AI games, no rendering
  client (3D engine) ──protobuf over WebSocket/QUIC──► server
 ```
 
 - **The server only sends what the current view needs.** Walk mode gets every individual pedestrian within about 100 m. RTS mode gets crowd density and money flows for the whole map. One protocol, two levels of detail.
 - **Single-player:** the client starts the server binary on a random localhost port with a one-time token. The code path is identical to multiplayer. Pause is a host privilege, and saves are server snapshots.
-- **Platforms** (Dan): **Linux first. If it works on Linux, macOS is fine.** **No Microsoft stack** (Dan), which rules out C#/.NET, Unity and Windows-only tooling.
-- **Client engine: Godot 4** (Dan). MIT licence, run by a non-profit foundation, native on Linux and macOS.
+- **Platforms**: **Linux first. If it works on Linux, macOS is fine.** **No Microsoft stack**, which rules out C#/.NET, Unity and Windows-only tooling.
+- **Client engine: Godot 4**. MIT licence, run by a non-profit foundation, native on Linux and macOS.
   - **GDScript** for scenes, cameras and UI.
   - **Rust via `godot-rust` (gdext)** for the network client and anything heavy.
   - A shared Rust `protocol` crate defines the messages once, for both server and client.
   - Unreal 5 is the fallback if Godot hits a visual ceiling we can't live with. Its licence is fine for a pet project.
-- **World scale** (Dan): **1 lot unit = 4 m** by default (configurable), so a 9×9 lot is 36 m across.
-- **Multiplayer audience** (Dan): **friends connecting remotely** first. Internet and community play is a maybe for later.
+- **World scale**: **1 lot unit = 4 m** by default (configurable), so a 9×9 lot is 36 m across.
+- **Multiplayer audience**: **friends connecting remotely** first. Internet and community play is a maybe for later.
   - **[PROPOSED]** v1 multiplayer:
-    - Dan hosts the server on the homelab.
+    - The host runs the server.
     - Friends join with an invite code over TLS.
     - The server is authoritative, so clients can only send commands. That's enough cheat protection between friends.
   - Accounts, lobbies and moderation for community play go to the backlog. Nothing in v1 blocks them.
 
-## 10b. Configuration (Dan: YAML)
+## 10b. Configuration (ruled: YAML)
 
 Every tunable lives in YAML. The server loads it at game start, and a game's save file stores the config it was started with, so a running game never changes under you. The balance harness (`sim-cli`) takes config overrides, so it can sweep a value across a run. **[PROPOSED]** File layout:
 
@@ -524,7 +513,7 @@ leases:
 - **Validation:** a JSON Schema for each file. The server refuses to start on an invalid config and names the bad key, so nothing fails silently.
 - **Mods for free:** a different city is a different `map.yaml`.
 
-## 10c. v1 build plan (Dan: approved 2026-11-19; tickets OTY-1 to OTY-6)
+## 10c. v1 build plan (approved)
 
 **Goal:** play a 1930–1950 game (4 days, 80 minutes) on a grey-box 3×3 map, single-player against one AI, in both camera modes, end to end. Also: the balance harness runs 1,000 headless games.
 
@@ -550,7 +539,7 @@ OpenTycoon/
 | **M2 Server** | Protocol, snapshots + per-tick deltas, two levels of detail (walk vs RTS), single-player server started on 127.0.0.1, save/load | A scripted bot client plays a full game over the socket |
 | **M3 RTS client** | Grey-box city (boxes for buildings, capsules for walkers), bird's-eye camera, auction UI, shop panel (prices, tomorrow's order), money HUD | You can play the v1 game from the bird's-eye view |
 | **M4 Walk mode** | Street-level camera, walker interpolation, switching between camera modes | Walk down Old Kent Road and watch your own shop trade |
-| **M5 Friends** | Server container on k3s, invite codes, TLS; metrics, house labels, Backstage entry, runbook (house rules) | A friend joins from outside the house and finishes a game |
+| **M5 Friends** | Server container, invite codes, TLS, metrics and an operations runbook | A friend joins from outside the house and finishes a game |
 
 **After v1:** Hotel and tourists, residential (needs its design session), elections and utilities, events, the full 9×9 map, eras past 1950, more AIs, art.
 
@@ -570,7 +559,7 @@ OpenTycoon/
 
 ## 12. Decisions
 
-### Ruled (Dan, 2026-11-19)
+### Ruled
 
 | # | Decision |
 |---|---|
@@ -640,4 +629,4 @@ OpenTycoon/
 
 ### Open
 
-- **OTY-8:** regenerate the business stats from our own formulas.
+- **a follow-up:** regenerate the business stats from our own formulas.

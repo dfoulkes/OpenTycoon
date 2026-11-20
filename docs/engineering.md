@@ -68,7 +68,7 @@ Allowlists:
   scenario fully proves a ruling, delete its line in the same PR. Mark half-proven ones
   `# partial: <what's missing>`.
 
-When the spec snapshot is refreshed from the vault, re-run `cargo trace`: new rulings show up as
+When `docs/spec.md` is updated, re-run `cargo trace`: new rulings show up as
 failures until they are tagged, pending or out of scope.
 
 ## 2. Readability and testability
@@ -183,12 +183,12 @@ each other (see [`perf.md`](perf.md)); revisit them with measurements once custo
 
 ## 6. Workflow
 
-- Branch per ticket off `v2`; small commits that each build. Commit messages start with the
-  ticket key (`OTY-12: ...`).
-- Agents commit, push and open PRs as their GitHub App
-  (`~/source/github_runner/scripts/github-agents/as-agent.sh <app> git ...`), never as Dan. Agents
-  never merge, approve, or change branch protection. `.github/workflows/` is off-limits to apps:
-  propose workflow changes as files under `docs/ci/` and say so in the PR.
+- Branch per change off `v2`; small commits that each build. Commit messages start with the
+  area they touch (`economy: ...`, `land: ...`).
+- Automated contributors open PRs; they never merge, approve, or change branch protection.
+  `.github/workflows/` changes are proposed in the PR description for a maintainer to apply.
+- This repository is public: no personal information, local paths or private infrastructure
+  details in code, docs, commit messages or PR descriptions.
 - **Definition of done** for a change:
   - `cargo fmtc`, `cargo lint`, `cargo t` pass; `cargo bench-build` compiles;
   - scenarios tagged with the rulings proven, red → green shown in the PR;
