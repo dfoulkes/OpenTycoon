@@ -271,7 +271,7 @@ mod tests {
             }
         }
         let models = generate(&def).unwrap();
-        assert_eq!(models.len(), 100);
+        assert_eq!(models.len(), def.models as usize);
         assert_eq!(
             model_config(&def, &base, &models[0], "full").unwrap().game,
             {
