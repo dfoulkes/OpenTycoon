@@ -30,7 +30,10 @@ use crate::businesses::{BusinessId, Businesses};
 use crate::clock::{Clock, ClockEvents, ClockRules};
 use crate::config::Config;
 use crate::customers::Customers;
-use crate::economy::{AccountId, Ledger, PlayerId, Solvency, SolvencyTracker};
+use crate::economy::{
+    AccountId, Ledger, NetWorthBoard, PlayerId, Solvency, SolvencyTracker, credit_limit_on_day,
+    spendable,
+};
 use crate::events::Events;
 use crate::hash::StableHasher;
 use crate::land::{BlockId, Map};
@@ -75,6 +78,11 @@ pub enum Command {
         /// Units.
         quantity: i64,
     },
+    /// Sell a business to the city at once for `sell_to_city_ratio` of its build cost (R5).
+    SellToCity {
+        /// The business; the seller must own it.
+        business: BusinessId,
+    },
 }
 
 /// A player's status.
@@ -105,6 +113,7 @@ pub struct World {
     events: Events,
     ai: Vec<AiSeat>,
     queued: Vec<(PlayerId, Command)>,
+    net_worth: NetWorthBoard,
 }
 
 impl World {
@@ -150,6 +159,7 @@ impl World {
             events: Events::default(),
             ai,
             queued: Vec::new(),
+            net_worth: NetWorthBoard::default(),
             config,
         }
     }
@@ -313,6 +323,64 @@ impl World {
         &self.players
     }
 
+    /// Today's credit limit, the same for every player: `start + day × increase` (R7).
+    pub fn credit_limit(&self) -> Money {
+        credit_limit_on_day(&self.config.game.overdraft, self.clock.day())
+    }
+
+    /// A player's bid ceiling, `balance + credit limit` (R7, §5.1): the most they can bid or
+    /// spend right now. `None` if the seat doesn't exist or the player is bankrupt (R4).
+    /// May be negative after the 06:00 bills (R32).
+    pub fn bid_ceiling(&self, player: PlayerId) -> Option<Money> {
+        self.is_active(player).then(|| {
+            spendable(
+                self.ledger.balance(AccountId::Player(player)),
+                self.credit_limit(),
+            )
+        })
+    }
+
+    /// True if an active player can pay `amount` without going past their credit limit (R7).
+    pub fn can_afford(&self, player: PlayerId, amount: Money) -> bool {
+        self.bid_ceiling(player).is_some_and(|c| amount <= c)
+    }
+
+    /// True if `player` is a seat in this game and not bankrupt.
+    pub fn is_active(&self, player: PlayerId) -> bool {
+        self.players
+            .iter()
+            .any(|(p, s)| *p == player && *s == PlayerStatus::Active)
+    }
+
+    /// A player's consecutive failed midnights (§2.3).
+    pub fn strikes(&self, player: PlayerId) -> u32 {
+        self.solvency.strikes(player)
+    }
+
+    /// The nightly leaderboard: every player's net worth at the last midnight. After the
+    /// final midnight this is the final score (R19, R31).
+    pub fn net_worth(&self) -> &NetWorthBoard {
+        &self.net_worth
+    }
+
+    /// Mutable ledger, for scenario setup and tools. Play changes money through commands.
+    #[doc(hidden)]
+    pub fn ledger_mut(&mut self) -> &mut Ledger {
+        &mut self.ledger
+    }
+
+    /// Mutable map, for scenario setup and tools. Play changes leases through auctions.
+    #[doc(hidden)]
+    pub fn map_mut(&mut self) -> &mut Map {
+        &mut self.map
+    }
+
+    /// Mutable businesses, for scenario setup and tools. Play builds through commands.
+    #[doc(hidden)]
+    pub fn businesses_mut(&mut self) -> &mut Businesses {
+        &mut self.businesses
+    }
+
     /// A portable hash of all mutable state, for determinism checks. Equal seeds, config and
     /// commands give equal hashes on every OS and CPU.
     pub fn state_hash(&self) -> u64 {
@@ -332,6 +400,7 @@ impl World {
         self.events.hash(&mut h);
         self.ai.hash(&mut h);
         self.queued.hash(&mut h);
+        self.net_worth.hash(&mut h);
         h.finish()
     }
 }

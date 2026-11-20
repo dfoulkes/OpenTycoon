@@ -22,6 +22,8 @@ pub struct SimWorld {
     pub config: steps::config::ConfigState,
     /// Clock under test (`steps::clock`).
     pub clock: steps::clock::ClockState,
+    /// Game under test (`steps::economy`).
+    pub economy: steps::economy::EconomyState,
 }
 
 fn main() {
