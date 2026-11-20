@@ -94,6 +94,10 @@ approximate). `World::tick()` runs these phases **in this order, always**:
 | 8 | Customers | every tick | customers | spawn, choose shops, walk, buy |
 | 9 | Businesses | every tick | businesses | record sales, reputation, lost sales |
 
+`World::tick_observed` runs the same tick and calls an observer after each phase that ran; the
+harness uses it for per-phase timing (`sim-cli bench --phases`, docs/perf.md). The observer
+cannot touch the world, and `tick` passes a no-op.
+
 Rules that keep the order meaningful:
 
 - **The year has already stepped when phase 3 runs**: `clock.year()` is the *new* year. Anything

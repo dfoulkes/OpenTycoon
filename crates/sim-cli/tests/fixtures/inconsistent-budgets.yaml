@@ -1,0 +1,6 @@
+# The budgets before customers landed: a 1 ms p99 lets the slowest 1% of ticks alone take
+# 86 ms, against a 50 ms day. perf-budget must refuse this file (perf_budget.feature).
+tolerance: 0.2
+budgets:
+  game_day_ms: { limit: 50 }
+  tick_p99_us: { limit: 1000 }

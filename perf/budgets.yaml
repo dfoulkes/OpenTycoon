@@ -1,33 +1,45 @@
 # Performance budgets checked by `sim-cli perf-budget config` (alias `cargo perf`).
-# See docs/perf.md for what each metric measures and how to update this file.
+# See docs/perf.md for what each metric measures, how the limits are derived and how to update
+# this file.
 #
 # A metric passes while measured <= limit * (1 + tolerance). `baseline` is what the reference
 # machine measured when the budget was last reviewed: drifting more than `tolerance` above it
 # prints a warning to flag in the PR (docs/engineering.md §4) but does not fail the run.
 #
-# Limits are the design budgets from docs/engineering.md §4, not "measured x 1.2": at M1 wave 2
-# most phases are stubs, so measured numbers are a floor, and a tight multiple would fail every
-# PR that adds real work. The baseline column tracks the drift instead.
+# Every tick limit derives from one root, the shipped-scenario day budget D = 20 ms (docs/perf.md
+# "Deriving the budgets"). perf-budget refuses a file whose limits disagree with each other.
 tolerance: 0.2
-reference_machine: "a 10-core arm64 laptop, release build (2026-11-20, M1 wave 2: phases stubbed)"
+reference_machine: "a 10-core arm64 laptop, release build (2026-11-20, M1 wave 3: customers real)"
 budgets:
   game_day_ms:
-    limit: 50
-    baseline: 0.147
-    why: "engineering.md §4: one game day (8,640 ticks) on the 3x3 map < 50 ms"
+    limit: 20
+    baseline: 1.9
+    why: "root: D = 20 ms per game day at the shipped 2,000 adults; ~10x the measured day; real time, 4x play and the 1,000-game sweep all fit inside it (perf.md)"
+  tick_mean_us:
+    limit: 2.315
+    baseline: 0.22
+    why: "D / 8,640 ticks: the same budget per tick, so it passes exactly when game_day_ms does"
   tick_p99_us:
-    limit: 1000
-    baseline: 0.042
-    why: "engineering.md §4: one tick, 3x3 map, 2,000 customers < 1 ms (shipped initial_population is 2,000)"
+    limit: 46
+    baseline: 3.4
+    why: "20 x the mean budget (measured p99/mean is 14-17); at the limit the slowest 1% of ticks use at most 20% of D"
+  game_day_ms_10k_agents:
+    limit: 100
+    baseline: 9.2
+    why: "D scaled linearly to 10,000 adults (customer work is linear in agents; superlinear growth fails here)"
   tick_p99_us_10k_agents:
-    limit: 5000
-    baseline: 0.042
-    why: "interpolated between engineering.md's 2,000 customers < 1 ms and 20,000 < 10 ms"
+    limit: 231
+    baseline: 19.8
+    why: "20 x the 10k mean budget (100 ms / 8,640 = 11.6 us)"
+  tick_max_us_20k_agents:
+    limit: 8680
+    baseline: 1480
+    why: "real time: the slowest tick at 20,000 adults takes at most 25% of one 4x tick (138.9 ms / 4 = 34.7 ms)"
   batch_1000_games_s:
-    limit: 600
-    baseline: 0.46
-    why: "engineering.md §4: 1,000 games 1930-1950 headless < 10 min on one machine (extrapolated from a 200-game sample)"
+    limit: 10
+    baseline: 1.2
+    why: "1,000 v1 games = 4,000 days x D = 80 core-s, on 10 cores at 80% parallel efficiency; far inside the spec's 10 minutes"
   config_load_ms:
     limit: 20
     baseline: 1.6
-    why: "engineering.md §4: config load + validate < 20 ms"
+    why: "engineering.md §4: config load + validate < 20 ms (not tick time; independent of D)"

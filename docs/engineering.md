@@ -149,26 +149,34 @@ x86_64 and macOS aarch64**. Balance runs, replays, saves and multiplayer all rel
 
 ### Budget
 
-Real time per tick at 1× is 1200 s / 8640 ≈ **139 ms**. The sim must use a small fraction of that
-so the server can run 4× speed votes, serve clients and run 1,000-game balance sweeps.
+Real time per tick at 1× is 1200 s / 8640 ≈ **139 ms**; at the fastest 4× speed vote it is
+**34.7 ms**. The sim must use a small fraction of that so the server can serve clients, and a
+1,000-game balance sweep must be a coffee break, not an afternoon. Every tick limit below derives
+from one root, the shipped-scenario day budget **D = 20 ms** (2,000 adults, about 10× the measured
+day), so a uniform slowdown trips them together and no limit can pass while it contradicts
+another; `perf-budget` refuses a `budgets.yaml` whose limits disagree. The derivation is in
+[`perf.md`](perf.md) "Deriving the budgets".
 
-| Measure | Budget | Baseline (10-core arm64 laptop, release) | Checked by |
+| Measure | Budget | Baseline (10-core arm64 laptop, release, M1 wave 3) | Checked by |
 |---|---|---|---|
+| one game day (8,640 ticks), 3×3 map, 2,000 adults | < 20 ms (D) | 1.8–1.9 ms | `perf-budget` `game_day_ms` |
+| one tick, same scenario, mean | < 2.315 µs (D / 8,640) | 0.21–0.22 µs | `perf-budget` `tick_mean_us` |
+| one tick, same scenario, p99 | < 46 µs (20 × mean) | 3.2–3.4 µs | `perf-budget` `tick_p99_us` |
+| one game day, 3×3 map, 10,000 adults | < 100 ms (D × 5) | 8.6–9.2 ms | `perf-budget` `game_day_ms_10k_agents` |
+| one tick, 3×3 map, 10,000 adults, p99 | < 231 µs (20 × mean) | 18–20 µs | `perf-budget` `tick_p99_us_10k_agents` |
+| slowest tick, 3×3 map, 20,000 adults | < 8.68 ms (25% of a 4× tick) | 1.39–1.48 ms | `perf-budget` `tick_max_us_20k_agents` |
+| one tick, 9×9 map, 20,000 customers | < 8.68 ms worst tick, as above | *post-v1: fill in* | — |
 | one tick, 3×3 map, 2 players, no agents | < 1 µs | 15.5 ns (M0, criterion) | `cargo bench` |
-| one game day (8,640 ticks), 3×3 map | < 50 ms | 0.147 ms (M1 wave 2) | `perf-budget` `game_day_ms` |
-| businesses: one day of sales, ~69k sale attempts over 10 / 100 / 1,000 shops | inside the day's 50 ms | 0.83 / 1.29 / 3.54 ms (M1) | `cargo bench --bench businesses` |
-| one tick, 3×3 map, 2,000 customers (p99) | < 1 ms | ≤ 42 ns, timer floor (M1 wave 2: customers stubbed) | `perf-budget` `tick_p99_us` |
-| one tick, 3×3 map, 10,000 agents (p99) | < 5 ms | ≤ 42 ns, timer floor (M1 wave 2: customers stubbed) | `perf-budget` `tick_p99_us_10k_agents` |
-| one tick, 9×9 map, 20,000 customers | < 10 ms | *post-v1: fill in* | — |
-| 1,000 games 1930–1950 headless (`sim-cli batch`) | < 10 min on one machine | 0.23 s on 10 cores (M1 wave 2) | `perf-budget` `batch_1000_games_s` |
+| businesses: one day of sales, ~69k sale attempts over 10 / 100 / 1,000 shops | inside D | 0.83 / 1.29 / 3.54 ms (M1) | `cargo bench --bench businesses` |
+| 1,000 games 1930–1950 headless (`sim-cli batch`) | < 10 s (4,000 days × D on 10 cores at 80%) | 0.9–1.2 s on 10 cores | `perf-budget` `batch_1000_games_s` |
 | config load + validate | < 20 ms | 1.6 ms | `perf-budget` `config_load_ms` |
 | 06:00 settlement, 6 players × 1,000 buildings (`benches/economy.rs`) | < 1 ms | 110 µs (M1) | `cargo bench` |
 | midnight net worth, 6 players × 1,000 buildings | < 1 ms | 74 µs (M1) | `cargo bench` |
 | 06:00 residents' rent, 20,000 residents in 100 blocks (`benches/economy.rs`) | < 1 ms | 0.74 ms (M1 wave 3) | `cargo bench` |
 
 Update the baseline column (and `perf/budgets.yaml`) when a feature lands, and flag any
-regression over 20% in the PR. The day, tick and 1,000-game budgets are not yet consistent with
-each other (see [`perf.md`](perf.md)); revisit them with measurements once customers land.
+regression over 20% in the PR. Change a limit only by re-deriving it from D (or changing D, with
+a reason), never by bumping one number.
 
 ## 5. Config
 

@@ -16,3 +16,11 @@ Feature: Headless benchmark
     When I run sim-cli "bench config --days 1 --repeats 1 --agents 10000"
     Then sim-cli succeeds
     And the JSON says scenario "synthetic-10000-agents" with 10000 agents
+
+  @spec-11
+  Scenario: sim-cli bench --phases breaks the tick down by phase
+    When I run sim-cli "bench config --days 1 --repeats 1 --phases"
+    Then sim-cli succeeds
+    And its output is JSON with "tick_mean_us", "tick_latency", "phases" and "state_hash"
+    And its output contains "customers"
+    And its output contains "ms_per_day"

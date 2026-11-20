@@ -152,6 +152,45 @@ impl From<LeverError> for BusinessCommandError {
     }
 }
 
+/// One phase of the tick, in tick order (module docs; docs/architecture.md "The tick").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Phase {
+    /// 1. Clock.
+    Clock,
+    /// 2. Commands.
+    Commands,
+    /// 3. Midnight reckoning (00:00 only).
+    Midnight,
+    /// 4. Arrivals (05:30 only).
+    Arrivals,
+    /// 5. Settlement (06:00 only).
+    Settlement,
+    /// 6. Auctions.
+    Auctions,
+    /// 7. AI.
+    Ai,
+    /// 8. Customers.
+    Customers,
+    /// 9. Businesses.
+    Businesses,
+}
+
+impl Phase {
+    /// Every phase, in tick order.
+    pub const ALL: [Phase; 9] = [
+        Phase::Clock,
+        Phase::Commands,
+        Phase::Midnight,
+        Phase::Arrivals,
+        Phase::Settlement,
+        Phase::Auctions,
+        Phase::Ai,
+        Phase::Customers,
+        Phase::Businesses,
+    ];
+}
+
 /// A player's status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum PlayerStatus {
@@ -241,22 +280,39 @@ impl World {
 
     /// Runs one tick in the documented order and returns what the clock fired.
     pub fn tick(&mut self) -> ClockEvents {
+        self.tick_observed(&mut |_| {})
+    }
+
+    /// [`World::tick`], calling `after(phase)` as each phase that ran finishes, in tick order.
+    /// The observer cannot touch the world, so the tick is exactly [`World::tick`]'s. It exists
+    /// for the harness's per-phase timing (`sim-cli bench --phases`): sim-core never reads the
+    /// wall clock, the observer does. `tick` passes a no-op, which compiles away.
+    pub fn tick_observed(&mut self, after: &mut impl FnMut(Phase)) -> ClockEvents {
         let fired = self.clock.advance();
+        after(Phase::Clock);
         self.apply_commands();
+        after(Phase::Commands);
         if fired.midnight {
             self.midnight_reckoning();
             self.population_year_step();
+            after(Phase::Midnight);
         }
         if fired.arrivals {
             self.arrivals();
+            after(Phase::Arrivals);
         }
         if fired.settlement {
             self.settlement();
+            after(Phase::Settlement);
         }
         self.auctions_phase();
+        after(Phase::Auctions);
         self.ai_phase();
+        after(Phase::Ai);
         self.customers_phase();
+        after(Phase::Customers);
         self.businesses_phase();
+        after(Phase::Businesses);
         fired
     }
 
@@ -1097,5 +1153,32 @@ mod businesses_tests {
         w.submit(P0, bakery());
         w.tick();
         assert!(w.businesses.owned_by(ME).next().is_none());
+    }
+
+    #[test]
+    fn an_observed_tick_is_the_same_tick_and_reports_each_phase_that_ran_in_order() {
+        let mut plain = World::new(shipped(), 7, 2);
+        let mut observed = World::new(shipped(), 7, 2);
+        let ticks_per_day = plain.clock.rules().ticks_per_day();
+        let mut counts = std::collections::BTreeMap::<Phase, u32>::new();
+        for _ in 0..ticks_per_day {
+            let mut seen = Vec::new();
+            let a = plain.tick();
+            let b = observed.tick_observed(&mut |p| seen.push(p));
+            assert_eq!(a, b);
+            assert!(
+                seen.windows(2).all(|w| w[0] < w[1]),
+                "out of order: {seen:?}"
+            );
+            for p in seen {
+                *counts.entry(p).or_default() += 1;
+            }
+        }
+        assert_eq!(plain.state_hash(), observed.state_hash());
+        for p in Phase::ALL {
+            let once_a_day = matches!(p, Phase::Midnight | Phase::Arrivals | Phase::Settlement);
+            let expected = if once_a_day { 1 } else { ticks_per_day };
+            assert_eq!(counts.get(&p).copied(), Some(expected), "{p:?}");
+        }
     }
 }
