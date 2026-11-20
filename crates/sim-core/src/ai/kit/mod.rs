@@ -20,7 +20,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 
 use super::find_site;
-use super::grocer::{initial_order, next_order};
+use super::grocer::{demand_seen, initial_order, next_order};
 use crate::auctions::{Auction, AuctionItem, AuctionPhase};
 use crate::businesses::{BusinessId, FitOutLevel, Hours, build_cost};
 use crate::config::Config;
@@ -541,7 +541,7 @@ impl ShopBook {
     }
 
     /// Once each trading window has closed for the day, sets tomorrow's order for every shop
-    /// trading in it from today's sales ([`next_order`], R2, R10).
+    /// trading in it from today's demand ([`demand_seen`], [`next_order`], R2, R10).
     pub fn evening_orders(&mut self, world: &World, me: PlayerId, margin: Rate) -> Vec<Command> {
         let rules = world.clock().rules();
         let now = world.clock().second_of_day();
@@ -560,11 +560,10 @@ impl ShopBook {
                     continue;
                 }
                 for good in shop.prices.keys() {
-                    if shop.tomorrow_order.get(good).copied().unwrap_or(0) <= 0 {
-                        continue; // nothing arrived today, so today's sales say nothing
-                    }
-                    let sold = shop.sold_today.get(good).copied().unwrap_or(0);
-                    let order = next_order(sold, shop.capacity_per_good, margin);
+                    let Some(demand) = demand_seen(shop, good) else {
+                        continue;
+                    };
+                    let order = next_order(demand, shop.capacity_per_good, margin);
                     if shop.standing_order.get(good).copied() != Some(order) {
                         out.push(Command::SetOrder {
                             business: id,

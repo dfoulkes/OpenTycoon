@@ -24,7 +24,8 @@ use super::World;
 
 impl World {
     /// Phase 3, events' part (after lease expiry): the year step's election, history and
-    /// random-era events (§9, §9.1), then rationing caps on the orders just locked.
+    /// random-era events (§9, §9.1), then rationing caps and closures on the orders just
+    /// locked.
     pub(super) fn events_step(&mut self) {
         let inputs = StepInputs {
             config: &self.config,
@@ -153,17 +154,23 @@ impl World {
         Some(gone)
     }
 
-    /// Rationing (§9): caps every locked order of a capped good at the cap's share of the
-    /// shop's capacity, so the 06:00 bill and delivery match.
+    /// Rationing and closures (§9), on the orders just locked, so the 06:00 bill and delivery
+    /// match: every order of a capped good is capped at the cap's share of the shop's
+    /// capacity, and a shop an event keeps shut all day (the three-day week) takes no delivery
+    /// at all, rather than pay for stock it can only bin at midnight (R1).
     fn apply_supply_caps(&mut self) {
         let modifiers = &self.events.modifiers;
         if modifiers.is_empty() {
             return;
         }
-        for b in self.businesses.by_id.values_mut() {
+        let day = self.clock.day();
+        for (id, b) in &mut self.businesses.by_id {
             let capacity = b.capacity_per_good;
+            let shut = !modifiers.may_trade(*id, day);
             for (good, units) in &mut b.tomorrow_order {
-                if let Some(share) = modifiers.supply_cap(good) {
+                if shut {
+                    *units = 0;
+                } else if let Some(share) = modifiers.supply_cap(good) {
                     *units = (*units).min(share_of(capacity, share));
                 }
             }

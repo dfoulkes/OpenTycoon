@@ -183,6 +183,81 @@ cheap produce, delivery) are later mechanics. The boutique hotel trades in the h
 Allowances stay flat across eras (§8.2, R6: no inflation); what changes by decade is what
 people want, not how much they have.
 
+## Retail through the eras (R68)
+
+R68: a competently run shop must be profitable in every era, and retail is fixed in the
+economy, not by loosening the balance rule (R65). The formula above already makes a reference
+shop pay at reference footfall on paper; what failed was the path from paper to the street.
+
+### What was measured
+
+Full 1930–2050 games on the shipped config (seeds 1–3, the default roster), every retail shop's
+books read each night before the write-off, then per decade: takings, stock delivered (at
+purchase price, binned waste included), rent, utilities, footfall and reputation. Alongside it,
+one shop of reference size alone in the city, priced at reference and ordering what it sold
+plus 10%.
+
+- **Overheads were never the problem.** Rent and utilities came to £9–13 a day in every era,
+  against £150–260 of takings for a greengrocer that was selling, as the formula intends.
+- **Online shopping took nothing.** Spend only goes online when an online seller has stock
+  (R15, §7.5); no seat built one in these games, so the online share was 0% in every decade.
+- **Demand was there.** Shoppers wanted 680–990 units of fruit & veg a day in every decade,
+  while the city's greengrocers had about 200–600 units on their shelves.
+- **Shops died of their reputation.** A lost sale took a flat 0.02 off reputation and a sale
+  added 0.005 × the gap to 1, so a shop that sold out lost more than it gained; and a
+  reputation of 0 scores 0 (§8.3), so nobody chooses the shop, it makes no sale, and nothing
+  can bring it back. The lone reference greengrocer sold out on its first trading day (66
+  sold, 32 turned away), fell to 0 on its second and sold nothing for the rest of the game.
+  In the full games a third of the Grocer's shops were dead by the 1940s, every one by the
+  2000s; city-run shops inherited the dead reputations and binned a full order every day.
+- **Orders by sales alone under-order.** A shop that sells out only sees what it had, so
+  `sold × 1.1` grows 10% a day however many shoppers it turns away, and after any day with no
+  sales it falls to one unit and climbs by one a day. With reputation fixed alone, the
+  Grocer's shops sold 30–55 of their 238 units a day from the 1980s, sold out and turning
+  shoppers away, while city-run shops ordering their full capacity sold 130–200.
+- **A shut day was a dead loss.** The three-day week (§9) keeps 4 shops in 7 shut for the 1970
+  step, but they were billed for and binned that morning's delivery (R1), which no ordering
+  can avoid: the order locked at the midnight the headline came out.
+
+### The fix
+
+1. **Reputation is a rolling stat in both directions** (§8.3). A lost sale now moves it
+   `lost_sale_penalty` of the way to 0, the mirror of a sale moving it `sale_recovery` of the
+   way to 1 (`customers::scoring::reputation_after_lost_sale`). It never reaches 0, so a shop
+   that sold out is dented, not shut out for good; between rival shops it still settles where
+   it reflects how often each turns shoppers away (`sales ÷ (sales + 4 × lost)` as shipped).
+   The shipped 0.02 is kept and now reads as a share.
+2. **A shop an event keeps shut all day takes no delivery** (§9; R1, R2): the closures join
+   rationing as caps on the locked orders (`World::apply_supply_caps`), so the 06:00 bill and
+   delivery stay equal and the standing order stands for the next open day.
+3. **AI orders count the shoppers turned away** (R2, R10). Tomorrow's order is
+   `⌈(sold + lost sales) × (1 + order_margin)⌉`, lost sales counted only for goods that sold
+   out (`ai::grocer::demand_seen`, used by every seat's evening orders). This is a fix to the
+   AI's own competence, which the measurements showed wanting, not compensation for the economy.
+
+### After the fix
+
+The same probe, per decade, net profit as a share of build cost a day (all retail; the shops
+are almost all the Grocer's 3×3×12 greengrocers on Low-tier land):
+
+| Decade | Before | After | | Decade | Before | After |
+|---|---|---|---|---|---|---|
+| 1930s | 5.7% | 5.7% | | 1990s | −3.0% | 5.5% |
+| 1940s | 6.6% | 10.1% | | 2000s | −2.8% | 6.2% |
+| 1950s | 4.3% | 11.5% | | 2010s | −2.0% | 5.0% |
+| 1960s | 1.6% | 11.7% | | 2020s | −2.7% | −0.4% |
+| 1970s | −5.3% | 5.7% | | 2030s | −3.7% | 5.3% |
+| 1980s | −4.4% | 7.7% | | 2040s | −5.6% | 5.9% |
+
+The 2020s dip is the pandemic step (§9: physical retail demand −70% for a day), a shock no
+order can see coming. A lone reference shop (`features/economy/retail_eras.feature`) makes a
+profit in every decade 1930–2040: a greengrocer 19% of its build cost a day once its orders
+have grown to capacity, a bakery 21%, a clothes store 17%.
+
+Retail still earns less than flats (21–28% of build cost a day in the measurements that
+prompted R68), so this fixes R68, not R65: the residential seats still take every win on the
+shipped config.
+
 ## Land value
 
 Net worth (§3, R19, R39) counts a held lease's land. The spec gives one formula; how land

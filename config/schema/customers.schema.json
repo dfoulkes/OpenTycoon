@@ -485,7 +485,7 @@
           "type": "number"
         },
         "lost_sale_penalty": {
-          "description": "Drop per lost sale, 0–1.",
+          "description": "Share of its reputation a shop loses per lost sale, 0–1 (a rolling stat: it never\nreaches 0).",
           "format": "double",
           "maximum": 1.0,
           "minimum": 0.0,
