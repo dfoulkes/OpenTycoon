@@ -8,14 +8,18 @@
 //!
 //! 1. **Auction turns, every tick.** On a lease of a tier it wants (personality weight ≥
 //!    `min_tier_weight`), while it holds fewer than `max_leases`, it raises by the smallest
-//!    increment up to [`Landlord::max_bid`]; otherwise it passes (R8). It never bids on a
-//!    business: it doesn't run them.
+//!    increment up to [`Landlord::max_bid`]. On an apartment block up for auction (the city's,
+//!    R28, or a player's) on a tier it wants, up to its build cost (R41), if `buy_city_blocks`
+//!    (R67). Otherwise it passes (R8); it never bids on a shop.
 //!
 //! Then, once every `decision_interval_ticks`:
 //!
 //! 2. **Rescue.** From `rescue_after` to midnight, a negative balance (R3) sells its cheapest
 //!    building to the city (R5) or, with none, offers a lease at auction.
-//! 3. **Rents.** Each apartment block it owns is let at `rent × reference_rent` (R51).
+//! 3. **Rents.** A new block is let at `start_rent × reference_rent`; each morning after the
+//!    house-hunt its rent goes up by `rent_step` when the block is at least `raise_at` let and
+//!    down when it is at most `cut_at` let, within `min_rent`–`max_rent` (R51, R52, R67; the
+//!    rule Sir Penny Sugar uses, [`kit::rent`]).
 //! 4. **Sell late.** With `sell_within_years` or fewer years left on a lease, it offers the
 //!    lease at auction (R33) when the reserve (the land base price, the least a sale can fetch)
 //!    beats holding to expiry: book value (§3) + the lot uplift on other owners' buildings
@@ -26,14 +30,17 @@
 //!    era allows it), at most `apartments_per_lot` per lease, never on a lease it is about to
 //!    sell, and only if it keeps `cash_buffer`.
 //! 6. **Land.** Opens an auction on the cheapest lot it wants at its base price (R23), if that
-//!    is within its maximum bid.
-
-use std::collections::BTreeSet;
+//!    is within its maximum bid; failing that, on the city's cheapest apartment block at its
+//!    build cost (R28, R67).
+//!
+//! What keeps it apart from Sir Penny Sugar: it holds every tier, it values a lease for the land
+//! rent and lot uplift others' buildings bring (R39, §5.2), and it sells leases late in their
+//! term when that beats holding.
 
 use serde::{Deserialize, Serialize};
 
 use super::Brain;
-use super::kit::{self, Cadence, Temper};
+use super::kit::{self, Cadence, RentBook, Temper, VacancyRule};
 use crate::auctions::{Auction, AuctionItem};
 use crate::businesses::{BusinessId, FitOutLevel};
 use crate::economy::{AccountId, PlayerId};
@@ -49,8 +56,8 @@ pub struct Landlord {
     personality: String,
     cadence: Cadence,
     temper: Temper,
-    /// Apartment blocks whose rent it has set.
-    let_out: BTreeSet<BusinessId>,
+    /// The rents it has set, reviewed each morning by vacancy (R67).
+    rents: RentBook,
 }
 
 impl Landlord {
@@ -94,10 +101,32 @@ impl Landlord {
         )
     }
 
+    /// The most it pays for an apartment block on auction: its build cost (R41), if it stands
+    /// on a tier it wants, `buy_city_blocks` is on and it keeps `cash_buffer` (R67).
+    fn max_for_block(&self, world: &World, me: PlayerId, id: BusinessId) -> Option<Money> {
+        let config = world.config();
+        let cfg = &config.ai.landlord;
+        let b = world.businesses().get(id)?;
+        let wanted = cfg.buy_city_blocks
+            && b.type_id == config.customers.residential.building_type
+            && kit::wants_block(
+                world,
+                &self.personality,
+                cfg.min_tier_weight.rate(),
+                b.block,
+            );
+        wanted.then(|| {
+            b.build_cost
+                .min(kit::spare(world, me, cfg.cash_buffer.money()))
+                .min(kit::share_of_ceiling(world, me, crate::money::Rate::ONE))
+        })
+    }
+
     fn max_for(&self, world: &World, me: PlayerId, auction: &Auction) -> Option<Money> {
         match auction.item {
             AuctionItem::Land(block) => self.max_bid(world, me, block),
-            _ => None,
+            AuctionItem::Business(id) => self.max_for_block(world, me, id),
+            AuctionItem::Utility(_) => None,
         }
     }
 
@@ -106,7 +135,7 @@ impl Landlord {
         if kit::needs_rescue(world, me, cfg.rescue_after.seconds_since_midnight()) {
             return kit::rescue(world, me).into_iter().collect();
         }
-        let mut out = self.let_new_blocks(world, me);
+        let mut out = self.let_blocks(world, me);
         if let Some(sell) = Self::sell_late(world, me) {
             out.push(sell);
         } else if let Some(build) = Self::build(world, me) {
@@ -117,22 +146,17 @@ impl Landlord {
         out
     }
 
-    fn let_new_blocks(&mut self, world: &World, me: PlayerId) -> Vec<Command> {
-        let config = world.config();
-        let rules = &config.customers.residential;
-        let rent = config
-            .ai
-            .landlord
-            .start_rent
-            .rate()
-            .apply(rules.reference_rent.money());
-        let mut out = Vec::new();
-        for (id, b) in world.businesses().owned_by(AccountId::Player(me)) {
-            if b.type_id == rules.building_type && self.let_out.insert(id) {
-                out.push(Command::SetRent { building: id, rent });
-            }
-        }
-        out
+    fn let_blocks(&mut self, world: &World, me: PlayerId) -> Vec<Command> {
+        let cfg = &world.config().ai.landlord;
+        let rule = VacancyRule {
+            start: cfg.start_rent.rate(),
+            step: cfg.rent_step.rate(),
+            raise_at: cfg.raise_at.rate(),
+            cut_at: cfg.cut_at.rate(),
+            min: cfg.min_rent.rate(),
+            max: cfg.max_rent.rate(),
+        };
+        self.rents.review(world, me, &rule)
     }
 
     /// True if the lease on `block` is in its last `sell_within_years`.
@@ -222,11 +246,25 @@ impl Landlord {
         if !kit::house_free(world) {
             return None;
         }
-        kit::open_lots(world)
+        let land = kit::open_lots(world)
             .into_iter()
             .filter(|(id, base)| self.max_bid(world, me, *id).is_some_and(|max| *base <= max))
             .min_by_key(|(id, base)| (*base, *id))
-            .map(|(block, bid)| Command::OpenLandAuction { block, bid })
+            .map(|(block, bid)| Command::OpenLandAuction { block, bid });
+        land.or_else(|| {
+            world
+                .businesses()
+                .owned_by(AccountId::City)
+                .filter(|(id, b)| {
+                    self.max_for_block(world, me, *id)
+                        .is_some_and(|max| b.build_cost <= max)
+                })
+                .min_by_key(|(id, b)| (b.build_cost, *id))
+                .map(|(business, b)| Command::OpenBusinessAuction {
+                    business,
+                    bid: b.build_cost,
+                })
+        })
     }
 }
 
