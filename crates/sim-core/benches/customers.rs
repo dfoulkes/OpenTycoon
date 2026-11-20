@@ -35,6 +35,14 @@ fn shipped_config() -> Config {
         let text = std::fs::read_to_string(dir.join(file.file_name())).expect("config file");
         sources.insert(file.file_name(), text);
     }
+    // The 3×3 grey-box map: these benches and their baselines are written against it. The
+    // full 9×9 board has its own group in benches/tick.rs.
+    let map =
+        sources
+            .get("map.yaml")
+            .expect("map.yaml")
+            .replacen("\nmap: full\n", "\nmap: v1\n", 1);
+    sources.insert("map.yaml", map);
     Config::load(&sources).expect("shipped config is valid")
 }
 

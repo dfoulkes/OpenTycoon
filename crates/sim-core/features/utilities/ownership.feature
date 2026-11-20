@@ -8,7 +8,9 @@ Feature: Utilities are owned like land
   from a utility nobody holds goes to the city.
 
   Background:
-    Given the shipped config with "events.yaml" key "/elections/enabled" set to "false"
+    # The arithmetic below is the 3×3 map's.
+    Given the shipped config on the v1 map
+    And the shipped config with "events.yaml" key "/elections/enabled" set to "false"
     # The v1 placeholder bakery and bread this arithmetic is written against (the shipped
     # stats are era content: docs/economy.md).
     And the shipped config with "businesses.yaml" key "/goods/bread" set to "{name: Bread, ref_price: 0.10, purchase_price: 0.04}"

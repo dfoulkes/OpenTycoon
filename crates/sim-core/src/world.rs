@@ -1147,9 +1147,12 @@ mod businesses_tests {
     use crate::land::Lease;
 
     pub(super) fn shipped() -> Config {
+        // These tests are about the v1 3×3 map's blocks.
+        let map_v1 =
+            include_str!("../../../config/map.yaml").replacen("\nmap: full\n", "\nmap: v1\n", 1);
         let text = |f: ConfigFile| match f {
             ConfigFile::Game => include_str!("../../../config/game.yaml"),
-            ConfigFile::Map => include_str!("../../../config/map.yaml"),
+            ConfigFile::Map => map_v1.as_str(),
             ConfigFile::Auctions => include_str!("../../../config/auctions.yaml"),
             ConfigFile::Utilities => include_str!("../../../config/utilities.yaml"),
             ConfigFile::Businesses => include_str!("../../../config/businesses.yaml"),

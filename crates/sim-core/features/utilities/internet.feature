@@ -4,6 +4,10 @@ Feature: The telephone exchange becomes the internet in 1995
   The Telephone Exchange is there from 1930 and becomes the Internet in 1995. From then every
   building pays an internet bill, to whoever holds it.
 
+  Background:
+    # The arithmetic below is the 3×3 map's.
+    Given the shipped config on the v1 map
+
   @R11
   Scenario: Every building pays the internet bill from 1995
     Given the shipped config with "game.yaml" key "/clock/start_year" set to "1990"

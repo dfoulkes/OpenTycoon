@@ -42,6 +42,25 @@ pub(crate) mod test_support {
         );
         Config::load(&sources).expect("shipped config is valid")
     }
+
+    /// The shipped config on the grey-box 3×3 map (`map: v1`), for tests about it.
+    #[allow(clippy::expect_used, reason = "test helper")]
+    pub(crate) fn shipped_config_v1() -> Config {
+        let mut sources = shipped!(
+            "game.yaml",
+            "auctions.yaml",
+            "utilities.yaml",
+            "businesses.yaml",
+            "customers.yaml",
+            "events.yaml",
+            "ai.yaml",
+        );
+        sources.insert(
+            "map.yaml",
+            include_str!("../../../../config/map.yaml").replacen("\nmap: full\n", "\nmap: v1\n", 1),
+        );
+        Config::load(&sources).expect("shipped config is valid")
+    }
 }
 
 use std::collections::BTreeMap;

@@ -33,6 +33,13 @@ pub fn shipped_config() -> Config {
     Config::load(&shipped_sources()).unwrap_or_else(|e| panic!("{e}"))
 }
 
+/// The shipped config on the grey-box 3×3 map (`map: v1`), for tests about it.
+pub fn shipped_config_v1() -> Config {
+    let mut sources = shipped_sources();
+    set_key(&mut sources, "map.yaml", "/map", "v1");
+    Config::load(&sources).unwrap_or_else(|e| panic!("{e}"))
+}
+
 /// Sets the value at a JSON-pointer-style path (`/clock/start_year`) in one file, creating the
 /// final key if absent (that is how tests add unknown keys). `value` is parsed as YAML, so
 /// `"20"` is a number and `"\"twenty\""` or `"twenty"` a string.

@@ -76,6 +76,11 @@ impl World {
             } => {
                 let at_risk: BTreeSet<BlockId> =
                     blocks.iter().filter_map(|b| self.map.block_id(b)).collect();
+                // The map records the damage (land's hook), then buildings fall.
+                let year = self.clock.year();
+                for block in &at_risk {
+                    let _known = self.map.damage_block(*block, year);
+                }
                 self.raid(&at_risk, chance.rate(), compensation.rate());
             }
             Effect::DesirabilityChange { blocks, tier } => {

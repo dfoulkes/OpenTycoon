@@ -95,7 +95,8 @@ Feature: History makes the front page and moves the market
     Given the shipped config with "game.yaml" key "/clock/start_year" set to "1980"
     And a new game with 2 players
     When the game runs to midnight
-    Then "Holborn" is a high-tier block
+    Then "Spitalfields" is a high-tier block
+    And "Tower Hill" is a high-tier block
 
   # The dot-com swing applies to the business types events.yaml lists; bakeries stand in for
   # online businesses here. A 10-high 2×2 bakery on Soho (Medium) cost £400: ×2.0, then ×0.4.
@@ -126,7 +127,7 @@ Feature: History makes the front page and moves the market
     Given the shipped config with "game.yaml" key "/clock/start_year" set to "2005"
     And a new game with 2 players
     When the game runs to midnight
-    Then shops on "Whitechapel" draw 150% of their usual footfall
+    Then shops on "Stratford" draw 150% of their usual footfall
     And shops on "Mayfair" draw 100% of their usual footfall
 
   @R16

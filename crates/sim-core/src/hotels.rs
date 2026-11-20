@@ -346,7 +346,8 @@ mod tests {
 
     #[test]
     fn the_hotel_needs_every_block_of_the_set_and_only_one_per_set() {
-        let config = shipped_config();
+        // The v1 board's light-blue set: Old Kent Road, Whitechapel, Bethnal Green.
+        let config = crate::economy::test_support::shipped_config_v1();
         let mut map = Map::from_config(&config.map);
         let mut businesses = Businesses::default();
         let okr = map.block_id("old_kent_road").unwrap();
