@@ -182,3 +182,33 @@ cheap produce, delivery) are later mechanics. The boutique hotel trades in the h
 
 Allowances stay flat across eras (§8.2, R6: no inflation); what changes by decade is what
 people want, not how much they have.
+
+## Land value
+
+Net worth (§3, R19, R39) counts a held lease's land. The spec gives one formula; how land
+*should* be valued is not ruled, so `game.yaml` `net_worth.land_value` picks the method and the
+balance study compares them (`study/study.yaml`, parameter `land_value`). The default keeps the
+spec's formula, so the shipped game and its state hashes are unchanged. The code is
+`crates/sim-core/src/economy/net_worth.rs` (`lease_land_value`, `market_land_price`); the
+scenarios are `crates/sim-core/features/economy/land_value.feature`.
+
+The **current land base price** of a block is its land base price today (the auction minimum,
+R23, which a desirability shift moves) after every `land_value` event fired so far, applied in
+order, each rounded to the penny (the 2008 crash: ×0.7). It is only read for net worth: what
+an auction asks is untouched.
+
+| Method | `land_value` | Character |
+|---|---|---|
+| `book_decay` (default) | `last auction price × years left / term` | The spec's formula. Land is worth what was paid, running down to nothing over the lease, like a depreciating asset. A crash scales the price paid. A lease loses half to two-thirds of its value over a 20-year game, so holding land is a slow loss on the scoreboard unless the business on it outruns the decay. |
+| `market` | `current land base price × years left / term` | What the remaining years would cost today. Overpaying at auction is not rewarded in the score (the extra is gone from cash and does not reappear as land); a block that gentrifies gains, a crash loses. Still decays to nothing at the end of the lease. |
+| `market_no_decay` | `current land base price` while the lease runs, 0 once it has run out | Land is a store of value: a lease counts at the block's full price until the day it ends, then drops to nothing (the block goes back to auction, R9). Holding land never loses score through time alone, only through shifts and crashes, and a cliff at expiry. |
+
+Worked example (the scenarios): a 30-year lease on Bloomsbury (land base price £5,500) bought for
+£6,000 in 1930; in 1935 the block gentrifies to £9,900.
+
+| Scored for | Years left | `book_decay` | `market` | `market_no_decay` |
+|---|---|---|---|---|
+| 1930 | 30 | £6,000.00 | £5,500.00 | £5,500.00 |
+| 1935 | 25 | £5,000.00 | £8,250.00 | £9,900.00 |
+| 1955 | 5 | £1,000.00 | £1,650.00 | £9,900.00 |
+| 1960 | 0 (back at auction) | £0.00 | £0.00 | £0.00 |

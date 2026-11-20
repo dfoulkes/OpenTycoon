@@ -104,16 +104,19 @@ pub fn lease_land_value(
     remaining_years: u32,
     term_years: u32,
 ) -> Money {
-    let _ = (method, market_price);
-    land_value(last_price, remaining_years, term_years)
+    match method {
+        LandValueMethod::BookDecay => land_value(last_price, remaining_years, term_years),
+        LandValueMethod::Market => land_value(market_price, remaining_years, term_years),
+        LandValueMethod::MarketNoDecay if remaining_years > 0 && term_years > 0 => market_price,
+        LandValueMethod::MarketNoDecay => Money::ZERO,
+    }
 }
 
 /// The block's current land base price: `base_price` after every land-value event factor fired
 /// so far, applied in order (each rounded half away from zero, like the event's own effect on
 /// lease prices).
 pub fn market_land_price(base_price: Money, factors: &[Rate]) -> Money {
-    let _ = factors;
-    base_price
+    factors.iter().fold(base_price, |price, f| f.apply(price))
 }
 
 /// How [`net_worth_inputs`] values land: the method, and the land-value event factors fired so
