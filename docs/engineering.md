@@ -165,7 +165,7 @@ another; `perf-budget` refuses a `budgets.yaml` whose limits disagree. The deriv
 | one game day, 3×3 map, 10,000 adults | < 100 ms (D × 5) | 8.6–9.2 ms | `perf-budget` `game_day_ms_10k_agents` |
 | one tick, 3×3 map, 10,000 adults, p99 | < 231 µs (20 × mean) | 18–20 µs | `perf-budget` `tick_p99_us_10k_agents` |
 | slowest tick, 3×3 map, 20,000 adults | < 8.68 ms (25% of a 4× tick) | 1.39–1.48 ms | `perf-budget` `tick_max_us_20k_agents` |
-| one tick, 9×9 map, 20,000 customers | < 8.68 ms worst tick, as above | *post-v1: fill in* | — |
+| slowest tick, 9×9 map (`map: full`), 20,000 adults | < 8.68 ms worst tick, as above | 1.9–2.0 ms; day 21.6 ms (balance wave, machine under load) | `perf-budget` on a config with `map: full`; `cargo bench --bench tick` `tick_9x9` |
 | one tick, 3×3 map, 2 players, no agents | < 1 µs | 15.5 ns (M0, criterion) | `cargo bench` |
 | businesses: one day of sales, ~69k sale attempts over 10 / 100 / 1,000 shops | inside D | 0.83 / 1.29 / 3.54 ms (M1) | `cargo bench --bench businesses` |
 | 1,000 games 1930–1950 headless (`sim-cli batch`) | < 10 s (4,000 days × D on 10 cores at 80%) | 0.9–1.2 s on 10 cores | `perf-budget` `batch_1000_games_s` |

@@ -3,7 +3,9 @@
 //! Owner boundary: map construction from `map.yaml`, lots and the street-frontage rule
 //! ([`lot`], R22), set completion (R14), lease terms and expiry (R9), who collects land rent
 //! (§5.2; the economy's 06:00 settlement bills it), the land-rent formula (R10), and where the city's starting apartment blocks stand
-//! (R28). Leases change hands only through [`crate::auctions`] (R33): nothing here hands a
+//! (R28), and the board as a whole ([`board`]: roads and the river, set holding for the Hotel
+//! unlock, utility blocks, tube footfall, desirability shifts; R14, R16, R23, R26). Leases
+//! change hands only through [`crate::auctions`] (R33): nothing here hands a
 //! lease to a player except [`Map::grant_lease`], which only the world calls when an auction
 //! closes. Buildings live in [`crate::businesses`].
 
