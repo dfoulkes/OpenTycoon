@@ -270,7 +270,7 @@ boards:
       - { block: stratford, line: elizabeth, opens: 2022 }
     desirability_shifts:          # §4.2, R16: applied at the first midnight year step that reaches the year
       - { block: notting_hill, year: 1985, tier: high, land_base_price: 11000, headline: "Notting Hill Goes Up in the World" }   # placeholder price
-      - { block: docklands, year: 1987, tier: high, land_base_price: 12000, headline: "Canary Wharf Rises: Docklands Goes Upmarket" }   # placeholder price
+      - { block: docklands, year: 1987, tier: high, land_base_price: 12000, headline: "Docklands Goes Upmarket" }   # placeholder price
       - { block: shoreditch, year: 1995, tier: medium, land_base_price: 5000, headline: "Artists Move Into Shoreditch" }   # placeholder price
       - { block: hackney, year: 2000, tier: medium, land_base_price: 4500, headline: "Hackney on the Up" }   # placeholder price
       - { block: brixton, year: 2000, tier: medium, land_base_price: 4500, headline: "Brixton Is Buzzing" }   # placeholder price

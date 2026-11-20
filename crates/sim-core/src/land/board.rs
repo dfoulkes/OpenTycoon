@@ -10,10 +10,8 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 
 use super::{BlockId, Map, Tier};
-use crate::config::Pounds;
 use crate::config::map::MapConfig;
 use crate::economy::AccountId;
-use crate::money::Money;
 use crate::utilities::UtilityKind;
 
 /// Why a map operation was refused.
@@ -188,44 +186,42 @@ impl Map {
         Ok(())
     }
 
-    /// Brings every block's tier and land base price to `year` (§4.2, R16, R23): the latest
-    /// desirability shift at or before `year`, else the block's starting values. Returns the
-    /// blocks that changed, in id order, with the shift's headline (empty when a block goes
-    /// back to its starting values). Idempotent: the same year twice changes nothing.
-    pub fn apply_desirability(&mut self, config: &MapConfig, year: i32) -> Vec<TierShift> {
+    /// Applies the desirability shifts whose year falls in `years` (§4.2, R16, R23), in year
+    /// order: each sets its block's tier and land base price. Returns what changed, with each
+    /// shift's headline. Shifts are applied once, as the years go by, so a change made by an
+    /// event in between (Big Bang's `desirability_change`) stands until a later shift.
+    ///
+    /// A shift lands on the year step whose span covers its year, the same rule as historical
+    /// events (§9): the world passes `year..year + years_per_step` at each midnight step, and
+    /// `..start + years_per_step` when a game is created.
+    pub fn apply_desirability(
+        &mut self,
+        config: &MapConfig,
+        years: std::ops::Range<i32>,
+    ) -> Vec<TierShift> {
+        let mut due: Vec<&crate::config::map::DesirabilityShift> = config
+            .desirability_shifts
+            .iter()
+            .filter(|s| years.contains(&s.year))
+            .collect();
+        due.sort_by_key(|s| s.year);
         let mut changes = Vec::new();
-        for (i, block) in self.blocks.iter_mut().enumerate() {
-            let Some(start) = config.blocks.iter().find(|b| b.id == block.key) else {
+        for shift in due {
+            let Some(id) = self.block_id(&shift.block) else {
                 continue;
             };
-            // The latest shift at or before `year`; a later entry wins a tie.
-            let shift = config
-                .desirability_shifts
-                .iter()
-                .filter(|s| s.block == block.key && s.year <= year)
-                .max_by_key(|s| s.year);
-            let (tier, price, headline) = match shift {
-                Some(s) => (s.tier, s.land_base_price.money(), s.headline.clone()),
-                None => (
-                    start.tier,
-                    start.land_base_price.map_or(Money::ZERO, Pounds::money),
-                    String::new(),
-                ),
-            };
-            if (tier, price) == (block.tier, block.land_base_price) {
+            let Some(block) = self.blocks.get_mut(id.0 as usize) else {
                 continue;
-            }
+            };
             let from = block.tier;
-            block.tier = tier;
-            block.land_base_price = price;
-            if let Ok(i) = u32::try_from(i) {
-                changes.push(TierShift {
-                    block: BlockId(i),
-                    from,
-                    to: tier,
-                    headline,
-                });
-            }
+            block.tier = shift.tier;
+            block.land_base_price = shift.land_base_price.money();
+            changes.push(TierShift {
+                block: id,
+                from,
+                to: shift.tier,
+                headline: shift.headline.clone(),
+            });
         }
         changes
     }
@@ -348,10 +344,12 @@ mod tests {
     }
 
     #[test]
-    fn desirability_is_a_function_of_the_year() {
+    fn shifts_land_once_on_the_step_covering_their_year() {
         let (mut map, config) = full();
         let docklands = id(&map, "docklands");
-        let shifts = map.apply_desirability(&config, 1990);
+        // 1987 falls in the 1985 step (1985..1990), as historical events do (§9).
+        assert_eq!(map.apply_desirability(&config, 1980..1985), vec![]);
+        let shifts = map.apply_desirability(&config, 1985..1990);
         assert!(
             shifts
                 .iter()
@@ -361,15 +359,10 @@ mod tests {
             map.block(docklands).unwrap().land_base_price,
             Money::from_pounds(12_000)
         );
-        // Applying the same year again changes nothing and says nothing.
-        assert_eq!(map.apply_desirability(&config, 1990), vec![]);
-        // Going back restores the starting values.
-        map.apply_desirability(&config, 1930);
-        assert_eq!(map.block(docklands).unwrap().tier, Tier::Low);
-        assert_eq!(
-            map.block(docklands).unwrap().land_base_price,
-            Money::from_pounds(1_500)
-        );
+        // An event's change in between stands: the next step does not undo it.
+        map.blocks[docklands.0 as usize].tier = Tier::Medium;
+        map.apply_desirability(&config, 1990..1995);
+        assert_eq!(map.block(docklands).unwrap().tier, Tier::Medium);
     }
 
     #[test]
