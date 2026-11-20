@@ -51,13 +51,63 @@ parameters:
   - { name: price_k,        key: customers.price_sensitivity,       min: 0.5,  max: 2.0,   distribution: log_uniform, mode: scale }   # §8.3 k_class (shipped 3.0 / 1.5 / 0.5): halved to doubled
   # Demand by decade (docs/economy.md "Demand by decade"): one factor per era on its day and
   # night base tables, customers.desires 0–11 in era order. Four places, so rare goods
-  # (0.004) keep their weight; the highest weight (0.55) stays under 1 at 1.4×.
-  - { name: demand_1930s,   keys: [customers.desires.0.goods, customers.desires.1.goods],   min: 0.6, max: 1.4, decimals: 4, mode: scale }
-  - { name: demand_1950s,   keys: [customers.desires.2.goods, customers.desires.3.goods],   min: 0.6, max: 1.4, decimals: 4, mode: scale }
-  - { name: demand_1970s,   keys: [customers.desires.4.goods, customers.desires.5.goods],   min: 0.6, max: 1.4, decimals: 4, mode: scale }
-  - { name: demand_1990s,   keys: [customers.desires.6.goods, customers.desires.7.goods],   min: 0.6, max: 1.4, decimals: 4, mode: scale }
-  - { name: demand_2010s,   keys: [customers.desires.8.goods, customers.desires.9.goods],   min: 0.6, max: 1.4, decimals: 4, mode: scale }
-  - { name: demand_2030s,   keys: [customers.desires.10.goods, customers.desires.11.goods], min: 0.6, max: 1.4, decimals: 4, mode: scale }
+  # (0.004) keep their weight; the highest weight (0.55) stays under 1 at 1.4×. The rules
+  # have no id, so each parameter `expect`s its rules' window and year range: if the desire
+  # rules are reordered, the study refuses to start instead of scaling the wrong table.
+  - name: demand_1930s
+    keys: [customers.desires.0.goods, customers.desires.1.goods]
+    min: 0.6
+    max: 1.4
+    decimals: 4
+    mode: scale
+    expect:
+      - { key: customers.desires.0.match,  equals: { window: day,   from_year: 1930, until_year: 1945 } }
+      - { key: customers.desires.1.match,  equals: { window: night, from_year: 1930, until_year: 1945 } }
+  - name: demand_1950s
+    keys: [customers.desires.2.goods, customers.desires.3.goods]
+    min: 0.6
+    max: 1.4
+    decimals: 4
+    mode: scale
+    expect:
+      - { key: customers.desires.2.match,  equals: { window: day,   from_year: 1950, until_year: 1965 } }
+      - { key: customers.desires.3.match,  equals: { window: night, from_year: 1950, until_year: 1965 } }
+  - name: demand_1970s
+    keys: [customers.desires.4.goods, customers.desires.5.goods]
+    min: 0.6
+    max: 1.4
+    decimals: 4
+    mode: scale
+    expect:
+      - { key: customers.desires.4.match,  equals: { window: day,   from_year: 1970, until_year: 1985 } }
+      - { key: customers.desires.5.match,  equals: { window: night, from_year: 1970, until_year: 1985 } }
+  - name: demand_1990s
+    keys: [customers.desires.6.goods, customers.desires.7.goods]
+    min: 0.6
+    max: 1.4
+    decimals: 4
+    mode: scale
+    expect:
+      - { key: customers.desires.6.match,  equals: { window: day,   from_year: 1990, until_year: 2005 } }
+      - { key: customers.desires.7.match,  equals: { window: night, from_year: 1990, until_year: 2005 } }
+  - name: demand_2010s
+    keys: [customers.desires.8.goods, customers.desires.9.goods]
+    min: 0.6
+    max: 1.4
+    decimals: 4
+    mode: scale
+    expect:
+      - { key: customers.desires.8.match,  equals: { window: day,   from_year: 2010, until_year: 2025 } }
+      - { key: customers.desires.9.match,  equals: { window: night, from_year: 2010, until_year: 2025 } }
+  - name: demand_2030s
+    keys: [customers.desires.10.goods, customers.desires.11.goods]
+    min: 0.6
+    max: 1.4
+    decimals: 4
+    mode: scale
+    expect:
+      - { key: customers.desires.10.match,  equals: { window: day,   from_year: 2030, until_year: 2050 } }
+      - { key: customers.desires.11.match,  equals: { window: night, from_year: 2030, until_year: 2050 } }
   # AI tunables
   - { name: grocer_bid,     key: ai.grocer.max_bid_share,           min: 0.1,  max: 0.6 }   # shipped 0.3 of the bid ceiling
   - { name: grocer_buffer,  key: ai.grocer.cash_buffer,             min: 100,  max: 1000,  distribution: log_uniform, kind: integer }   # shipped £300

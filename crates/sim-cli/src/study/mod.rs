@@ -22,7 +22,9 @@ pub mod output;
 pub mod run;
 pub mod seats;
 
-pub use def::{Criteria, Distribution, IDLE, Kind, Mode, Parameter, StudyDef, StudyError};
+pub use def::{
+    Criteria, Distribution, Expectation, IDLE, Kind, Mode, Parameter, StudyDef, StudyError,
+};
 pub use metrics::{
     EntryMetrics, GameOutcome, ModelMetrics, Tally, gini, metrics, normalised_entropy, wilson,
 };

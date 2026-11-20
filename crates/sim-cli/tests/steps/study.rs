@@ -42,6 +42,8 @@ pub struct StudyState {
     pub outs: Vec<PathBuf>,
     /// Reports of study runs, in order.
     pub reports: Vec<StudyReport>,
+    /// The error of the last run that refused to start.
+    pub refused: Option<String>,
 }
 
 impl StudyState {
@@ -146,6 +148,28 @@ fn a_categorical_parameter(w: &mut HarnessWorld, name: String, key: String, valu
         .def()
         .parameters
         .push(Parameter::categorical(&name, &key, &values));
+}
+
+#[given(expr = "the shipped config with the first two {string} desire rules swapped")]
+fn desire_rules_swapped(w: &mut HarnessWorld, file: String) {
+    let dir = super::repo_root().join("config");
+    let mut sources = ConfigSources::read_dir(&dir).unwrap();
+    let mut doc: serde_yaml_ng::Value =
+        serde_yaml_ng::from_str(sources.get(&file).unwrap()).unwrap();
+    doc["desires"].as_sequence_mut().unwrap().swap(0, 1);
+    sources.insert(file, serde_yaml_ng::to_string(&doc).unwrap());
+    w.config.sources = Some(sources);
+}
+
+#[given(expr = "{string} expects {string} to equal {string}")]
+fn expects(w: &mut HarnessWorld, name: String, key: String, equals: String) {
+    let i = param_index(w, &name);
+    w.study.def().parameters[i]
+        .expect
+        .push(sim_cli::study::Expectation {
+            key,
+            equals: serde_yaml_ng::from_str(&equals).unwrap(),
+        });
 }
 
 #[when("I generate the models twice")]
@@ -565,6 +589,35 @@ fn run(w: &mut HarnessWorld, out: PathBuf, threads: Option<usize>, stop_after: O
     let report = run_study(&def, &base(w), &opts).unwrap();
     w.study.outs.push(out);
     w.study.reports.push(report);
+}
+
+#[when("I try to run the study")]
+fn try_run(w: &mut HarnessWorld) {
+    let def = w.study.def.clone().unwrap();
+    let out = scratch();
+    let opts = RunOptions {
+        out: out.clone(),
+        games_csv: true,
+        wall_time: false,
+        ..RunOptions::default()
+    };
+    match run_study(&def, &base(w), &opts) {
+        Ok(report) => w.study.reports.push(report),
+        Err(e) => w.study.refused = Some(e.to_string()),
+    }
+    w.study.outs.push(out);
+}
+
+#[then(expr = "the study refuses to start, naming {string} and {string}")]
+fn refuses(w: &mut HarnessWorld, path: String, name: String) {
+    let err = w.study.refused.as_ref().expect("the study ran");
+    assert!(err.contains(&path) && err.contains(&name), "{err}");
+}
+
+#[then("no games were played")]
+fn no_games(w: &mut HarnessWorld) {
+    assert!(w.study.reports.is_empty());
+    assert!(!w.study.outs.last().unwrap().join("models.csv").exists());
 }
 
 #[when("I run the study")]

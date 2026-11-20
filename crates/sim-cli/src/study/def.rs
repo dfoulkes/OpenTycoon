@@ -136,6 +136,43 @@ pub struct Parameter {
     /// that only exist once some content lands). Default false: a missing key is an error.
     #[serde(default)]
     pub optional: bool,
+    /// Guards on the base config that must hold before the study starts, e.g. that
+    /// `customers.desires.0.match` is still the 1930s day table. A key path that moves when
+    /// content is reordered would otherwise vary the wrong value with no error. One
+    /// `{ key, equals }` or a list of them.
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        deserialize_with = "one_or_many"
+    )]
+    pub expect: Vec<Expectation>,
+}
+
+/// A guard on the base config: the node at `key` (in `--set` form) must equal `equals`
+/// (mappings compare regardless of key order).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Expectation {
+    /// Config key, `file.key.path`.
+    pub key: String,
+    /// The value it must hold.
+    pub equals: serde_yaml_ng::Value,
+}
+
+fn one_or_many<'de, D>(de: D) -> Result<Vec<Expectation>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum OneOrMany {
+        One(Expectation),
+        Many(Vec<Expectation>),
+    }
+    Ok(match OneOrMany::deserialize(de)? {
+        OneOrMany::One(e) => vec![e],
+        OneOrMany::Many(v) => v,
+    })
 }
 
 /// Default decimal places.
@@ -163,6 +200,7 @@ impl Parameter {
             decimals: None,
             mode: Mode::Set,
             optional: false,
+            expect: Vec::new(),
         }
     }
 
@@ -382,6 +420,17 @@ impl StudyDef {
                     return Err(StudyError::def(
                         at("key"),
                         format!("{k:?} is not `file.key.path`"),
+                    ));
+                }
+            }
+            for (j, e) in p.expect.iter().enumerate() {
+                if format!("{}=0", e.key)
+                    .parse::<crate::overrides::Override>()
+                    .is_err()
+                {
+                    return Err(StudyError::def(
+                        at(&format!("expect[{j}].key")),
+                        format!("{:?} is not `file.key.path`", e.key),
                     ));
                 }
             }
