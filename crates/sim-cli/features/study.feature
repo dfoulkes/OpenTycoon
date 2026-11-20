@@ -77,6 +77,27 @@ Feature: Balance study
     And models.csv shows "land" as "book_decay" for model 0
     And models.csv shows "land" as one of "market, market_no_decay" for models 1 to 3
 
+  @R64
+  Scenario: A parameter whose guard no longer holds stops the study before any game
+    # Demand parameters address desire rules by position; a reordered rule must not be scaled
+    # silently in its place.
+    Given the shipped config with the first two "customers.yaml" desire rules swapped
+    And a study of 3 models of 2 games from seed 0 with the roster "grocer, idle" on preset "v1"
+    And the scale parameter "demand_1930s" on "customers.desires.0.goods" from 0.6 to 1.4
+    And "demand_1930s" expects "customers.desires.0.match" to equal "{ window: day, from_year: 1930, until_year: 1945 }"
+    When I try to run the study
+    Then the study refuses to start, naming "parameters[0].expect[0]" and "demand_1930s"
+    And no games were played
+
+  @R64
+  Scenario: A guard that holds lets the study run, whatever the key order
+    Given the shipped config
+    And a study of 2 models of 2 games from seed 0 with the roster "grocer, idle" on preset "v1"
+    And the scale parameter "demand_1930s" on "customers.desires.0.goods" from 0.6 to 1.4
+    And "demand_1930s" expects "customers.desires.0.match" to equal "{ until_year: 1945, from_year: 1930, window: day }"
+    When I try to run the study
+    Then the study finishes with 2 models
+
   # ---- Seats ---------------------------------------------------------------------------------
 
   @R65

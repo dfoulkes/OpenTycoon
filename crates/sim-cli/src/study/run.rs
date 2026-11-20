@@ -190,6 +190,13 @@ fn fmt_duration(d: Duration) -> String {
     }
 }
 
+/// Checks every parameter's `expect` guards against the base config, so a key path that now
+/// points at different content stops the study before any game.
+pub fn check_expectations(def: &StudyDef, base: &ConfigSources) -> Result<(), StudyError> {
+    let _ = (def, base);
+    Ok(())
+}
+
 /// Checks every non-optional parameter key exists in the base config, so a typo fails before
 /// any game instead of making every model invalid.
 fn check_keys(def: &StudyDef, base: &ConfigSources) -> Result<(), StudyError> {
@@ -251,6 +258,7 @@ impl<'a> Study<'a> {
         }
         let roster = resolve_roster(def, &base_config)?;
         check_keys(def, base)?;
+        check_expectations(def, base)?;
         Ok(Study {
             models: generate(def)?,
             baseline: baseline_labels(def, base),

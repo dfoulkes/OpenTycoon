@@ -270,6 +270,7 @@ mod tests {
                 assert!(node_at(&base, k).is_some(), "{}: no key {k}", p.name);
             }
         }
+        super::super::run::check_expectations(&def, &base).unwrap();
         let models = generate(&def).unwrap();
         assert_eq!(models.len(), def.models as usize);
         assert_eq!(
