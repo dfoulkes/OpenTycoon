@@ -1,7 +1,7 @@
 # R64: balance is found by study: ~100 economic models (parameter sets), each tested over 500
 # games of the full span. R65: a balanced model has every AI personality winning 10–40% of games
-# (seats rotated), bankruptcy under 15% of player-games, and an idle player always last; models
-# are ranked by how even the win shares are. `sim-cli study` runs the study and measures; it
+# (seats rotated), bankruptcy under 15% of player-games, and an idle player finishing below every
+# AI that is still solvent, in every game; models are ranked by how even the win shares are. `sim-cli study` runs the study and measures; it
 # implements no game rule (docs/study.md).
 Feature: Balance study
   A study samples parameter sets with a Latin hypercube, plays every set over many games with
@@ -98,25 +98,47 @@ Feature: Balance study
     When the win counts are "100, 0, 0, 0"
     Then the normalised entropy is 0.0000 and the Gini index is 0.7500
 
+  # R65's idle rule is about the solvent AIs only: a bankrupt AI is covered by the bankruptcy
+  # limit, so the idle seat finishing above it does not count against the model.
+  @R65
+  Scenario Outline: The idle seat must finish below every AI that is still solvent
+    Given the roster "grocer, landlord, toff, idle"
+    And a game that ends with grocer <grocer>, landlord <landlord>, toff <toff>, idle <idle>
+    When I tally that game
+    Then the idle seat <verdict> the idle rule
+    And the model's idle_below_solvent_rate is <rate>
+
+    Examples:
+      | grocer        | landlord      | toff          | idle | verdict   | rate     |
+      | 900           | 700           | -200 bankrupt | 500  | satisfies | 1.000000 |
+      | 900           | 700           | 600           | 500  | satisfies | 1.000000 |
+      | 900           | 400           | 700           | 500  | fails     | 0.000000 |
+      | 900           | 500           | 700           | 500  | fails     | 0.000000 |
+      | -100 bankrupt | -50 bankrupt  | -300 bankrupt | 500  | fails     | 0.000000 |
+
+  # Bankrupt AIs no longer break the idle rule, so idle_last (idle strictly last, bankrupt AIs
+  # included) is reported but does not decide the verdict: with 44 bankrupt AI player-games the
+  # idle seat is above a bankrupt AI in 44 games and the model is still balanced.
   @R65
   Scenario Outline: The balanced flag follows R65 on synthetic results
     Given the roster "grocer, landlord, toff, idle"
     And 100 synthetic games where grocer wins <grocer>, landlord <landlord>, toff <toff>, idle <idle>
     And <bankrupt> AI player-games end bankrupt
+    And the idle seat finishes below every solvent AI in <idle_below_solvent> games
     And the idle seat finishes strictly last in <idle_last> games
     When I compute the model's metrics
     Then the model is <verdict>
 
     Examples:
-      | grocer | landlord | toff | idle | bankrupt | idle_last | verdict      |
-      | 34     | 33       | 33   | 0    | 0        | 100       | balanced     |
-      | 10     | 40       | 40   | 0    | 0        | 100       | balanced     |
-      | 9      | 41       | 40   | 0    | 0        | 100       | not balanced |
-      | 20     | 41       | 39   | 0    | 0        | 100       | not balanced |
-      | 34     | 33       | 33   | 0    | 45       | 100       | not balanced |
-      | 34     | 33       | 33   | 0    | 44       | 100       | balanced     |
-      | 34     | 33       | 33   | 0    | 0        | 99        | not balanced |
-      | 30     | 30       | 30   | 10   | 0        | 90        | not balanced |
+      | grocer | landlord | toff | idle | bankrupt | idle_below_solvent | idle_last | verdict      |
+      | 34     | 33       | 33   | 0    | 0        | 100                | 100       | balanced     |
+      | 10     | 40       | 40   | 0    | 0        | 100                | 100       | balanced     |
+      | 9      | 41       | 40   | 0    | 0        | 100                | 100       | not balanced |
+      | 20     | 41       | 39   | 0    | 0        | 100                | 100       | not balanced |
+      | 34     | 33       | 33   | 0    | 45       | 100                | 55        | not balanced |
+      | 34     | 33       | 33   | 0    | 44       | 100                | 56        | balanced     |
+      | 34     | 33       | 33   | 0    | 0        | 99                 | 99        | not balanced |
+      | 30     | 30       | 30   | 10   | 0        | 90                 | 90        | not balanced |
 
   # ---- Running -------------------------------------------------------------------------------
 
