@@ -343,7 +343,7 @@ Dan's rule: **from 1995, customers can spend part of their daily budget at e-com
 #### Births (Dan: births per woman follow history)
 
 Population is a **cohort model**: counts per age band and sex. Only adults are walking agents on the map. At each midnight year step (+5 years):
-- **Births** = women aged 18–49 × the **historical births per woman** for that era ÷ the childbearing span. Children are tracked as numbers only, not agents.
+- **Births** = women aged 18–49 × the **historical births per woman** for that era ÷ the childbearing span (32 years, 18–49) × the 5 years in each step. Children are tracked as numbers only, not agents.
 - **Ageing:** each cohort moves up a band as the years pass. **Children who reach 18 join the next 05:30 arrivals** and look for a flat like any newcomer.
 - **Deaths:** a mortality rate per band and era. **Migration** (configurable) tops up the rest of the arrivals.
 - The **inputs are historical; the population is not.** Total population comes out of the cohort model, so a city that can't house people doesn't grow the same way real London did.
@@ -634,6 +634,7 @@ OpenTycoon/
 | R59 | Visitors split into commuters (70%, always the train home) and tourists (30%, hotel first). Only tourists feed hotels. |
 | R60 | Age bands 18–29, 30–49, 50–64, 65+. Children aren't shoppers. |
 | R61 | Population is a cohort model. Births per woman follow history, and children join the arrivals at 18. |
+| R62 | Players start with £7,000 cash (configurable) |
 | R40 | Client/server architecture: the server runs the simulation and clients display it |
 
 ### Open

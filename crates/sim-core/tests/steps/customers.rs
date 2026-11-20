@@ -1,4 +1,8 @@
 //! Steps for `features/customers/`. The city scene lives in [`super::population::CityState`].
+#![allow(
+    clippy::many_single_char_names,
+    reason = "step captures read as class, sex, band: c, s, b"
+)]
 
 use std::collections::BTreeSet;
 
@@ -312,7 +316,7 @@ fn check_exits(w: &mut SimWorld, which: &[sim_core::customers::Customer]) {
     let year = CityState::clock(w).year();
     let stations: BTreeSet<_> = station_cells(&config, &map, year, g).into_iter().collect();
     let doors = front_doors(&w.city.businesses, &map, g);
-    assert!(!which.is_empty());
+    assert!(!which.is_empty(), "no shoppers to check");
     for c in which {
         match c.origin {
             Origin::Resident(r) => {
@@ -411,7 +415,7 @@ fn choose(w: &mut SimWorld, n: u32, c: String, block: String, good: String) {
             sim_core::Money::from_pounds(1_000),
             good,
             &offers,
-            &w.city.customers,
+            &w.city.customers.reputation,
             &config.customers,
             g,
             &mut rng,

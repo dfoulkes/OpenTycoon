@@ -26,10 +26,3 @@ R46  # platform: proved by CI on Linux and macOS
 R47  # client: Godot + gdext stack
 R48  # client: world scale (config value exists in game.yaml)
 R49  # architecture: multiplayer audience (M5)
-R50  # post-v1: residential
-R51  # post-v1: residential
-R52  # post-v1: residential
-R53  # post-v1: arrivals house-hunt (the 05:30 clock event exists)
-R54  # post-v1: residential
-R56  # post-v1: residential
-R59  # post-v1: commuter/tourist split feeds hotels

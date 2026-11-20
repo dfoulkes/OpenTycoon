@@ -97,7 +97,7 @@ Feature: The population cohort model
 
   @R6 @R53
   Scenario: The population grows every morning and the growth arrives by train
-    Given a new game
-    When the game runs for 4 days
+    Given a fresh city
+    When the fresh city runs for 4 days
     Then the population grew every day
     And people arrived on every morning's train

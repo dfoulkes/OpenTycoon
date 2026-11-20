@@ -38,12 +38,12 @@ pub fn rule_matches(
 }
 
 /// `P(good)` for every good this shopper might want in this window and year (§8.2, R55).
-pub fn desire_weights<'a>(
-    rules: &'a CustomersConfig,
+pub fn desire_weights(
+    rules: &CustomersConfig,
     cohort: Cohort,
     window: Hours,
     year: i32,
-) -> BTreeMap<&'a str, f64> {
+) -> BTreeMap<&str, f64> {
     let mut out = BTreeMap::new();
     for rule in &rules.desires {
         if rule_matches(&rule.matcher, rules, cohort, window, year) {

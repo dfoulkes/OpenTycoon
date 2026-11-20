@@ -1,8 +1,5 @@
-//! What shoppers see of the high street, and the narrow selling interface they buy through.
-//!
-//! [`Shops::try_sell`] is the only way a customer takes stock off a shelf. The businesses
-//! module owns stock; until it ships its own implementation, [`BusinessShops`] is a minimal
-//! one over [`Businesses`] (stock never goes negative; price = `ref_price × price share`).
+//! What shoppers see of the high street: every open shop's offer of every good, scored by
+//! customers (§8.3). Selling itself is the businesses module's `Businesses::try_sell`.
 
 use std::collections::BTreeMap;
 
@@ -10,12 +7,12 @@ use serde::{Deserialize, Serialize};
 
 use super::movement::{Cell, Geometry};
 use super::scoring;
-use crate::businesses::{BusinessId, Businesses, Hours};
-use crate::clock::{Clock, TradingWindow};
+use crate::businesses::{BusinessId, Businesses};
+use crate::clock::Clock;
 use crate::config::Config;
 use crate::config::businesses::Good;
 use crate::land::Map;
-use crate::money::{Money, Rate};
+use crate::money::Money;
 use crate::population::Class;
 use crate::population::residential::fit_out_appeal;
 
@@ -54,63 +51,6 @@ impl GoodsIndex {
     }
 }
 
-/// Why a sale didn't happen.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum SellError {
-    /// No such shop, or it doesn't sell the good.
-    UnknownShop,
-    /// The shop is shut.
-    Closed,
-    /// Not enough stock: a lost sale (§8.3).
-    OutOfStock,
-}
-
-/// The selling interface customers buy through (owned by businesses).
-pub trait Shops {
-    /// Sells `qty` of `good` at the shop's current price. On success, stock has gone down by
-    /// `qty` and the return value is what the customer pays.
-    fn try_sell(&mut self, shop: BusinessId, good: &str, qty: u32) -> Result<Money, SellError>;
-}
-
-/// A minimal [`Shops`] over [`Businesses`] until the businesses module provides its own.
-#[derive(Debug)]
-pub struct BusinessShops<'a> {
-    /// Businesses whose stock is sold.
-    pub businesses: &'a mut Businesses,
-    /// The goods catalogue (reference prices).
-    pub goods: &'a BTreeMap<String, Good>,
-}
-
-/// A shop's price for a good: `ref_price × price share` (§7.1; share 1.0 if unset).
-pub fn shop_price(prices: &BTreeMap<String, Rate>, good: &str, ref_price: Money) -> Money {
-    prices
-        .get(good)
-        .copied()
-        .unwrap_or(Rate::ONE)
-        .apply(ref_price)
-}
-
-impl Shops for BusinessShops<'_> {
-    fn try_sell(&mut self, shop: BusinessId, good: &str, qty: u32) -> Result<Money, SellError> {
-        let business = self
-            .businesses
-            .by_id
-            .get_mut(&shop)
-            .ok_or(SellError::UnknownShop)?;
-        let catalogue = self.goods.get(good).ok_or(SellError::UnknownShop)?;
-        if !business.open {
-            return Err(SellError::Closed);
-        }
-        let stock = business.stock.get_mut(good).ok_or(SellError::OutOfStock)?;
-        let qty = i64::from(qty);
-        if *stock < qty {
-            return Err(SellError::OutOfStock);
-        }
-        *stock -= qty;
-        Ok(shop_price(&business.prices, good, catalogue.ref_price.money()).saturating_mul(qty))
-    }
-}
-
 /// One shop's offer of one good, as scored by customers this tick.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ShopOffer {
@@ -132,16 +72,6 @@ pub struct ShopOffer {
     pub stock: i64,
 }
 
-/// Is a business of these hours trading now?
-pub fn trading_now(clock: &Clock, hours: Hours) -> bool {
-    match hours {
-        Hours::Day => clock.is_open(TradingWindow::Day),
-        Hours::Night => clock.is_open(TradingWindow::Night),
-        Hours::Hotel => clock.is_open(TradingWindow::Hotel),
-        Hours::None => false,
-    }
-}
-
 /// Every open shop's offer of every good it sells, in (shop, good) order (§8.3, §8.4:
 /// night businesses only score while open).
 pub fn shop_offers(
@@ -157,7 +87,7 @@ pub fn shop_offers(
         let Some(kind) = config.businesses.types.get(&b.type_id) else {
             continue;
         };
-        if !b.open || !trading_now(clock, kind.hours) {
+        if !b.is_trading(clock) {
             continue;
         }
         let Some(block) = map.block(b.block) else {
@@ -173,15 +103,18 @@ pub fn shop_offers(
                 continue;
             };
             let ref_price = catalogue.ref_price.money();
+            let Some(price) = b.unit_price(name, &config.businesses) else {
+                continue;
+            };
             out.push(ShopOffer {
                 shop: *id,
                 good,
                 door,
-                price: shop_price(&b.prices, name, ref_price),
+                price,
                 ref_price,
                 luxury: catalogue.luxury,
                 affinity,
-                stock: b.stock.get(name).copied().unwrap_or(0),
+                stock: b.stock_of(name),
             });
         }
     }

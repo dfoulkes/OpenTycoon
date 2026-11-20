@@ -65,8 +65,9 @@ Feature: Shoppers come from home and from the tube
   @R25
   Scenario: Day shoppers still on the map at 17:00 despawn
     Given the shipped config with "customers.yaml" key "/movement/spawn_spread_minutes" set to "600"
-    And a city of 200 working men aged "30-49"
-    And a bakery "Bun" on "holborn" with 1000 bread
+    And the shipped config with "customers.yaml" key "/movement/cells_per_tick" set to "1"
+    And a city of 2000 working men aged "30-49"
+    And a bakery "Bun" on "holborn" with 5000 bread
     When the city runs to "16:59:50"
     Then some day shoppers are still about
     When the city runs to "17:00:00"

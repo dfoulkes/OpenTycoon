@@ -118,6 +118,17 @@ pub fn shop_score(
         * rate_f64(reputation)
 }
 
+/// Reputation after a completed sale: a rolling stat, `rep + recovery × (1 − rep)` (§8.3).
+pub fn reputation_after_sale(rep: Rate, recovery: f64) -> Rate {
+    let r = rate_f64(rep);
+    unit_to_rate(r + recovery * (1.0 - r))
+}
+
+/// Reputation after a lost sale: `max(0, rep − penalty)` (§8.3).
+pub fn reputation_after_lost_sale(rep: Rate, penalty: f64) -> Rate {
+    unit_to_rate(rate_f64(rep) - penalty)
+}
+
 /// `price_factor = exp(-k × (price/ref_price − 1))` (§8.3). `ref_price` must be positive.
 pub fn price_factor(k_class: f64, price: f64, ref_price: f64) -> f64 {
     libm::exp(-k_class * (price / ref_price - 1.0))
@@ -175,6 +186,19 @@ mod tests {
             price_factor(1.5, 1.2, 1.0).to_bits(),
             4_604_847_916_870_499_334
         );
+    }
+
+    #[test]
+    fn reputation_is_a_rolling_stat_clamped_to_unit() {
+        let half = Rate::from_bp(5_000);
+        assert_eq!(reputation_after_sale(half, 0.005), Rate::from_bp(5_025));
+        assert_eq!(reputation_after_lost_sale(half, 0.02), Rate::from_bp(4_800));
+        assert_eq!(
+            reputation_after_lost_sale(Rate::from_bp(100), 0.02),
+            Rate::ZERO
+        );
+        assert_eq!(reputation_after_sale(Rate::ONE, 0.5), Rate::ONE);
+        assert_eq!(unit_to_rate(f64::NAN), Rate::ZERO);
     }
 
     #[test]
