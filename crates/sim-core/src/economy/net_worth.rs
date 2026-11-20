@@ -215,6 +215,8 @@ mod tests {
                 ref_price: crate::config::types::Pounds(Money::from_pence(10)),
                 purchase_price: crate::config::types::Pounds(Money::from_pence(4)),
                 luxury: false,
+                unlock_year: None,
+                obsolete_year: None,
             },
         )]
         .into();

@@ -273,6 +273,21 @@
       },
       "type": "object"
     },
+    "DesireMode": {
+      "description": "How a [`DesireRule`] combines with the rules before it.",
+      "oneOf": [
+        {
+          "const": "set",
+          "description": "Sets the weight of each good it names.",
+          "type": "string"
+        },
+        {
+          "const": "scale",
+          "description": "Multiplies the weight already set for each good it names, capped at 1.",
+          "type": "string"
+        }
+      ]
+    },
     "DesireRule": {
       "additionalProperties": false,
       "description": "Shopping-list weights for a segment. Unset match fields match everyone.",
@@ -282,12 +297,17 @@
             "format": "double",
             "type": "number"
           },
-          "description": "`P(good)` weight per good id.",
+          "description": "`P(good)` weight per good id (`set`, 0–1), or a multiplier (`scale`, 0–10).",
           "type": "object"
         },
         "match": {
           "$ref": "#/$defs/DesireMatch",
           "description": "Which customers this rule applies to."
+        },
+        "mode": {
+          "$ref": "#/$defs/DesireMode",
+          "default": "set",
+          "description": "`set` (the default) sets each weight; `scale` multiplies weights already set."
         }
       },
       "required": [
@@ -360,6 +380,31 @@
       "required": [
         "cells_per_tick",
         "spawn_spread_minutes"
+      ],
+      "type": "object"
+    },
+    "Obsolescence": {
+      "additionalProperties": false,
+      "description": "Demand fade after an obsolete year (§7.1): the share still wanted falls linearly from 1 at\nthe obsolete year to `floor` after `fade_years`, and stays at `floor`.",
+      "properties": {
+        "fade_years": {
+          "description": "Years from the obsolete year until demand reaches the floor.",
+          "format": "uint32",
+          "maximum": 500,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "floor": {
+          "description": "Share of demand that never goes away (collectors, die-hards), 0–1.",
+          "format": "double",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "fade_years",
+        "floor"
       ],
       "type": "object"
     },
@@ -625,6 +670,10 @@
       "$ref": "#/$defs/MovementSettings",
       "description": "Walking and spawning on the map (§8.1, §8.4)."
     },
+    "obsolescence": {
+      "$ref": "#/$defs/Obsolescence",
+      "description": "How demand fades after a good's or a type's obsolete year (§7.1)."
+    },
     "price_sensitivity": {
       "$ref": "#/$defs/ClassF64",
       "description": "`k_class` price sensitivity (§8.3)."
@@ -652,6 +701,7 @@
     "migration_per_day",
     "allowance",
     "desires",
+    "obsolescence",
     "demographics",
     "price_sensitivity",
     "class_affinity",

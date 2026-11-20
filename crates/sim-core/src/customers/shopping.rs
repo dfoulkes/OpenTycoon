@@ -57,6 +57,19 @@ pub fn desire_weights(
     out
 }
 
+/// `P(good)` as shoppers act on it in `year`: the table's weight, zero before the good's
+/// unlock year and fading after its obsolete year (§7.1, §8.2).
+///
+/// Stub: `features/customers/eras.feature` is written against it first.
+pub fn effective_weights<'a>(
+    config: &'a crate::config::Config,
+    cohort: Cohort,
+    window: Hours,
+    year: i32,
+) -> BTreeMap<&'a str, f64> {
+    desire_weights(&config.customers, cohort, window, year)
+}
+
 /// The goods a shopper might roll, with `P(good) > 0`, in catalogue (name) order: the
 /// [`desire_weights`] of one cohort, window and year resolved to ids once, so a wave rolls
 /// every member of a cohort from the same list ([`roll_from`]).

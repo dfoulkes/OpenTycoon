@@ -37,6 +37,8 @@ pub struct CustomersConfig {
     pub allowance: AllowanceSettings,
     /// Shopping-list weights per segment (R55).
     pub desires: Vec<DesireRule>,
+    /// How demand fades after a good's or a type's obsolete year (§7.1).
+    pub obsolescence: Obsolescence,
     /// Population mix by era, keyed by year.
     pub demographics: BTreeMap<String, Demographics>,
     /// `k_class` price sensitivity (§8.3).
@@ -137,8 +139,35 @@ pub struct DesireRule {
     /// Which customers this rule applies to.
     #[serde(rename = "match")]
     pub matcher: DesireMatch,
-    /// `P(good)` weight per good id.
+    /// `set` (the default) sets each weight; `scale` multiplies weights already set.
+    #[serde(default)]
+    pub mode: DesireMode,
+    /// `P(good)` weight per good id (`set`, 0–1), or a multiplier (`scale`, 0–10).
     pub goods: BTreeMap<String, f64>,
+}
+
+/// How a [`DesireRule`] combines with the rules before it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DesireMode {
+    /// Sets the weight of each good it names.
+    #[default]
+    Set,
+    /// Multiplies the weight already set for each good it names, capped at 1.
+    Scale,
+}
+
+/// Demand fade after an obsolete year (§7.1): the share still wanted falls linearly from 1 at
+/// the obsolete year to `floor` after `fade_years`, and stays at `floor`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Obsolescence {
+    /// Years from the obsolete year until demand reaches the floor.
+    #[schemars(range(min = 1, max = 500))]
+    pub fade_years: u32,
+    /// Share of demand that never goes away (collectors, die-hards), 0–1.
+    #[schemars(range(min = 0.0, max = 1.0))]
+    pub floor: f64,
 }
 
 /// Segment selector for a [`DesireRule`].

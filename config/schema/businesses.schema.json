@@ -4,6 +4,11 @@
       "additionalProperties": false,
       "description": "A business type (§7.1).",
       "properties": {
+        "channel": {
+          "$ref": "#/$defs/Channel",
+          "default": "shop",
+          "description": "Walk-in shop (the default), online seller or infrastructure (§7.5)."
+        },
         "goods": {
           "description": "Good ids it sells. Multi-good stores split capacity.",
           "items": {
@@ -37,7 +42,7 @@
           "type": "string"
         },
         "obsolete_year": {
-          "description": "Optional year after which demand fades.",
+          "description": "Optional year after which demand fades: shoppers favour other shops (§7.1).",
           "format": "int32",
           "maximum": 2500,
           "minimum": 1800,
@@ -73,6 +78,26 @@
         "unlock_year"
       ],
       "type": "object"
+    },
+    "Channel": {
+      "description": "How a business reaches its customers (§7.5).",
+      "oneOf": [
+        {
+          "const": "shop",
+          "description": "A walk-in shop: shoppers walk to its door (§8.3).",
+          "type": "string"
+        },
+        {
+          "const": "online",
+          "description": "An online seller (§7.5, R15, R36): no walk-in trade; its demand model is e-commerce's.",
+          "type": "string"
+        },
+        {
+          "const": "infrastructure",
+          "description": "Infrastructure (data centre, lockers, farms, hubs): no walk-in trade.",
+          "type": "string"
+        }
+      ]
     },
     "FitOut": {
       "additionalProperties": false,
@@ -130,6 +155,16 @@
           "description": "Display name.",
           "type": "string"
         },
+        "obsolete_year": {
+          "description": "Year after which demand for it fades (§7.1); absent means never.",
+          "format": "int32",
+          "maximum": 2500,
+          "minimum": 1800,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "purchase_price": {
           "description": "Wholesale price per unit paid at the 06:00 settlement.",
           "type": "number"
@@ -137,6 +172,16 @@
         "ref_price": {
           "description": "Reference retail price per unit (`ref_price` in §8.3).",
           "type": "number"
+        },
+        "unlock_year": {
+          "description": "First year anyone wants it; absent means from the start (§7.4).",
+          "format": "int32",
+          "maximum": 2500,
+          "minimum": 1800,
+          "type": [
+            "integer",
+            "null"
+          ]
         }
       },
       "required": [
@@ -170,6 +215,36 @@
           "type": "string"
         }
       ]
+    },
+    "ReferenceShop": {
+      "additionalProperties": false,
+      "description": "The reference shop of the business-stats formula (docs/economy.md \"Business stats\"): a\nbuilding of the type's `min_footprint`, `height` high, on a Medium-tier block, selling\n`sell_through` of its stock at reference prices. Its stock density is set so that this shop\ncovers its rent and utilities and earns its build cost back in `payback_days`.",
+      "properties": {
+        "height": {
+          "description": "Height of the reference building, in units.",
+          "format": "uint32",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "payback_days": {
+          "description": "Days for a Medium-tier reference shop to earn back its build cost.",
+          "format": "uint32",
+          "maximum": 1000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "sell_through": {
+          "description": "Share of its stock a competently run shop sells in a day (the reference footfall).\nAbove 0 and at most 1.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "height",
+        "sell_through",
+        "payback_days"
+      ],
+      "type": "object"
     },
     "UtilityFactors": {
       "additionalProperties": false,
@@ -220,6 +295,10 @@
       "description": "Goods catalogue, keyed by good id.",
       "type": "object"
     },
+    "reference": {
+      "$ref": "#/$defs/ReferenceShop",
+      "description": "The reference shop the stats formula is built around (docs/economy.md)."
+    },
     "types": {
       "additionalProperties": {
         "$ref": "#/$defs/BusinessType"
@@ -231,6 +310,7 @@
   "required": [
     "build_base_rate",
     "fit_out",
+    "reference",
     "goods",
     "types"
   ],

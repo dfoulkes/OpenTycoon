@@ -57,6 +57,9 @@ desires:                        # §8.2 placeholder weights: P(good) per segment
     goods: { bread: 0.4, groceries: 0.3, clothes: 0.2 }
   - match: { class: upper, window: night }
     goods: { drinks: 0.3, meals: 0.4 }
+obsolescence:                   # §7.1: demand fades after a good's or a type's obsolete year
+  fade_years: 15                # linear fade from 1 at the obsolete year to the floor
+  floor: 0.1                    # collectors and die-hards: the share that never goes away
 demographics:                   # §8.1: class split by era; age and sex placeholders
   1930: { class: [0.60, 0.30, 0.10], age: [0.30, 0.35, 0.20, 0.15], sex: [0.5, 0.5] }
   2050: { class: [0.40, 0.45, 0.15], age: [0.22, 0.33, 0.22, 0.23], sex: [0.5, 0.5] }
