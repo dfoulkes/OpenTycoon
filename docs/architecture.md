@@ -41,7 +41,7 @@ the split for M1 parallel work.
 | `utilities` | `src/utilities.rs` | utility bills, holders | R11, R12, R24 | types + bill formula |
 | `population` | `src/population.rs` | cohort model, births, ageing, arrivals | R6, R53, R60, R61 | types only |
 | `customers` | `src/customers.rs` | shoppers, shopping lists, shop scoring, movement | R25, R55, §8.3 | scoring primitives real |
-| `ai` | `src/ai.rs` | AI personalities behind the `Brain` trait | §10 | trait + do-nothing seat |
+| `ai` | `src/ai/` | AI personalities behind the `Brain` trait, each seat on its own RNG stream | §10 | **real** (M1): the Grocer (`ai.yaml` `grocer`); other personalities inert |
 | `events` | `src/events.rs` | history, random events, elections, front page | R12, R16 | step selection real |
 | `world` | `src/world.rs` | owns all state; runs the tick order; `Command`s; state hash | R40 | **real** (phases are stubs) |
 | support | `src/rng.rs`, `src/hash.rs` | seeded RNG helpers; portable state hash | — | **real** |
