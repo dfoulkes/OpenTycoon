@@ -625,6 +625,8 @@ OpenTycoon/
 | R61 | Population is a cohort model. Births per woman follow history, and children join the arrivals at 18. |
 | R62 | Players start with £7,000 cash (configurable) |
 | R63 | Shoppers' daily allowances are new money created each morning. No household accounts or wages. |
+| R64 | Balance is found by study: ~100 economic models (parameter sets), each tested over 500 games of the full 1930–2050 span, with demand changing by decade |
+| R65 | A balanced model: every AI personality wins 10–40% of games (seats rotated), bankruptcy under 15% of player-games, and an idle player always finishes last. Models are ranked by how even the win shares are. |
 | R40 | Client/server architecture: the server runs the simulation and clients display it |
 
 ### Open
