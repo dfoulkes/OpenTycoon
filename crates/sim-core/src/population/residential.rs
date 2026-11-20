@@ -480,8 +480,11 @@ pub struct RentDue {
     pub landlord: AccountId,
     /// Flats let.
     pub flats_let: u32,
-    /// `flats_let × rent`.
+    /// What the residents pay in all: `Σ min(rent, allowance)` over the flats let.
     pub amount: Money,
+    /// The part of `amount` paid to the city as rent tax (`residential.rent_tax`, a study
+    /// lever, 0 by default); the landlord gets `amount − tax`.
+    pub tax: Money,
 }
 
 /// What residents owe at 06:00, per building in id order (R51; economy debits it from the
@@ -507,6 +510,7 @@ pub fn rent_due(
             landlord: l.owner,
             flats_let: 0,
             amount: Money::ZERO,
+            tax: Money::ZERO,
         });
         entry.flats_let += 1;
         let budget = *allowances

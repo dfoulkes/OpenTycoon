@@ -25,6 +25,9 @@ Feature: Population and customer settings fail loudly
       | /class_affinity/upper/high              | -1                     | /class_affinity/upper/high        |
       | /reputation/sale_recovery               | 2                      | /reputation/sale_recovery         |
       | /residential/stretch_min_desirability   | -0.5                   | /residential/stretch_min_desirability |
+      | /residential/rent_tax                   | 1.5                    | /residential/rent_tax             |
+      | /residential/commute_preference         | 1.5                    | /residential/commute_preference   |
+      | /residential/max_rent_per_flat          | -1.00                  | /residential/max_rent_per_flat    |
 
   @R45 @R56
   Scenario: The apartment type must not trade

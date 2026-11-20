@@ -518,6 +518,10 @@
           "description": "Comfortable rent share of allowance (R52, default 0.2).",
           "type": "number"
         },
+        "commute_preference": {
+          "description": "Study lever, off by default (0): the share of the city's adults who would rather\ncommute than live in a flat, even one they can afford. The 05:30 house-hunt houses no\nmore than `⌊adults × (1 − commute_preference)⌋` (docs/economy.md \"Residential levers\").",
+          "type": "number"
+        },
         "default_rent": {
           "description": "Rent per flat per day until the owner sets one: the city's default (R4, R51).",
           "type": "number"
@@ -528,6 +532,13 @@
           "maximum": 10000,
           "minimum": 1,
           "type": "integer"
+        },
+        "max_rent_per_flat": {
+          "description": "Study lever, off by default (`null`): the most any flat's rent can be per day. An\nowner may set more, but residents see and pay `min(rent, cap)` (docs/economy.md\n\"Residential levers\").",
+          "type": [
+            "number",
+            "null"
+          ]
         },
         "move_interval_years": {
           "description": "Minimum in-game years between moves (R54, default 10).",
@@ -543,6 +554,10 @@
         "rehunt_unhoused": {
           "description": "Whether unhoused people already in the city look again each morning, after the\narrivals, while flats stand empty (§7.2: everyone wants to live in the city).",
           "type": "boolean"
+        },
+        "rent_tax": {
+          "description": "Study lever, off by default (0): the share of residents' rent paid to the city as tax\nat the 06:00 settlement; the owner gets the rest (docs/economy.md \"Residential levers\").",
+          "type": "number"
         },
         "stretch_min_desirability": {
           "description": "A flat whose desirability (class affinity × fit-out appeal) is at least this justifies\nstretching to `stretch_share` (R52).",
@@ -565,7 +580,9 @@
         "default_rent",
         "reference_rent",
         "stretch_min_desirability",
-        "rehunt_unhoused"
+        "rehunt_unhoused",
+        "rent_tax",
+        "commute_preference"
       ],
       "type": "object"
     },

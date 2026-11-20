@@ -336,4 +336,15 @@ pub struct ResidentialSettings {
     /// Whether unhoused people already in the city look again each morning, after the
     /// arrivals, while flats stand empty (§7.2: everyone wants to live in the city).
     pub rehunt_unhoused: bool,
+    /// Study lever, off by default (`null`): the most any flat's rent can be per day. An
+    /// owner may set more, but residents see and pay `min(rent, cap)` (docs/economy.md
+    /// "Residential levers").
+    pub max_rent_per_flat: Option<Pounds>,
+    /// Study lever, off by default (0): the share of residents' rent paid to the city as tax
+    /// at the 06:00 settlement; the owner gets the rest (docs/economy.md "Residential levers").
+    pub rent_tax: Ratio,
+    /// Study lever, off by default (0): the share of the city's adults who would rather
+    /// commute than live in a flat, even one they can afford. The 05:30 house-hunt houses no
+    /// more than `⌊adults × (1 − commute_preference)⌋` (docs/economy.md "Residential levers").
+    pub commute_preference: Ratio,
 }

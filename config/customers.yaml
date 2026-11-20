@@ -136,6 +136,11 @@ residential:                    # §7.2
   reference_rent: 3.00          # placeholder: ref price for rent in price_factor (R51)
   stretch_min_desirability: 1.0 # placeholder: affinity × appeal needed to stretch to 50% (R52)
   rehunt_unhoused: true         # unhoused residents of the city look again while flats are empty
+  # Study levers, off by default (docs/economy.md "Residential levers"): not rulings, choices
+  # the balance study can search between.
+  max_rent_per_flat: null       # £ cap on any flat's rent per day; null = no cap
+  rent_tax: 0.0                 # share of residents' rent paid to the city
+  commute_preference: 0.0       # share of adults who commute rather than rent, even if they can afford it
 tourists:                       # §7.3, R29
   desire_boost: { souvenirs: 5.0 }   # placeholder: the Souvenir Shop's bonus from tourists
 online:                         # §7.5; R15, R36. online_share(year, good) = share_by_year × good_multiplier
