@@ -401,6 +401,10 @@ impl World {
             self.clock.year(),
             &mut self.rng,
         );
+        // R63: today's allowances are new money, minted into the shoppers' purse.
+        let allowances =
+            crate::population::daily_allowances(&self.population, &self.config.customers);
+        self.ledger.mint(AccountId::Shoppers, allowances);
     }
 
     /// Phase 5, economy's part: overdraft interest (0 by default, R32), then every building's
@@ -647,9 +651,8 @@ impl World {
         self.queued.extend(out);
     }
 
-    /// Phase 8. Owner: customers. Shoppers spawn, choose, walk and buy (§8). Until economy
-    /// models households, a shopper's spending money comes from the city (the world outside
-    /// the players' businesses) and goes to the shop's owner through the ledger.
+    /// Phase 8. Owner: customers. Shoppers spawn, choose, walk and buy (§8). Each sale moves
+    /// money from the shoppers' purse (minted at 05:30, R63) to the shop's owner.
     fn customers_phase(&mut self) {
         let report = crate::customers::run_phase(
             &mut self.customers,
@@ -665,7 +668,7 @@ impl World {
         for sale in &report.sales {
             if let Some(shop) = self.businesses.by_id.get(&sale.shop) {
                 self.ledger
-                    .transfer(AccountId::City, shop.owner, sale.amount);
+                    .transfer(AccountId::Shoppers, shop.owner, sale.amount);
             }
         }
     }
@@ -1021,6 +1024,7 @@ mod businesses_tests {
         assert_eq!(cost, Money::from_pounds(540));
         assert_eq!(w.ledger.balance(ME), start - cost);
         let total = w.ledger.total();
+        let minted = w.ledger.minted();
 
         w.submit(
             P0,
@@ -1039,7 +1043,12 @@ mod businesses_tests {
             w.ledger.balance(ME),
             start - cost - Money::from_pence(450 + 450 + 160)
         );
-        assert_eq!(w.ledger.total(), total, "settlement conserves money");
+        // Settlement conserves money; the only new money is the shoppers' allowances (R63).
+        assert_eq!(
+            w.ledger.total(),
+            total + (w.ledger.minted() - minted),
+            "settlement conserves money"
+        );
         run_to(&mut w, 0);
         assert_eq!(w.businesses.get(id).unwrap().stock_of("bread"), 0);
     }

@@ -149,12 +149,44 @@ proptest! {
 }
 
 #[test]
-fn a_full_game_keeps_the_ledger_balanced() {
+fn a_full_game_grows_the_ledger_by_exactly_what_was_minted() {
+    // R63: allowances are the only new money; every other movement is a transfer.
     let mut world = World::new(common::shipped_config(), 9, 2);
-    let total = world.ledger().total();
+    let start = world.ledger().total();
     for _ in 0..(3 * 8_640) {
+        let minted_before = world.ledger().minted();
+        let total_before = world.ledger().total();
         world.tick();
+        let minted = world.ledger().minted() - minted_before;
+        assert!(minted >= Money::ZERO);
+        assert_eq!(world.ledger().total(), total_before + minted);
     }
-    assert_eq!(world.ledger().total(), total);
+    assert!(world.ledger().minted() > Money::ZERO);
+    assert_eq!(world.ledger().total(), start + world.ledger().minted());
     assert!(world.population().total_adults() > 0);
+}
+
+proptest! {
+    #[test]
+    fn minting_and_transfers_conserve_money_plus_what_was_minted(
+        ops in prop::collection::vec((any::<bool>(), 0u8..3, 0u8..3, 0i64..1_000_000), 0..200)
+    ) {
+        use sim_core::economy::{Ledger, PlayerId};
+        let acct = |i: u8| match i {
+            0 => AccountId::City,
+            1 => AccountId::Shoppers,
+            _ => AccountId::Player(PlayerId(0)),
+        };
+        let mut ledger = Ledger::new();
+        ledger.open(AccountId::City, Money::from_pounds(1_000));
+        let start = ledger.total();
+        for (mint, a, b, pence) in ops {
+            if mint {
+                ledger.mint(acct(a), Money::from_pence(pence));
+            } else {
+                ledger.transfer(acct(a), acct(b), Money::from_pence(pence));
+            }
+            prop_assert_eq!(ledger.total(), start + ledger.minted());
+        }
+    }
 }

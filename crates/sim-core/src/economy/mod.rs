@@ -86,6 +86,9 @@ pub struct Bill {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub struct Ledger {
     balances: BTreeMap<AccountId, Money>,
+    /// Money created since setup (R63).
+    #[serde(default)]
+    minted: Money,
 }
 
 impl Ledger {
@@ -113,12 +116,13 @@ impl Ledger {
     /// Creates `amount` of new money in `account` (R63: shoppers' daily allowances). The only
     /// way the ledger total grows after setup; [`Ledger::minted`] counts it.
     pub fn mint(&mut self, account: AccountId, amount: Money) {
-        let _ = (account, amount);
+        *self.balances.entry(account).or_default() += amount;
+        self.minted += amount;
     }
 
     /// All money minted since the game began (R63).
     pub fn minted(&self) -> Money {
-        Money::ZERO
+        self.minted
     }
 
     /// Moves `amount` from one account to another. No limit check: callers that must respect

@@ -53,7 +53,8 @@ proptest! {
             for _ in 0..wait {
                 world.tick();
             }
-            prop_assert_eq!(world.ledger().total(), total);
+            // Auctions conserve money; the only new money is shoppers' allowances (R63).
+            prop_assert_eq!(world.ledger().total(), total + world.ledger().minted());
             for (_, balance) in world.ledger().accounts() {
                 // Day 0: every bid is capped at balance + £10,000, so no one is ever deeper
                 // in debt than the limit through auctions alone.

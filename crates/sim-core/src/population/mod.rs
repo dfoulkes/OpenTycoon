@@ -201,7 +201,7 @@ pub fn allowance(rules: &CustomersConfig, cohort: Cohort) -> Money {
 }
 
 /// Every adult's daily allowance, summed: the new money minted each morning (§8.2, R63).
-/// Rent comes out of it (residents pay their landlords from the shoppers' purse).
+/// Residents' rent is owed out of it ([`residential::rent_due`]).
 pub fn daily_allowances(pop: &Population, rules: &CustomersConfig) -> Money {
     let pool: Money = pop
         .pool
