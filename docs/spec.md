@@ -635,6 +635,7 @@ OpenTycoon/
 | R60 | Age bands 18–29, 30–49, 50–64, 65+. Children aren't shoppers. |
 | R61 | Population is a cohort model. Births per woman follow history, and children join the arrivals at 18. |
 | R62 | Players start with £7,000 cash (configurable) |
+| R63 | Shoppers' daily allowances are new money created each morning. No household accounts or wages. |
 | R40 | Client/server architecture: the server runs the simulation and clients display it |
 
 ### Open

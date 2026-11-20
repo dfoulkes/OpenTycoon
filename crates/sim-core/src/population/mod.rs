@@ -199,3 +199,20 @@ pub fn allowance(rules: &CustomersConfig, cohort: Cohort) -> Money {
     .rate();
     sex.apply(age.apply(base))
 }
+
+/// Every adult's daily allowance, summed: the new money minted each morning (§8.2, R63).
+/// Rent comes out of it (residents pay their landlords from the shoppers' purse).
+pub fn daily_allowances(pop: &Population, rules: &CustomersConfig) -> Money {
+    let pool: Money = pop
+        .pool
+        .iter()
+        .map(|(c, n)| allowance(rules, *c).saturating_mul(i64::try_from(*n).unwrap_or(i64::MAX)))
+        .sum();
+    let housed: Money = pop
+        .residential
+        .residents
+        .values()
+        .map(|r| allowance(rules, r.cohort))
+        .sum();
+    pool + housed
+}

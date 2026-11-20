@@ -66,6 +66,9 @@ pub enum AccountId {
     City,
     /// A player.
     Player(PlayerId),
+    /// The shoppers' purse: every shopper's allowance, minted each morning (R63). Purchases
+    /// move money from here to the shop's owner. Not a player and never checked for solvency.
+    Shoppers,
 }
 
 /// A sum owed from one account to another, settled at 06:00 (R32: may push past the limit).
@@ -105,6 +108,17 @@ impl Ledger {
     /// Sum of every balance.
     pub fn total(&self) -> Money {
         self.balances.values().copied().sum()
+    }
+
+    /// Creates `amount` of new money in `account` (R63: shoppers' daily allowances). The only
+    /// way the ledger total grows after setup; [`Ledger::minted`] counts it.
+    pub fn mint(&mut self, account: AccountId, amount: Money) {
+        let _ = (account, amount);
+    }
+
+    /// All money minted since the game began (R63).
+    pub fn minted(&self) -> Money {
+        Money::ZERO
     }
 
     /// Moves `amount` from one account to another. No limit check: callers that must respect

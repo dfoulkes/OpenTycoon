@@ -58,6 +58,7 @@ pub struct CityState {
     /// Number of shoppers in the last "choose" step.
     pub pick_total: u32,
     world: Option<World>,
+    ledger_at_start: Option<Money>,
     daily: Vec<u64>,
     pending_each_morning: Vec<u64>,
 }
@@ -389,7 +390,77 @@ fn allowance_flat(w: &mut SimWorld, from: i32, to: i32) {
 #[given("a fresh city")]
 fn new_game(w: &mut SimWorld) {
     let config = CityState::config(w);
-    w.city.world = Some(World::new(config, 42, 2));
+    let world = World::new(config, 42, 2);
+    w.city.ledger_at_start = Some(world.ledger().total());
+    w.city.world = Some(world);
+}
+
+#[when(expr = "the fresh city runs until {string}")]
+fn fresh_city_until(w: &mut SimWorld, time: String) {
+    let parts: Vec<u32> = time.split(':').map(|p| p.parse().unwrap()).collect();
+    let target = parts[0] * 3600 + parts[1] * 60 + parts[2];
+    let world = w.city.world.as_mut().unwrap();
+    loop {
+        world.tick();
+        if world.clock().second_of_day() == target {
+            break;
+        }
+    }
+}
+
+#[then("the shoppers' purse holds every adult's daily allowance")]
+fn purse_holds(w: &mut SimWorld) {
+    let config = CityState::config(w);
+    let world = w.city.world.as_ref().unwrap();
+    let due = sim_core::population::daily_allowances(world.population(), &config.customers);
+    assert!(due > Money::ZERO);
+    assert_eq!(world.ledger().balance(AccountId::Shoppers), due);
+}
+
+#[then("the ledger grew by exactly the allowances minted")]
+fn ledger_grew_by_minted(w: &mut SimWorld) {
+    let world = w.city.world.as_ref().unwrap();
+    let start = w.city.ledger_at_start.unwrap();
+    assert!(world.ledger().minted() > Money::ZERO);
+    assert_eq!(world.ledger().total(), start + world.ledger().minted());
+}
+
+#[then("more was minted than one morning's allowances")]
+fn minted_several(w: &mut SimWorld) {
+    let config = CityState::config(w);
+    let world = w.city.world.as_ref().unwrap();
+    let one = sim_core::population::daily_allowances(world.population(), &config.customers);
+    assert!(
+        world.ledger().minted() > one,
+        "{} vs {one}",
+        world.ledger().minted()
+    );
+}
+
+#[then("every city apartment block has residents")]
+fn city_blocks_let(w: &mut SimWorld) {
+    let config = CityState::config(w);
+    let world = w.city.world.as_ref().unwrap();
+    let occupancy = world.population().residential.occupancy();
+    let blocks: Vec<_> = world
+        .businesses()
+        .by_id
+        .iter()
+        .filter(|(_, b)| {
+            b.owner == AccountId::City && b.type_id == config.customers.residential.building_type
+        })
+        .map(|(id, _)| *id)
+        .collect();
+    assert!(
+        !blocks.is_empty(),
+        "the city should start with apartment blocks"
+    );
+    for id in blocks {
+        assert!(
+            occupancy.get(&id).copied().unwrap_or(0) > 0,
+            "{id:?} is empty"
+        );
+    }
 }
 
 #[when(expr = "the fresh city runs for {int} days")]
