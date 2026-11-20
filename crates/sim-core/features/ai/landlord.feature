@@ -1,7 +1,7 @@
 # Spec §10: "The Landlord hoards leases and never builds retail." R67 makes it a real residential
 # rival. It plays seat 1 through public commands only (R40); seat 0 is a scripted rival.
 # Tunables are ai.yaml `landlord` (shipped: up to 8 leases, pays at most 31% of its bid ceiling
-# for one, keeps £500, puts up at most four 3×3×25 apartment blocks per lease, lets them from the
+# for one, keeps £500, puts up at most three 3×3×12 apartment blocks per lease, lets them from the
 # reference rent by vacancy, bids for the city's blocks, offers a lease with 5 or fewer years
 # left).
 Feature: The Landlord
