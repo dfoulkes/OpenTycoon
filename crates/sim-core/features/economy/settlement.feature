@@ -28,7 +28,7 @@ Feature: The 06:00 settlement
     When the game runs to "06:00"
     Then player 1's balance is "£92.80"
     And player 2's balance is "£1.20"
-    And the city's balance is "£6.00"
+    And the city's balance is "£6.00" plus its residents' rent
     And no money was created or destroyed
 
   @R10
@@ -38,7 +38,7 @@ Feature: The 06:00 settlement
     And the city has a balance of "£0.00"
     When the game runs to "06:00"
     Then player 1's balance is "£96.80"
-    And the city's balance is "£3.20"
+    And the city's balance is "£3.20" plus its residents' rent
 
   @R10
   Scenario: Rent on the leaseholder's own building nets to zero
