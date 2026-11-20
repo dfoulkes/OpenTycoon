@@ -31,8 +31,8 @@ use crate::clock::{Clock, ClockEvents, ClockRules};
 use crate::config::Config;
 use crate::customers::Customers;
 use crate::economy::{
-    AccountId, Ledger, NetWorthBoard, PlayerId, Solvency, SolvencyTracker, credit_limit_on_day,
-    spendable,
+    self, AccountId, Ledger, NetWorthBoard, PlayerId, Solvency, SolvencyTracker,
+    credit_limit_on_day, spendable,
 };
 use crate::events::Events;
 use crate::hash::StableHasher;
@@ -189,27 +189,83 @@ impl World {
         fired
     }
 
-    /// Phase 2. M0: commands are drained in order; each module owner wires its own.
+    /// Phase 2. Commands are applied in submission order; each module owner wires its own.
+    /// A bankrupt player is out of the game, so their commands are dropped (R4).
     fn apply_commands(&mut self) {
-        for (_player, _command) in std::mem::take(&mut self.queued) {}
+        for (player, command) in std::mem::take(&mut self.queued) {
+            if !self.is_active(player) {
+                continue;
+            }
+            if let Command::SellToCity { business } = command {
+                // A refused sale (not the seller's, no such business) changes nothing.
+                let _ = economy::bankruptcy::sell_to_city(
+                    player,
+                    business,
+                    &mut self.ledger,
+                    &mut self.businesses,
+                    &self.config,
+                );
+            }
+        }
     }
 
-    /// Phase 3. M0: solvency only (R3, R4 strike counting).
+    /// Phase 3, economy's part, in the spec's order: net worth (R31, scored for the day that
+    /// just ended, so before the write-off) → stock write-off (R1, businesses) → solvency and
+    /// bankruptcy hand-over (R3, R4). The credit-limit step (R7) needs no work here: the limit
+    /// is derived from the day. Lease expiry, events and population follow (their owners).
     fn midnight_reckoning(&mut self) {
+        self.score_net_worth();
+        crate::businesses::write_off_stock(&mut self.businesses);
+        self.check_solvency();
+    }
+
+    /// Net worth for every active player (R19, R31, R39). The clock has already stepped, so
+    /// leases are valued at the year of the day being scored.
+    fn score_net_worth(&mut self) {
+        let years_per_day = i32::try_from(self.clock.rules().years_per_day).unwrap_or(0);
+        let scoring_year = self.clock.year().saturating_sub(years_per_day);
+        let uplift = self.config.game.net_worth.lot_property_uplift.rate();
+        for (player, status) in &self.players {
+            if *status != PlayerStatus::Active {
+                continue;
+            }
+            let inputs = economy::net_worth::net_worth_inputs(
+                AccountId::Player(*player),
+                &self.ledger,
+                &self.map,
+                &self.businesses,
+                &self.config.businesses.goods,
+                scoring_year,
+            );
+            self.net_worth
+                .record(*player, economy::net_worth(&inputs, uplift));
+        }
+    }
+
+    /// The midnight solvency check (R3) and, on the last strike, the hand-over of every
+    /// asset to the city (R4). The city is never checked: it can't go bust.
+    fn check_solvency(&mut self) {
         let rules = &self.config.game.bankruptcy;
         for (player, status) in &mut self.players {
             if *status != PlayerStatus::Active {
                 continue;
             }
-            let balance = self.ledger.balance(AccountId::Player(*player));
+            let account = AccountId::Player(*player);
             let outcome = self.solvency.check(
                 *player,
-                balance,
+                self.ledger.balance(account),
                 rules.solvent_at_or_above.money(),
                 rules.strikes_to_bankrupt,
             );
             if outcome == Solvency::Bankrupt {
                 *status = PlayerStatus::Bankrupt;
+                let handover = economy::bankruptcy::assets_of(account, &self.map, &self.businesses);
+                economy::bankruptcy::hand_over_to_city(
+                    &handover,
+                    &mut self.map,
+                    &mut self.businesses,
+                    &self.config,
+                );
             }
         }
     }
@@ -221,12 +277,29 @@ impl World {
     )]
     fn arrivals(&mut self) {}
 
-    /// Phase 5. Owner: economy (bills from land, utilities, businesses).
-    #[allow(
-        clippy::unused_self,
-        reason = "M0 phase stub; the module owner fills it in"
-    )]
-    fn settlement(&mut self) {}
+    /// Phase 5, economy's part: overdraft interest (0 by default, R32), then every building's
+    /// rent, utilities and stock order, paid with no limit check (R32). Delivery of the order
+    /// (R2) and the population joining the map follow (their owners).
+    fn settlement(&mut self) {
+        let active = self
+            .players
+            .iter()
+            .filter(|(_, s)| *s == PlayerStatus::Active)
+            .map(|(p, _)| *p);
+        let mut bills = economy::settlement::interest_bills(
+            &self.ledger,
+            active,
+            self.config.game.overdraft.interest_rate.rate(),
+        );
+        bills.extend(economy::settlement::settlement_bills(
+            &self.map,
+            &self.businesses,
+            &self.utilities,
+            &self.config,
+            self.clock.year(),
+        ));
+        self.ledger.settle(&bills);
+    }
 
     /// Phase 6. Owner: auctions.
     #[allow(

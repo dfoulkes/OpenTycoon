@@ -13,6 +13,7 @@ use crate::money::{BASIS_POINTS_PER_UNIT, Rate};
 pub fn check(config: &Config) -> Vec<ConfigError> {
     let mut errors = Vec::new();
     check_game(config, &mut errors);
+    check_game_economy(config, &mut errors);
     check_map(config, &mut errors);
     check_businesses(config, &mut errors);
     check_customers(config, &mut errors);
@@ -101,6 +102,48 @@ fn check_game(config: &Config, errors: &mut Vec<ConfigError>) {
                 ConfigFile::Game,
                 format!("/world/lot_size/{i}"),
                 "lot dimensions must be at least 1".into(),
+            );
+        }
+    }
+}
+
+/// `game.yaml` keys the economy owns (§2.3, §3): no negative limits, rates or uplifts, and
+/// the city never pays more than true value for a sell-back (R5).
+fn check_game_economy(config: &Config, errors: &mut Vec<ConfigError>) {
+    let game = &config.game;
+    let ratio = game.bankruptcy.sell_to_city_ratio.rate();
+    if ratio < Rate::ZERO || ratio > Rate::ONE {
+        err(
+            errors,
+            ConfigFile::Game,
+            "/bankruptcy/sell_to_city_ratio".into(),
+            "must be between 0 and 1 (a share of true value, R5)".into(),
+        );
+    }
+    for (pointer, negative) in [
+        (
+            "/overdraft/start_limit",
+            game.overdraft.start_limit.money().is_negative(),
+        ),
+        (
+            "/overdraft/increase_per_step",
+            game.overdraft.increase_per_step.money().is_negative(),
+        ),
+        (
+            "/overdraft/interest_rate",
+            game.overdraft.interest_rate.rate() < Rate::ZERO,
+        ),
+        (
+            "/net_worth/lot_property_uplift",
+            game.net_worth.lot_property_uplift.rate() < Rate::ZERO,
+        ),
+    ] {
+        if negative {
+            err(
+                errors,
+                ConfigFile::Game,
+                pointer.into(),
+                "must not be negative".into(),
             );
         }
     }

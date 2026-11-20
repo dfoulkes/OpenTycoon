@@ -153,3 +153,17 @@ fn empty_sources_report_all_eight_missing_files() {
     let errors = Config::load(&ConfigSources::new()).unwrap_err();
     assert_eq!(errors.0.len(), 8, "{errors}");
 }
+
+#[test]
+fn economy_keys_reject_negative_and_out_of_range_values() {
+    for (pointer, value) in [
+        ("/bankruptcy/sell_to_city_ratio", "1.5"),
+        ("/bankruptcy/sell_to_city_ratio", "-0.1"),
+        ("/overdraft/start_limit", "-1"),
+        ("/overdraft/increase_per_step", "-2500"),
+        ("/overdraft/interest_rate", "-0.01"),
+        ("/net_worth/lot_property_uplift", "-0.2"),
+    ] {
+        assert_names(load_with("game.yaml", pointer, value), "game.yaml", pointer);
+    }
+}

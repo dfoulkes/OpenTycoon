@@ -255,7 +255,7 @@ mod tests {
         ledger.open(P0, Money::from_pounds(-5_000));
         ledger.open(P1, Money::from_pounds(5_000));
         let players = [PlayerId(0), PlayerId(1)];
-        assert!(interest_bills(&ledger, players, Rate::ZERO).is_empty());
+        assert_eq!(interest_bills(&ledger, players, Rate::ZERO), Vec::new());
         let bills = interest_bills(&ledger, players, Rate::from_bp(100));
         assert_eq!(
             bills,
