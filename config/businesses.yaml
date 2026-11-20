@@ -58,3 +58,16 @@ types:
     goods: [meals]
     utility_factor: { electricity: 1.2, gas: 1.5, water: 1.2, telecoms: 0.5 }
     unlock_year: 1930
+  # The one apartments type (§7.2; R20, R28, R50, R51, R56): the city's starting blocks (R28,
+  # map.yaml city_apartments) and every residential building. Flats per building =
+  # volume ÷ customers.yaml residential.flat_size (R50); the owner sets the rent (R51). No goods,
+  # no stock and no trading window; rent and utilities by volume like any building (R56).
+  apartments:
+    name: "Apartments"
+    min_footprint: [2, 2]       # placeholder
+    max_height: 100             # R58: apartments can be towers
+    stock_density: 0            # no stock (R56)
+    hours: none                 # no trading window
+    goods: []                   # flats, not goods
+    utility_factor: { electricity: 0.8, gas: 0.8, water: 1.0, telecoms: 0.5 }   # placeholder
+    unlock_year: 1930

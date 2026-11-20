@@ -27,6 +27,33 @@ pub struct MapConfig {
     pub blocks: Vec<BlockSettings>,
     /// Tube stations: spawn and despawn points (§4.3, R25).
     pub tube_stations: Vec<TubeStation>,
+    /// The city's starting apartment blocks: one in each Low-tier set (R28).
+    pub city_apartments: CityApartments,
+}
+
+/// The apartment blocks the city owns at the start of the game (R28).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CityApartments {
+    /// Business type id in `businesses.yaml` the blocks are built as.
+    pub business_type: String,
+    /// Where each block stands: exactly one per Low-tier set.
+    pub sites: Vec<CityApartmentSite>,
+}
+
+/// One city apartment block (R28).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CityApartmentSite {
+    /// Block id it stands on; must be in a Low-tier set.
+    pub block: String,
+    /// `[x, y]` of the near corner inside the lot.
+    pub position: [u32; 2],
+    /// `[width, depth]` footprint; must touch the lot edge (R22).
+    pub size: [u32; 2],
+    /// Height in units (at most the business type's `max_height`, R58).
+    #[schemars(range(min = 1))]
+    pub height: u32,
 }
 
 /// Grid size in blocks (§4.1: 9×9 for the full game).

@@ -26,3 +26,7 @@ tube_stations:                  # §4.3; 1930 lines only on the v1 map
   - { block: whitechapel, line: "District",  opens: 1930 }
   - { block: holborn,     line: "Central",   opens: 1930 }
   - { block: belgravia,   line: "Piccadilly", opens: 1930 }   # placeholder placement (Hyde Park Corner)
+city_apartments:                # R28: the city starts with one apartment block in each Low-tier set
+  business_type: apartments    # businesses.yaml type
+  sites:
+    - { block: whitechapel, position: [3, 0], size: [3, 3], height: 10 }   # placeholder size and height

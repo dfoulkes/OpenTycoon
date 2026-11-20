@@ -25,8 +25,10 @@ use std::hash::{Hash, Hasher};
 use serde::{Deserialize, Serialize};
 
 use crate::ai::{AiSeat, Brain};
-use crate::auctions::AuctionHouse;
-use crate::businesses::{BuildRequest, BusinessId, Businesses, FitOutLevel, LeverError};
+use crate::auctions::{
+    AuctionError, AuctionHouse, AuctionItem, AuctionOutcome, AuctionRules, Opening, QueuedSale,
+};
+use crate::businesses::{BuildRequest, Business, BusinessId, Businesses, FitOutLevel, LeverError};
 use crate::clock::{Clock, ClockEvents, ClockRules};
 use crate::config::Config;
 use crate::customers::Customers;
@@ -36,7 +38,7 @@ use crate::economy::{
 };
 use crate::events::Events;
 use crate::hash::StableHasher;
-use crate::land::{BlockId, Footprint, Map};
+use crate::land::{BlockId, Footprint, Lease, Map};
 use crate::money::{Money, Rate};
 use crate::population::Population;
 use crate::rng::{SimRng, seeded};
@@ -60,6 +62,20 @@ pub enum Command {
     },
     /// Pass this round (R8).
     Pass,
+    /// Open an auction on a city-owned business with an opening bid of at least its property
+    /// value (R5, R28).
+    OpenBusinessAuction {
+        /// Business.
+        business: BusinessId,
+        /// Opening bid.
+        bid: Money,
+    },
+    /// Put your own lease or business up for auction (R5, R33). There is no opening bid;
+    /// bidding starts from the reserve (the land base price for land, £0 for a business).
+    OfferForAuction {
+        /// Your lease (`Land`) or business.
+        item: AuctionItem,
+    },
     /// Set a good's price as a share of its reference price (§7.1).
     SetPrice {
         /// Business.
@@ -164,6 +180,9 @@ impl World {
     pub fn new(config: Config, seed: u64, players: u8) -> Self {
         let clock = Clock::new(ClockRules::from_config(&config.game.clock));
         let map = Map::from_config(&config.map);
+        let auctions =
+            AuctionHouse::new(AuctionRules::from_config(&config.auctions, clock.rules()));
+        let businesses = city_apartments(&map, &config);
         let mut ledger = Ledger::new();
         ledger.open(AccountId::City, Money::ZERO);
         let seats: Vec<(PlayerId, PlayerStatus)> = (0..players)
@@ -193,8 +212,8 @@ impl World {
             solvency: SolvencyTracker::default(),
             players: seats,
             map,
-            auctions: AuctionHouse::default(),
-            businesses: Businesses::default(),
+            auctions,
+            businesses,
             utilities: Utilities::default(),
             population: Population::default(),
             customers: Customers::default(),
@@ -238,27 +257,30 @@ impl World {
             if !self.is_active(player) {
                 continue;
             }
-            if matches!(
-                command,
+            match command {
+                Command::SellToCity { business } => {
+                    // A refused sale (not the seller's, no such business) changes nothing.
+                    let _ = economy::bankruptcy::sell_to_city(
+                        player,
+                        business,
+                        &mut self.ledger,
+                        &mut self.businesses,
+                        &self.config,
+                    );
+                }
                 Command::SetPrice { .. }
-                    | Command::SetOrder { .. }
-                    | Command::SetOpen { .. }
-                    | Command::Build { .. }
-            ) {
-                // A refused lever or build changes nothing. Reporting rejections to the client
-                // is the protocol's job (M2).
-                let _ = self.apply_business_command(player, command);
-                continue;
-            }
-            if let Command::SellToCity { business } = command {
-                // A refused sale (not the seller's, no such business) changes nothing.
-                let _ = economy::bankruptcy::sell_to_city(
-                    player,
-                    business,
-                    &mut self.ledger,
-                    &mut self.businesses,
-                    &self.config,
-                );
+                | Command::SetOrder { .. }
+                | Command::SetOpen { .. }
+                | Command::Build { .. } => {
+                    // A refused lever or build changes nothing. Reporting rejections to the
+                    // client is the protocol's job (M2).
+                    let _ = self.apply_business_command(player, command);
+                }
+                Command::OpenLandAuction { .. }
+                | Command::OpenBusinessAuction { .. }
+                | Command::OfferForAuction { .. }
+                | Command::Raise { .. }
+                | Command::Pass => self.apply_auction_command(player, &command),
             }
         }
     }
@@ -272,6 +294,7 @@ impl World {
         crate::businesses::write_off_stock(&mut self.businesses);
         self.businesses.lock_orders(); // R2: tomorrow's order locks at midnight
         self.check_solvency();
+        self.lease_expiry();
     }
 
     /// Net worth for every active player (R19, R31, R39). The clock has already stepped, so
@@ -358,12 +381,209 @@ impl World {
         self.businesses.deliver_orders();
     }
 
-    /// Phase 6. Owner: auctions.
-    #[allow(
-        clippy::unused_self,
-        reason = "M0 phase stub; the module owner fills it in"
-    )]
-    fn auctions_phase(&mut self) {}
+    /// Phase 6. Owner: auctions. Countdowns, turn timers and closing (§5.1); the winner pays
+    /// the seller at once and takes the lease or business.
+    fn auctions_phase(&mut self) {
+        if !self.auctions.is_busy() && self.auctions.queue().is_empty() {
+            return;
+        }
+        let bidders = self.active_players();
+        if let Some(outcome) = self.auctions.advance(self.clock.tick(), &bidders) {
+            self.apply_auction_outcome(outcome);
+        }
+    }
+
+    /// Phase 2, auction commands (§5.1): opening bids, offers, raises and passes. Other
+    /// commands are left to their owners.
+    fn apply_auction_command(&mut self, player: PlayerId, command: &Command) {
+        let now = self.clock.tick();
+        let result = match command {
+            Command::OpenLandAuction { block, bid } => self.open_land_auction(player, *block, *bid),
+            Command::OpenBusinessAuction { business, bid } => {
+                self.open_business_auction(player, *business, *bid)
+            }
+            Command::OfferForAuction { item } => self.offer_for_auction(player, *item),
+            Command::Raise { by } => {
+                let ceiling = self.bid_ceiling(player).unwrap_or(Money::ZERO);
+                let bidders = self.active_players();
+                self.auctions.raise(player, *by, ceiling, now, &bidders)
+            }
+            Command::Pass => {
+                let bidders = self.active_players();
+                self.auctions.pass(player, now, &bidders)
+            }
+            _ => return,
+        };
+        self.auctions.record(player, result);
+    }
+
+    /// A player's opening bid on an unleased block; the minimum is its land base price (R23).
+    fn open_land_auction(
+        &mut self,
+        player: PlayerId,
+        block: BlockId,
+        bid: Money,
+    ) -> Result<(), AuctionError> {
+        let base = self
+            .map
+            .block(block)
+            .ok_or(AuctionError::Unknown)?
+            .land_base_price;
+        if !self.map.is_open_for_bids(block) {
+            return Err(AuctionError::NotForSale);
+        }
+        let opening = Opening {
+            item: AuctionItem::Land(block),
+            seller: AccountId::City,
+            opening_bid: Some((player, bid)),
+            minimum: base,
+        };
+        let ceiling = self.bid_ceiling(player).unwrap_or(Money::ZERO);
+        self.auctions.open(opening, ceiling, self.clock.tick())
+    }
+
+    /// A player's opening bid on a city-owned business; the minimum is its property value,
+    /// the build cost (R41). Player-owned businesses are sold only by their owner (R5).
+    fn open_business_auction(
+        &mut self,
+        player: PlayerId,
+        business: BusinessId,
+        bid: Money,
+    ) -> Result<(), AuctionError> {
+        let b = self
+            .businesses
+            .by_id
+            .get(&business)
+            .ok_or(AuctionError::Unknown)?;
+        if b.owner != AccountId::City {
+            return Err(AuctionError::NotForSale);
+        }
+        let opening = Opening {
+            item: AuctionItem::Business(business),
+            seller: AccountId::City,
+            opening_bid: Some((player, bid)),
+            minimum: b.build_cost,
+        };
+        let ceiling = self.bid_ceiling(player).unwrap_or(Money::ZERO);
+        self.auctions.open(opening, ceiling, self.clock.tick())
+    }
+
+    /// A player puts their own lease (R33) or business (R5) up for auction. Same queue, same
+    /// countdown, no shortcuts.
+    fn offer_for_auction(
+        &mut self,
+        player: PlayerId,
+        item: AuctionItem,
+    ) -> Result<(), AuctionError> {
+        let me = AccountId::Player(player);
+        let reserve = match item {
+            AuctionItem::Land(block) => {
+                let b = self.map.block(block).ok_or(AuctionError::Unknown)?;
+                if b.lease.as_ref().is_none_or(|l| l.holder != me) {
+                    return Err(AuctionError::NotYours);
+                }
+                b.land_base_price
+            }
+            AuctionItem::Business(id) => {
+                let b = self
+                    .businesses
+                    .by_id
+                    .get(&id)
+                    .ok_or(AuctionError::Unknown)?;
+                if b.owner != me {
+                    return Err(AuctionError::NotYours);
+                }
+                Money::ZERO
+            }
+            AuctionItem::Utility(_) => return Err(AuctionError::Unknown),
+        };
+        let opening = Opening {
+            item,
+            seller: me,
+            opening_bid: None,
+            minimum: reserve,
+        };
+        self.auctions.open(opening, Money::ZERO, self.clock.tick())
+    }
+
+    /// The winner pays the seller at once (§5.1) and takes the lease or the business. A lease
+    /// sold by its holder keeps its remaining years (R33); one sold by the city starts a fresh
+    /// term. Land auctions move only the lease; businesses only their owner (R5).
+    fn apply_auction_outcome(&mut self, outcome: AuctionOutcome) {
+        let AuctionOutcome::Sold {
+            item,
+            seller,
+            winner,
+            price,
+        } = outcome
+        else {
+            return;
+        };
+        let buyer = AccountId::Player(winner);
+        // The ceiling was checked at each bid; if the winner has since gone bankrupt or the
+        // 06:00 bills took them past it, the sale defaults and the item stays with its seller.
+        let paid = self.is_active(winner)
+            && self
+                .ledger
+                .pay_within_limit(buyer, seller, price, self.credit_limit())
+                .is_ok();
+        if !paid {
+            self.auctions.mark_defaulted();
+            return;
+        }
+        match item {
+            AuctionItem::Land(block) => {
+                let held = self
+                    .map
+                    .block(block)
+                    .and_then(|b| b.lease.clone())
+                    .filter(|l| l.holder == seller && seller != AccountId::City);
+                let lease = held.map_or_else(
+                    || {
+                        Lease::new(
+                            buyer,
+                            self.clock.year(),
+                            self.config.game.leases.term_years,
+                            price,
+                        )
+                    },
+                    |l| l.transferred(buyer, price),
+                );
+                self.map.grant_lease(block, lease);
+            }
+            AuctionItem::Business(id) => {
+                if let Some(b) = self.businesses.by_id.get_mut(&id) {
+                    b.owner = buyer;
+                }
+            }
+            AuctionItem::Utility(_) => {}
+        }
+    }
+
+    /// Midnight, after solvency: expired leases go straight back to auction (R9). Buildings
+    /// stay and pay rent to the city until a new holder wins.
+    fn lease_expiry(&mut self) {
+        for block in self.map.expire_leases(self.clock.year()) {
+            let reserve = self
+                .map
+                .block(block)
+                .map_or(Money::ZERO, |b| b.land_base_price);
+            self.auctions.enqueue(QueuedSale {
+                item: AuctionItem::Land(block),
+                seller: AccountId::City,
+                reserve,
+            });
+        }
+    }
+
+    /// Players still in the game, in seat order.
+    fn active_players(&self) -> Vec<PlayerId> {
+        self.players
+            .iter()
+            .filter(|(_, s)| *s == PlayerStatus::Active)
+            .map(|(p, _)| *p)
+            .collect()
+    }
 
     /// Phase 7. AIs see the world read-only and queue commands for the next tick.
     fn ai_phase(&mut self) {
@@ -612,6 +832,43 @@ impl World {
     }
 }
 
+/// The city's starting apartment blocks (R28), one in each Low-tier set, owned by the city at
+/// their build cost (R41). Placed at world creation from `map.yaml` `city_apartments`.
+fn city_apartments(map: &Map, config: &Config) -> Businesses {
+    let mut businesses = Businesses::default();
+    let type_id = &config.map.city_apartments.business_type;
+    let Some(kind) = config.businesses.types.get(type_id) else {
+        return businesses;
+    };
+    let rates = &config.businesses;
+    for site in crate::land::city_apartment_sites(map, &config.map) {
+        let Some(block) = map.block(site.block) else {
+            continue;
+        };
+        let build_cost = crate::businesses::build_cost(
+            site.height,
+            site.footprint,
+            rates.build_base_rate.money(),
+            config.map.tiers.get(block.tier).desirability_mult.rate(),
+            rates.fit_out.medium.build_cost_mult.rate(),
+        );
+        let request = BuildRequest {
+            type_id: type_id.clone(),
+            block: site.block,
+            footprint: site.footprint,
+            height: site.height,
+            owner: AccountId::City,
+            fit_out: FitOutLevel::Medium,
+        };
+        let id = BusinessId(businesses.next_id);
+        businesses.next_id += 1;
+        businesses
+            .by_id
+            .insert(id, Business::new(request, kind, build_cost));
+    }
+    businesses
+}
+
 #[cfg(test)]
 mod businesses_tests {
     //! The businesses commands and hooks wired through the real tick.
@@ -682,7 +939,7 @@ mod businesses_tests {
         let start = w.ledger.balance(ME);
         w.submit(P0, bakery());
         w.tick();
-        let id = BusinessId(0);
+        let id = w.businesses.owned_by(ME).next().map(|(id, _)| id).unwrap();
         let cost = w.businesses.get(id).map(|b| b.build_cost).unwrap();
         // Old Kent Road is Low (×0.6): 90 × £10 × 0.6 = £540.
         assert_eq!(cost, Money::from_pounds(540));
@@ -716,18 +973,25 @@ mod businesses_tests {
         let mut w = world_with_lease();
         w.submit(PlayerId(1), bakery());
         w.tick();
-        assert!(w.businesses.by_id.is_empty(), "player 1 holds no lease");
+        assert!(
+            w.businesses
+                .owned_by(AccountId::Player(PlayerId(1)))
+                .next()
+                .is_none(),
+            "player 1 holds no lease"
+        );
         w.submit(P0, bakery());
         w.tick();
+        let id = w.businesses.owned_by(ME).next().map(|(id, _)| id).unwrap();
         w.submit(
             PlayerId(1),
             Command::SetOpen {
-                business: BusinessId(0),
+                business: id,
                 open: false,
             },
         );
         w.tick();
-        assert!(w.businesses.get(BusinessId(0)).unwrap().open);
+        assert!(w.businesses.get(id).unwrap().open);
     }
 
     #[test]
@@ -737,6 +1001,6 @@ mod businesses_tests {
         w.ledger.transfer(ME, AccountId::City, -poor);
         w.submit(P0, bakery());
         w.tick();
-        assert!(w.businesses.by_id.is_empty());
+        assert!(w.businesses.owned_by(ME).next().is_none());
     }
 }

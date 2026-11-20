@@ -19,7 +19,7 @@ use super::{
 use crate::config::Config;
 use crate::config::businesses::BusinessType;
 use crate::economy::AccountId;
-use crate::land::{BlockId, BlockKind, Footprint, Map};
+use crate::land::{BlockId, BlockKind, Footprint, Lot, Map, PlacementError as LotError};
 use crate::money::{Money, Rate};
 
 /// What a player asks to build (§7.1).
@@ -85,29 +85,27 @@ pub enum BuildError {
 }
 
 /// The lot rules for one footprint (§4.1, R22): inside the `lot_size` lot, touching its edge,
-/// overlapping none of `existing`.
-///
-/// This is the narrow interface businesses needs from land's lot model; land may replace it
-/// with `Lot::can_place` without changing callers.
+/// overlapping none of `existing`. Delegates to land's lot model, [`Lot::check`], the one
+/// implementation of the rule; this maps its errors to the building's terms.
 pub fn can_place<'a>(
     lot_size: [u32; 2],
     existing: impl IntoIterator<Item = (BusinessId, &'a Footprint)>,
     footprint: Footprint,
 ) -> Result<(), PlacementError> {
-    let [lot_w, lot_d] = lot_size;
-    if !footprint.fits(lot_w, lot_d) {
-        return Err(PlacementError::OutsideLot);
-    }
-    if !footprint.touches_edge(lot_w, lot_d) {
-        return Err(PlacementError::NoStreetFrontage);
-    }
-    match existing
-        .into_iter()
-        .find(|(_, other)| footprint.overlaps(other))
-    {
-        Some((id, _)) => Err(PlacementError::Overlaps(id)),
-        None => Ok(()),
-    }
+    let existing: Vec<(BusinessId, Footprint)> =
+        existing.into_iter().map(|(id, f)| (id, *f)).collect();
+    let lot = Lot::of_size(lot_size).with_occupied(existing.iter().map(|(_, f)| *f));
+    lot.check(footprint).map_err(|e| match e {
+        LotError::Empty | LotError::OutsideLot => PlacementError::OutsideLot,
+        LotError::NoFrontage => PlacementError::NoStreetFrontage,
+        LotError::Overlaps(other) => PlacementError::Overlaps(
+            existing
+                .iter()
+                .find(|(_, f)| *f == other)
+                .map(|(id, _)| *id)
+                .unwrap_or_default(),
+        ),
+    })
 }
 
 /// True if `footprint` meets `min` `[width, depth]` either way round (§7.1).

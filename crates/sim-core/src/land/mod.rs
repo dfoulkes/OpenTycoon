@@ -1,8 +1,13 @@
 //! Land: the grid, blocks (lots), colour sets, footprints and leases (§4, §5.2, §5.3).
 //!
-//! Owner boundary: map construction from `map.yaml`, footprint placement rules (R22), set
-//! completion (R14), lease terms and expiry (R9, R33), and the land-rent formula (R10).
-//! Auctions live in [`crate::auctions`]; buildings in [`crate::businesses`].
+//! Owner boundary: map construction from `map.yaml`, lots and the street-frontage rule
+//! ([`lot`], R22), set completion (R14), lease terms and expiry (R9), who collects land rent
+//! (§5.2; the economy's 06:00 settlement bills it), the land-rent formula (R10), and where the city's starting apartment blocks stand
+//! (R28). Leases change hands only through [`crate::auctions`] (R33): nothing here hands a
+//! lease to a player except [`Map::grant_lease`], which only the world calls when an auction
+//! closes. Buildings live in [`crate::businesses`].
+
+pub mod lot;
 
 use std::collections::BTreeMap;
 
@@ -12,6 +17,8 @@ use serde::{Deserialize, Serialize};
 use crate::config::map::MapConfig;
 use crate::economy::AccountId;
 use crate::money::{Money, Rate};
+
+pub use lot::{Lot, PlacementError, Position, Size};
 
 /// Desirability tier (§4.1).
 #[derive(
@@ -85,6 +92,27 @@ pub struct Lease {
 }
 
 impl Lease {
+    /// A fresh lease from `start_year` for `term_years`, bought for `price` (§5.2).
+    pub fn new(holder: AccountId, start_year: i32, term_years: u32, price: Money) -> Self {
+        Lease {
+            holder,
+            start_year,
+            term_years,
+            last_price: price,
+        }
+    }
+
+    /// The same lease, bought at auction by `holder` for `price`: the buyer gets the years
+    /// left, not a fresh term (R33).
+    #[must_use]
+    pub fn transferred(&self, holder: AccountId, price: Money) -> Self {
+        Lease {
+            holder,
+            last_price: price,
+            ..self.clone()
+        }
+    }
+
     /// Years left at `year`, between 0 and the term (a year before the start counts as the
     /// full term).
     pub fn remaining_years(&self, year: i32) -> u32 {
@@ -176,6 +204,94 @@ impl Map {
         }
         sets
     }
+
+    /// The id of the block with config id `key` (e.g. `old_kent_road`).
+    pub fn block_id(&self, key: &str) -> Option<BlockId> {
+        self.blocks
+            .iter()
+            .position(|b| b.key == key)
+            .and_then(|i| u32::try_from(i).ok())
+            .map(BlockId)
+    }
+
+    /// Who collects land rent on a block: its leaseholder, or the city if it is unleased
+    /// (§5.2).
+    pub fn rent_payee(&self, id: BlockId) -> AccountId {
+        self.block(id)
+            .and_then(|b| b.lease.as_ref())
+            .map_or(AccountId::City, |lease| lease.holder)
+    }
+
+    /// True if a player may open an auction on the block with an opening bid (§5.1): it is
+    /// buildable and nobody but the city holds it (unleased, or a lease that went back to the
+    /// city, R4). A player's lease is only auctioned when its holder offers it (R33).
+    pub fn is_open_for_bids(&self, id: BlockId) -> bool {
+        self.block(id).is_some_and(|b| {
+            b.kind == BlockKind::Buildable
+                && b.lease.as_ref().is_none_or(|l| l.holder == AccountId::City)
+        })
+    }
+
+    /// Records the lease an auction winner takes. The only way a lease changes hands (R33);
+    /// called by the world when an auction closes, never in response to a player's command.
+    pub(crate) fn grant_lease(&mut self, id: BlockId, lease: Lease) {
+        if let Some(block) = self.blocks.get_mut(id.0 as usize) {
+            block.lease = Some(lease);
+        }
+    }
+
+    /// Ends every lease that has run out by `year` and returns the blocks, in id order, so
+    /// they can go straight back to auction (R9). Buildings on them are untouched and pay
+    /// rent to the city until a new holder wins the lease.
+    pub(crate) fn expire_leases(&mut self, year: i32) -> Vec<BlockId> {
+        let mut expired = Vec::new();
+        for (i, block) in self.blocks.iter_mut().enumerate() {
+            if block.lease.as_ref().is_some_and(|l| l.is_expired(year)) {
+                block.lease = None;
+                if let Ok(i) = u32::try_from(i) {
+                    expired.push(BlockId(i));
+                }
+            }
+        }
+        expired
+    }
+}
+
+/// Where one of the city's starting apartment blocks stands (R28).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct CitySite {
+    /// Block.
+    pub block: BlockId,
+    /// Footprint in the lot (touches the edge, R22).
+    pub footprint: Footprint,
+    /// Height in units.
+    pub height: u32,
+}
+
+/// The city's starting apartment blocks from `map.yaml` `city_apartments`: one in each
+/// Low-tier set (R28; validated at load). Sites naming an unknown block are skipped.
+pub fn city_apartment_sites(map: &Map, config: &MapConfig) -> Vec<CitySite> {
+    config
+        .city_apartments
+        .sites
+        .iter()
+        .filter_map(|site| {
+            Some(CitySite {
+                block: map.block_id(&site.block)?,
+                footprint: Footprint::at(
+                    Size {
+                        w: site.size[0],
+                        d: site.size[1],
+                    },
+                    Position {
+                        x: site.position[0],
+                        y: site.position[1],
+                    },
+                ),
+                height: site.height,
+            })
+        })
+        .collect()
 }
 
 /// A building's footprint inside a lot, in lot units. `(x, y)` is the corner nearest the origin.
