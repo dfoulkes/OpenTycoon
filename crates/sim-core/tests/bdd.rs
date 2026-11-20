@@ -38,6 +38,9 @@ pub struct SimWorld {
     pub events: steps::events::EventsState,
     /// Hotel scenarios (`steps::hotels`).
     pub hotels: steps::hotels::HotelsState,
+
+    /// The AI roster, driven seat by seat (`steps::roster`).
+    pub roster: steps::roster::RosterState,
 }
 
 fn main() {

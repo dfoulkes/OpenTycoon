@@ -8,10 +8,22 @@
 //! an AI's choices never shift the world's draws (docs/engineering.md §3).
 //!
 //! - [`grocer`]: the Grocer, "opens many cheap Low-tier shops" (§10, §10c v1).
-//! - Other personalities in `ai.yaml` (Landlord, Toff, Speculator, Sir Penny Sugar) are post-v1;
-//!   their seats sit inert.
+//! - [`landlord`]: the Landlord, "hoards leases and never builds retail".
+//! - [`toff`]: the Toff, "only goes for High tier".
+//! - [`speculator`]: the Speculator, "bids hard and flips".
+//! - [`sir_penny_sugar`]: Sir Penny Sugar, "deals mostly in residential" (§7.2).
+//! - [`kit`]: what they share. Every personality chooses business types from what `businesses.yaml`
+//!   says is unlocked and not obsolete in the current year ([`kit::in_era`]), so they keep
+//!   working as era content lands.
+//!
+//! A personality id with no brain (none in the shipped `ai.yaml`) sits inert.
 
 pub mod grocer;
+pub mod kit;
+pub mod landlord;
+pub mod sir_penny_sugar;
+pub mod speculator;
+pub mod toff;
 
 use std::hash::{Hash, Hasher};
 
@@ -25,6 +37,10 @@ use crate::rng::{SimRng, seeded};
 use crate::world::{Command, World};
 
 pub use grocer::Grocer;
+pub use landlord::Landlord;
+pub use sir_penny_sugar::PennySugar;
+pub use speculator::Speculator;
+pub use toff::Toff;
 
 /// Decides an AI player's commands.
 pub trait Brain {
@@ -35,23 +51,54 @@ pub trait Brain {
 
 /// The personality id that plays as the [`Grocer`].
 pub const GROCER: &str = "grocer";
+/// The personality id that plays as the [`Landlord`].
+pub const LANDLORD: &str = "landlord";
+/// The personality id that plays as the [`Toff`].
+pub const TOFF: &str = "toff";
+/// The personality id that plays as the [`Speculator`].
+pub const SPECULATOR: &str = "speculator";
+/// The personality id that plays as [`PennySugar`].
+pub const SIR_PENNY_SUGAR: &str = "sir_penny_sugar";
 
 /// What plays an AI seat.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SeatBrain {
     /// The Grocer (§10).
     Grocer(Grocer),
-    /// A personality with no brain yet (post-v1): does nothing.
+    /// The Landlord (§10).
+    Landlord(Landlord),
+    /// The Toff (§10).
+    Toff(Toff),
+    /// The Speculator (§10).
+    Speculator(Speculator),
+    /// Sir Penny Sugar (§10, §7.2).
+    PennySugar(PennySugar),
+    /// A personality id with no brain: does nothing.
     Inert,
 }
 
 impl SeatBrain {
     /// The brain for a personality id from `ai.yaml`.
     pub fn for_personality(personality: &str) -> Self {
-        if personality == GROCER {
-            SeatBrain::Grocer(Grocer::new(personality))
-        } else {
-            SeatBrain::Inert
+        match personality {
+            GROCER => SeatBrain::Grocer(Grocer::new(personality)),
+            LANDLORD => SeatBrain::Landlord(Landlord::new(personality)),
+            TOFF => SeatBrain::Toff(Toff::new(personality)),
+            SPECULATOR => SeatBrain::Speculator(Speculator::new(personality)),
+            SIR_PENNY_SUGAR => SeatBrain::PennySugar(PennySugar::new(personality)),
+            _ => SeatBrain::Inert,
+        }
+    }
+
+    /// The brain as a [`Brain`], or `None` if inert.
+    pub fn brain_mut(&mut self) -> Option<&mut dyn Brain> {
+        match self {
+            SeatBrain::Grocer(b) => Some(b),
+            SeatBrain::Landlord(b) => Some(b),
+            SeatBrain::Toff(b) => Some(b),
+            SeatBrain::Speculator(b) => Some(b),
+            SeatBrain::PennySugar(b) => Some(b),
+            SeatBrain::Inert => None,
         }
     }
 }
@@ -85,9 +132,9 @@ impl AiSeat {
 
     /// Decides this tick's commands from the seat's own RNG stream.
     pub fn play(&mut self, world: &World) -> Vec<Command> {
-        match &mut self.brain {
-            SeatBrain::Grocer(g) => g.decide(world, self.player, &mut self.rng),
-            SeatBrain::Inert => Vec::new(),
+        match self.brain.brain_mut() {
+            Some(brain) => brain.decide(world, self.player, &mut self.rng),
+            None => Vec::new(),
         }
     }
 }
@@ -167,11 +214,10 @@ mod tests {
     }
 
     #[test]
-    fn only_the_grocer_has_a_brain_in_v1() {
-        assert!(matches!(
-            SeatBrain::for_personality("grocer"),
-            SeatBrain::Grocer(_)
-        ));
-        assert_eq!(SeatBrain::for_personality("toff"), SeatBrain::Inert);
+    fn every_shipped_personality_has_a_brain() {
+        for id in [GROCER, LANDLORD, TOFF, SPECULATOR, SIR_PENNY_SUGAR] {
+            assert_ne!(SeatBrain::for_personality(id), SeatBrain::Inert, "{id}");
+        }
+        assert_eq!(SeatBrain::for_personality("nobody"), SeatBrain::Inert);
     }
 }

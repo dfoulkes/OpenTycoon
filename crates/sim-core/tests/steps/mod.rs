@@ -14,3 +14,4 @@ pub mod online;
 pub mod population;
 // events and utilities
 pub mod events;
+pub mod roster;
