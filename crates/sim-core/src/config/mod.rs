@@ -28,6 +28,7 @@ pub mod customers;
 pub mod events;
 pub mod game;
 pub mod map;
+pub mod map_checks;
 pub mod types;
 pub mod utilities;
 pub mod validate;
@@ -45,7 +46,7 @@ pub use businesses::BusinessesConfig;
 pub use customers::CustomersConfig;
 pub use events::EventsConfig;
 pub use game::GameConfig;
-pub use map::MapConfig;
+pub use map::{MapChoice, MapConfig, MapFile};
 pub use types::{ClockTime, Pounds, Ratio};
 pub use utilities::UtilitiesConfig;
 
@@ -106,7 +107,7 @@ impl ConfigFile {
     pub fn schema(self) -> serde_json::Value {
         let schema = match self {
             ConfigFile::Game => schemars::schema_for!(GameConfig),
-            ConfigFile::Map => schemars::schema_for!(MapConfig),
+            ConfigFile::Map => schemars::schema_for!(MapFile),
             ConfigFile::Auctions => schemars::schema_for!(AuctionsConfig),
             ConfigFile::Utilities => schemars::schema_for!(UtilitiesConfig),
             ConfigFile::Businesses => schemars::schema_for!(BusinessesConfig),
@@ -254,7 +255,7 @@ impl ConfigSources {
 pub struct Config {
     /// `game.yaml`
     pub game: GameConfig,
-    /// `map.yaml`
+    /// `map.yaml`: the selected board, resolved ([`MapFile::board`]).
     pub map: MapConfig,
     /// `auctions.yaml`
     pub auctions: AuctionsConfig,
@@ -282,7 +283,22 @@ impl Config {
             }
         }
         let game = load_file::<GameConfig>(sources, ConfigFile::Game, &mut errors);
-        let map = load_file::<MapConfig>(sources, ConfigFile::Map, &mut errors);
+        let map_file = load_file::<MapFile>(sources, ConfigFile::Map, &mut errors);
+        let map = map_file.as_ref().and_then(|file| {
+            let board = file.board(file.map);
+            if board.is_none() {
+                errors.push(ConfigError::new(
+                    ConfigFile::Map.file_name(),
+                    "/map",
+                    format!(
+                        "selects board {:?} but /boards/{} is missing",
+                        file.map.key(),
+                        file.map
+                    ),
+                ));
+            }
+            board
+        });
         let auctions = load_file::<AuctionsConfig>(sources, ConfigFile::Auctions, &mut errors);
         let utilities = load_file::<UtilitiesConfig>(sources, ConfigFile::Utilities, &mut errors);
         let businesses =
@@ -317,6 +333,15 @@ impl Config {
             ai,
         };
         errors.extend(validate::check(&config));
+        // The boards not selected are checked too, so a switch of `map` never meets a stale
+        // board (R26).
+        if let Some(file) = &map_file {
+            for choice in MapChoice::ALL.into_iter().filter(|c| *c != file.map) {
+                if let Some(board) = file.board(choice) {
+                    errors.extend(validate::check_board(&config, &board));
+                }
+            }
+        }
         if errors.is_empty() {
             Ok(config)
         } else {

@@ -31,14 +31,14 @@ Feature: The city's starting apartment blocks
 
   @R28 @R17
   Scenario: A Low-tier set without a city apartment block fails to load
-    Given the shipped config with "map.yaml" key "/city_apartments/sites" set to "[]"
+    Given the shipped config with "map.yaml" key "/boards/v1/city_apartments/sites" set to "[]"
     When the config is loaded
     Then loading fails
-    And an error names "map.yaml" and "/city_apartments/sites"
+    And an error names "map.yaml" and "/boards/v1/city_apartments/sites"
 
   @R28 @R22
   Scenario: A city apartment block must have street frontage
-    Given the shipped config with "map.yaml" key "/city_apartments/sites/0/position" set to "[3, 3]"
+    Given the shipped config with "map.yaml" key "/boards/v1/city_apartments/sites/0/position" set to "[3, 3]"
     When the config is loaded
     Then loading fails
     And an error names "map.yaml" and "touch its edge"

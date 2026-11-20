@@ -40,11 +40,11 @@ Feature: Config fails loudly
   @R45
   Scenario: Every problem is reported, not just the first
     Given the shipped config with "game.yaml" key "/clock/real_minutes_per_dya" set to "20"
-    And the shipped config with "map.yaml" key "/grid/width" set to "-1"
+    And the shipped config with "map.yaml" key "/boards/v1/grid/width" set to "-1"
     When the config is loaded
     Then loading fails
     And an error names "game.yaml" and "real_minutes_per_dya"
-    And an error names "map.yaml" and "/grid/width"
+    And an error names "map.yaml" and "/boards/v1/grid/width"
 
   @R45
   Scenario: A missing file fails and names it

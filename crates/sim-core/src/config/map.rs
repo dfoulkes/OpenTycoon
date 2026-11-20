@@ -1,9 +1,13 @@
-//! `map.yaml`: grid, blocks, districts, tiers, colour sets, land prices, tube stations (§4, §5).
+//! `map.yaml`: the boards (grid, blocks, districts, colour sets, land prices, tube stations),
+//! the tier multipliers and the land rate (§4, §5).
 //!
-//! A different city is a different `map.yaml` (§10b). The shipped default is the v1 grey-box
-//! 3×3 map: one set per row, one tier per row (§10c, §11).
+//! The file holds every board a game can be played on, keyed by name, and picks one with the
+//! top-level `map` key (`v1 | full`). The tier multipliers and land rate are economics, not
+//! geography, so every board shares them. [`MapFile::board`] resolves a board into the
+//! [`MapConfig`] the rest of the sim reads as `config.map`.
 
 use std::collections::BTreeMap;
+use std::fmt;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -11,10 +15,116 @@ use serde::{Deserialize, Serialize};
 use super::types::{Pounds, Ratio};
 use crate::land::{BlockKind, ColourBand, Tier};
 
+/// Which board a game is played on (R26).
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum MapChoice {
+    /// The grey-box 3×3 test map (§10c, §11).
+    V1,
+    /// The full 9×9 board: 26 colour sets, 4 utilities and City Hall (§4.1, R26).
+    Full,
+}
+
+impl MapChoice {
+    /// Every board name.
+    pub const ALL: [MapChoice; 2] = [MapChoice::V1, MapChoice::Full];
+
+    /// The key under `boards` in `map.yaml`.
+    pub const fn key(self) -> &'static str {
+        match self {
+            MapChoice::V1 => "v1",
+            MapChoice::Full => "full",
+        }
+    }
+}
+
+impl fmt::Display for MapChoice {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.key())
+    }
+}
+
 /// Root of `map.yaml`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+pub struct MapFile {
+    /// The board this game is played on: a key of `boards`.
+    pub map: MapChoice,
+    /// Per-tier multipliers (§5.3), shared by every board.
+    pub tiers: TierTable,
+    /// Land rent per unit of building volume per day, before the tier multiplier (§5.3, R10).
+    pub land_base_rate: Pounds,
+    /// Every board, keyed by name.
+    pub boards: Boards,
+}
+
+/// The boards in `map.yaml`, by name. A file needs only the board it selects; the shipped file
+/// carries both.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Boards {
+    /// The grey-box 3×3 test map.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "Board")]
+    pub v1: Option<Board>,
+    /// The full 9×9 board (R26).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "Board")]
+    pub full: Option<Board>,
+}
+
+impl Boards {
+    /// A board by name.
+    pub fn get(&self, choice: MapChoice) -> Option<&Board> {
+        match choice {
+            MapChoice::V1 => self.v1.as_ref(),
+            MapChoice::Full => self.full.as_ref(),
+        }
+    }
+}
+
+impl MapFile {
+    /// The board `choice`, resolved with the shared settings, or `None` if the file has no
+    /// such board.
+    pub fn board(&self, choice: MapChoice) -> Option<MapConfig> {
+        let board = self.boards.get(choice)?.clone();
+        Some(MapConfig {
+            board: choice,
+            tiers: self.tiers.clone(),
+            land_base_rate: self.land_base_rate,
+            grid: board.grid,
+            sets: board.sets,
+            blocks: board.blocks,
+            tube_stations: board.tube_stations,
+            city_apartments: board.city_apartments,
+        })
+    }
+}
+
+/// One board in `map.yaml`: its geography.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Board {
+    /// Grid size in blocks.
+    pub grid: GridSettings,
+    /// Colour sets (R14, R26), keyed by set id.
+    pub sets: BTreeMap<String, SetSettings>,
+    /// Every block on the grid, exactly one per cell.
+    pub blocks: Vec<BlockSettings>,
+    /// Tube stations: spawn and despawn points (§4.3, R25).
+    pub tube_stations: Vec<TubeStation>,
+    /// The city's starting apartment blocks: one in each Low-tier set (R28).
+    pub city_apartments: CityApartments,
+}
+
+/// The board a game is played on, resolved from `map.yaml`: the selected [`Board`] plus the
+/// shared tier table and land rate. This is `config.map`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MapConfig {
+    /// Which board this is.
+    pub board: MapChoice,
     /// Grid size in blocks.
     pub grid: GridSettings,
     /// Per-tier multipliers (§5.3).
@@ -29,6 +139,13 @@ pub struct MapConfig {
     pub tube_stations: Vec<TubeStation>,
     /// The city's starting apartment blocks: one in each Low-tier set (R28).
     pub city_apartments: CityApartments,
+}
+
+impl MapConfig {
+    /// The JSON pointer in `map.yaml` of `rest` inside this board, e.g. `/boards/full/blocks/3`.
+    pub fn pointer(&self, rest: &str) -> String {
+        format!("/boards/{}{rest}", self.board.key())
+    }
 }
 
 /// The apartment blocks the city owns at the start of the game (R28).
