@@ -1,0 +1,239 @@
+{
+  "$defs": {
+    "BusinessType": {
+      "additionalProperties": false,
+      "description": "A business type (§7.1).",
+      "properties": {
+        "goods": {
+          "description": "Good ids it sells. Multi-good stores split capacity.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "hours": {
+          "$ref": "#/$defs/Hours",
+          "description": "When it trades."
+        },
+        "max_height": {
+          "description": "Maximum height in units: `1 ≤ max_height ≤ world.max_height` (R58).",
+          "format": "uint32",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "min_footprint": {
+          "description": "Minimum `[width, depth]` footprint within the lot.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "name": {
+          "description": "Display name.",
+          "type": "string"
+        },
+        "obsolete_year": {
+          "description": "Optional year after which demand fades.",
+          "format": "int32",
+          "maximum": 2500,
+          "minimum": 1800,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "stock_density": {
+          "description": "Units of stock per unit of building volume (R10).",
+          "type": "number"
+        },
+        "unlock_year": {
+          "description": "First year it can be built.",
+          "format": "int32",
+          "maximum": 2500,
+          "minimum": 1800,
+          "type": "integer"
+        },
+        "utility_factor": {
+          "$ref": "#/$defs/UtilityFactors",
+          "description": "Multipliers on the utility base rates."
+        }
+      },
+      "required": [
+        "name",
+        "min_footprint",
+        "max_height",
+        "stock_density",
+        "hours",
+        "goods",
+        "utility_factor",
+        "unlock_year"
+      ],
+      "type": "object"
+    },
+    "FitOut": {
+      "additionalProperties": false,
+      "description": "One fit-out level.",
+      "properties": {
+        "appeal": {
+          "description": "Multiplier on class affinity when customers score the shop (§8.3).",
+          "type": "number"
+        },
+        "build_cost_mult": {
+          "description": "Multiplier on build cost.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "build_cost_mult",
+        "appeal"
+      ],
+      "type": "object"
+    },
+    "FitOutTable": {
+      "additionalProperties": false,
+      "description": "Fit-out levels.",
+      "properties": {
+        "high": {
+          "$ref": "#/$defs/FitOut",
+          "description": "High."
+        },
+        "low": {
+          "$ref": "#/$defs/FitOut",
+          "description": "Low."
+        },
+        "medium": {
+          "$ref": "#/$defs/FitOut",
+          "description": "Medium."
+        }
+      },
+      "required": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "type": "object"
+    },
+    "Good": {
+      "additionalProperties": false,
+      "description": "A good on sale.",
+      "properties": {
+        "luxury": {
+          "default": false,
+          "description": "Luxury goods get a mild boost from a higher price (§8.3).",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "Display name.",
+          "type": "string"
+        },
+        "purchase_price": {
+          "description": "Wholesale price per unit paid at the 06:00 settlement.",
+          "type": "number"
+        },
+        "ref_price": {
+          "description": "Reference retail price per unit (`ref_price` in §8.3).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "name",
+        "ref_price",
+        "purchase_price"
+      ],
+      "type": "object"
+    },
+    "Hours": {
+      "description": "When a business trades (§2.2, §7.1).",
+      "oneOf": [
+        {
+          "const": "day",
+          "description": "Day trade (R1).",
+          "type": "string"
+        },
+        {
+          "const": "night",
+          "description": "Night trade (R1).",
+          "type": "string"
+        },
+        {
+          "const": "hotel",
+          "description": "Hotel rooms, 23:30–03:00 (R30).",
+          "type": "string"
+        },
+        {
+          "const": "none",
+          "description": "Never trades (apartments).",
+          "type": "string"
+        }
+      ]
+    },
+    "UtilityFactors": {
+      "additionalProperties": false,
+      "description": "Utility multipliers for a business type.",
+      "properties": {
+        "electricity": {
+          "description": "Electricity.",
+          "type": "number"
+        },
+        "gas": {
+          "description": "Gas.",
+          "type": "number"
+        },
+        "telecoms": {
+          "description": "Telecoms / internet.",
+          "type": "number"
+        },
+        "water": {
+          "description": "Water.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "electricity",
+        "gas",
+        "water",
+        "telecoms"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Root of `businesses.yaml`.",
+  "properties": {
+    "build_base_rate": {
+      "description": "Build cost per unit of building volume, before the tier multiplier (§5.3).",
+      "type": "number"
+    },
+    "fit_out": {
+      "$ref": "#/$defs/FitOutTable",
+      "description": "Fit-out levels (§7.1)."
+    },
+    "goods": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Good"
+      },
+      "description": "Goods catalogue, keyed by good id.",
+      "type": "object"
+    },
+    "types": {
+      "additionalProperties": {
+        "$ref": "#/$defs/BusinessType"
+      },
+      "description": "Business types, keyed by type id.",
+      "type": "object"
+    }
+  },
+  "required": [
+    "build_base_rate",
+    "fit_out",
+    "goods",
+    "types"
+  ],
+  "title": "BusinessesConfig",
+  "type": "object"
+}

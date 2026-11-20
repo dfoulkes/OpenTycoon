@@ -1,0 +1,60 @@
+[package]
+name = "sim-core"
+description = "OpenTycoon simulation: deterministic, headless, no I/O."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+# The one permitted I/O point: `ConfigSources::read_dir`. Binaries enable it;
+# the simulation itself never does.
+fs = []
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml_ng.workspace = true
+schemars.workspace = true
+jsonschema.workspace = true
+thiserror.workspace = true
+serde_path_to_error.workspace = true
+rand_core.workspace = true
+rand_chacha.workspace = true
+libm.workspace = true
+
+[dev-dependencies]
+cucumber.workspace = true
+futures.workspace = true
+proptest.workspace = true
+criterion.workspace = true
+
+[[test]]
+name = "bdd"
+harness = false
+
+[[bench]]
+name = "tick"
+harness = false
+
+[[bench]]
+name = "economy"
+harness = false
+
+[[bench]]
+name = "auctions"
+harness = false
+
+[[bench]]
+name = "customers"
+harness = false
+
+[lints]
+workspace = true
+
+[[bench]]
+name = "businesses"
+harness = false

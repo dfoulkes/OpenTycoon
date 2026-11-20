@@ -1,0 +1,22 @@
+# Determinism and portability guards. See docs/engineering.md.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+
+disallowed-types = [
+    { path = "std::collections::HashMap", reason = "iteration order is random; use BTreeMap or IndexMap in sim logic" },
+    { path = "std::collections::HashSet", reason = "iteration order is random; use BTreeSet in sim logic" },
+]
+
+disallowed-methods = [
+    { path = "f64::exp", reason = "platform libm differs; use libm::exp for bit-identical results" },
+    { path = "f64::ln", reason = "platform libm differs; use libm::log" },
+    { path = "f64::powf", reason = "platform libm differs; use libm::pow" },
+    { path = "f64::sin", reason = "platform libm differs; use libm::sin" },
+    { path = "f64::cos", reason = "platform libm differs; use libm::cos" },
+    { path = "f64::tanh", reason = "platform libm differs; use libm::tanh" },
+    { path = "f32::exp", reason = "platform libm differs; use libm::expf" },
+    { path = "f32::powf", reason = "platform libm differs; use libm::powf" },
+    { path = "std::time::SystemTime::now", reason = "the sim never reads the wall clock; inject time" },
+    { path = "std::time::Instant::now", reason = "the sim never reads the wall clock; inject time" },
+]
+doc-valid-idents = ["OpenTycoon", "GDScript", "JSON", "x86_64", "ChaCha8", ".."]

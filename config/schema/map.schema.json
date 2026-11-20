@@ -1,0 +1,375 @@
+{
+  "$defs": {
+    "BlockKind": {
+      "description": "What a block is (§4.1).",
+      "oneOf": [
+        {
+          "const": "buildable",
+          "description": "Leasable and buildable.",
+          "type": "string"
+        },
+        {
+          "const": "utility",
+          "description": "A utility block, auctioned like land (R12, R24).",
+          "type": "string"
+        },
+        {
+          "const": "special",
+          "description": "Non-buildable (City Hall).",
+          "type": "string"
+        }
+      ]
+    },
+    "BlockSettings": {
+      "additionalProperties": false,
+      "description": "One block (lot) on the grid.",
+      "properties": {
+        "col": {
+          "description": "Column, 0-based from the left.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "description": "Stable id, `snake_case`.",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/BlockKind",
+          "description": "What the block is."
+        },
+        "land_base_price": {
+          "description": "Minimum opening bid at auction (R23). Required for buildable blocks.",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "District name shown to players.",
+          "type": "string"
+        },
+        "row": {
+          "description": "Row, 0-based from the top.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "set": {
+          "description": "Colour set id, for buildable blocks.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tier": {
+          "$ref": "#/$defs/Tier",
+          "description": "Desirability tier."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "row",
+        "col",
+        "tier",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "CityApartmentSite": {
+      "additionalProperties": false,
+      "description": "One city apartment block (R28).",
+      "properties": {
+        "block": {
+          "description": "Block id it stands on; must be in a Low-tier set.",
+          "type": "string"
+        },
+        "height": {
+          "description": "Height in units (at most the business type's `max_height`, R58).",
+          "format": "uint32",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "position": {
+          "description": "`[x, y]` of the near corner inside the lot.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "size": {
+          "description": "`[width, depth]` footprint; must touch the lot edge (R22).",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "block",
+        "position",
+        "size",
+        "height"
+      ],
+      "type": "object"
+    },
+    "CityApartments": {
+      "additionalProperties": false,
+      "description": "The apartment blocks the city owns at the start of the game (R28).",
+      "properties": {
+        "business_type": {
+          "description": "Business type id in `businesses.yaml` the blocks are built as.",
+          "type": "string"
+        },
+        "sites": {
+          "description": "Where each block stands: exactly one per Low-tier set.",
+          "items": {
+            "$ref": "#/$defs/CityApartmentSite"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "business_type",
+        "sites"
+      ],
+      "type": "object"
+    },
+    "ColourBand": {
+      "description": "Colour band, cheapest to dearest (§4.1, R26).",
+      "oneOf": [
+        {
+          "const": "brown",
+          "description": "Brown.",
+          "type": "string"
+        },
+        {
+          "const": "light_blue",
+          "description": "Light blue.",
+          "type": "string"
+        },
+        {
+          "const": "pink",
+          "description": "Pink.",
+          "type": "string"
+        },
+        {
+          "const": "orange",
+          "description": "Orange.",
+          "type": "string"
+        },
+        {
+          "const": "red",
+          "description": "Red.",
+          "type": "string"
+        },
+        {
+          "const": "yellow",
+          "description": "Yellow.",
+          "type": "string"
+        },
+        {
+          "const": "green",
+          "description": "Green.",
+          "type": "string"
+        },
+        {
+          "const": "dark_blue",
+          "description": "Dark blue.",
+          "type": "string"
+        }
+      ]
+    },
+    "GridSettings": {
+      "additionalProperties": false,
+      "description": "Grid size in blocks (§4.1: 9×9 for the full game).",
+      "properties": {
+        "height": {
+          "description": "Rows.",
+          "format": "uint32",
+          "maximum": 32,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "width": {
+          "description": "Columns.",
+          "format": "uint32",
+          "maximum": 32,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ],
+      "type": "object"
+    },
+    "SetSettings": {
+      "additionalProperties": false,
+      "description": "A colour set (R14, R26).",
+      "properties": {
+        "band": {
+          "$ref": "#/$defs/ColourBand",
+          "description": "Colour band, cheapest to dearest."
+        },
+        "name": {
+          "description": "Display name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "band"
+      ],
+      "type": "object"
+    },
+    "Tier": {
+      "description": "Desirability tier (§4.1).",
+      "oneOf": [
+        {
+          "const": "low",
+          "description": "Low.",
+          "type": "string"
+        },
+        {
+          "const": "medium",
+          "description": "Medium.",
+          "type": "string"
+        },
+        {
+          "const": "high",
+          "description": "High.",
+          "type": "string"
+        }
+      ]
+    },
+    "TierSettings": {
+      "additionalProperties": false,
+      "description": "Settings for one desirability tier.",
+      "properties": {
+        "desirability_mult": {
+          "description": "`desirability_mult(tier)` in the rent and build-cost formulas (§5.3; 0.6 / 1.0 / 1.8).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "desirability_mult"
+      ],
+      "type": "object"
+    },
+    "TierTable": {
+      "additionalProperties": false,
+      "description": "Settings per desirability tier.",
+      "properties": {
+        "high": {
+          "$ref": "#/$defs/TierSettings",
+          "description": "High tier."
+        },
+        "low": {
+          "$ref": "#/$defs/TierSettings",
+          "description": "Low tier."
+        },
+        "medium": {
+          "$ref": "#/$defs/TierSettings",
+          "description": "Medium tier."
+        }
+      },
+      "required": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "type": "object"
+    },
+    "TubeStation": {
+      "additionalProperties": false,
+      "description": "A tube station sitting on a block (§4.3).",
+      "properties": {
+        "block": {
+          "description": "Block id the station sits on.",
+          "type": "string"
+        },
+        "line": {
+          "description": "Line name.",
+          "type": "string"
+        },
+        "opens": {
+          "description": "Year the line opens at this station.",
+          "format": "int32",
+          "maximum": 2500,
+          "minimum": 1800,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "block",
+        "line",
+        "opens"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Root of `map.yaml`.",
+  "properties": {
+    "blocks": {
+      "description": "Every block on the grid, exactly one per cell.",
+      "items": {
+        "$ref": "#/$defs/BlockSettings"
+      },
+      "type": "array"
+    },
+    "city_apartments": {
+      "$ref": "#/$defs/CityApartments",
+      "description": "The city's starting apartment blocks: one in each Low-tier set (R28)."
+    },
+    "grid": {
+      "$ref": "#/$defs/GridSettings",
+      "description": "Grid size in blocks."
+    },
+    "land_base_rate": {
+      "description": "Land rent per unit of building volume per day, before the tier multiplier (§5.3, R10).",
+      "type": "number"
+    },
+    "sets": {
+      "additionalProperties": {
+        "$ref": "#/$defs/SetSettings"
+      },
+      "description": "Colour sets (R14, R26), keyed by set id.",
+      "type": "object"
+    },
+    "tiers": {
+      "$ref": "#/$defs/TierTable",
+      "description": "Per-tier multipliers (§5.3)."
+    },
+    "tube_stations": {
+      "description": "Tube stations: spawn and despawn points (§4.3, R25).",
+      "items": {
+        "$ref": "#/$defs/TubeStation"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "grid",
+    "tiers",
+    "land_base_rate",
+    "sets",
+    "blocks",
+    "tube_stations",
+    "city_apartments"
+  ],
+  "title": "MapConfig",
+  "type": "object"
+}

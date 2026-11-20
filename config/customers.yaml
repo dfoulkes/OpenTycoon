@@ -1,0 +1,87 @@
+# yaml-language-server: $schema=schema/customers.schema.json
+# customers.yaml: §7.2, §8. Placeholders are marked; the balance harness tunes them.
+initial_population: 2000        # placeholder: adults on the v1 map at the start
+visitors:
+  commuter_share: 0.7           # R59
+age_bands:                      # R60
+  - { id: "18-29", min_age: 18, max_age: 29 }
+  - { id: "30-49", min_age: 30, max_age: 49 }
+  - { id: "50-64", min_age: 50, max_age: 64 }
+  - { id: "65+",   min_age: 65 }
+births_per_woman:               # §8.1, R61: approximate England & Wales; 2025+ projected
+  1930: 1.9
+  1935: 1.8
+  1940: 1.9
+  1945: 2.4
+  1950: 2.2
+  1955: 2.4
+  1960: 2.7
+  1965: 2.9
+  1970: 2.4
+  1975: 1.8
+  1980: 1.9
+  1985: 1.8
+  1990: 1.8
+  1995: 1.7
+  2000: 1.6
+  2005: 1.8
+  2010: 1.9
+  2015: 1.8
+  2020: 1.6
+  2025: 1.45
+  2030: 1.5
+  2035: 1.5
+  2040: 1.5
+  2045: 1.5
+  2050: 1.5
+childbearing_years: 32          # women aged 18–49 (§8.1)
+mortality_per_step:             # placeholder: share of each band dying per 5-year step
+  "18-29": 0.005
+  "30-49": 0.01
+  "50-64": 0.04
+  "65+": 0.25
+migration_per_day: 50           # placeholder
+allowance:                      # §8.2, R55; daily, before rent
+  base_by_class: { working: 20, middle: 45, upper: 120 }
+  age_multiplier: { "18-29": 0.9, "30-49": 1.1, "50-64": 1.0, "65+": 0.7 }
+  sex_multiplier: { female: 1.0, male: 1.0 }
+  day_share: 0.6                # placeholder: share of the after-rent allowance spent by day
+desires:                        # §8.2 placeholder weights: P(good) per segment and window.
+  # Rules apply in order; a later matching rule overrides the weight of each good it names.
+  # Match on class, age (band id), sex, window (day|night), from_year, until_year.
+  - match: { window: day }
+    goods: { bread: 0.6, groceries: 0.5, clothes: 0.05 }
+  - match: { window: night }
+    goods: { drinks: 0.3, meals: 0.1 }
+  - match: { class: upper, window: day }
+    goods: { bread: 0.4, groceries: 0.3, clothes: 0.2 }
+  - match: { class: upper, window: night }
+    goods: { drinks: 0.3, meals: 0.4 }
+demographics:                   # §8.1: class split by era; age and sex placeholders
+  1930: { class: [0.60, 0.30, 0.10], age: [0.30, 0.35, 0.20, 0.15], sex: [0.5, 0.5] }
+  2050: { class: [0.40, 0.45, 0.15], age: [0.22, 0.33, 0.22, 0.23], sex: [0.5, 0.5] }
+price_sensitivity: { working: 3.0, middle: 1.5, upper: 0.5 }   # §8.3 k_class
+class_affinity:                 # §8.3 placeholder: pull of each tier per class, × fit-out appeal
+  working: { low: 1.0, medium: 0.8, high: 0.4 }
+  middle:  { low: 0.7, medium: 1.0, high: 0.9 }
+  upper:   { low: 0.3, medium: 0.8, high: 1.2 }
+luxury_price_boost: 0.3         # §8.3 placeholder: luxury goods gain mildly from a higher price
+reputation:                     # §8.3
+  initial: 0.5                  # placeholder
+  lost_sale_penalty: 0.02       # placeholder
+  sale_recovery: 0.005          # placeholder: rolling stat, share of the gap to 1 per sale
+distance_decay:
+  per_block: 0.5                # placeholder
+movement:                       # §8.1, §8.4
+  cells_per_tick: 3             # placeholder: lot units per tick (≈1.2 m/s)
+  spawn_spread_minutes: 60      # placeholder: shoppers trickle in over the first hour
+residential:                    # §7.2
+  flat_size: 4                  # R50
+  comfortable_share: 0.2        # R52
+  stretch_share: 0.5            # R52
+  move_interval_years: 10       # R54
+  building_type: apartments     # R20: the businesses.yaml type that holds flats
+  default_rent: 3.00            # placeholder: £ per flat per day until the owner sets it (R51)
+  reference_rent: 3.00          # placeholder: ref price for rent in price_factor (R51)
+  stretch_min_desirability: 1.0 # placeholder: affinity × appeal needed to stretch to 50% (R52)
+  rehunt_unhoused: true         # unhoused residents of the city look again while flats are empty

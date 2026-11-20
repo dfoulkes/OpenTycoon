@@ -1,0 +1,15 @@
+; Registers the Rust extension (crates/client-ext). Build it first:
+;   cargo build -p client-ext            (debug)
+;   cargo build -p client-ext --release  (release)
+[configuration]
+entry_symbol = "gdext_rust_init"
+compatibility_minimum = 4.2
+reloadable = true
+
+[libraries]
+linux.debug.x86_64 = "res://../target/debug/libopentycoon_client_ext.so"
+linux.release.x86_64 = "res://../target/release/libopentycoon_client_ext.so"
+linux.debug.arm64 = "res://../target/debug/libopentycoon_client_ext.so"
+linux.release.arm64 = "res://../target/release/libopentycoon_client_ext.so"
+macos.debug = "res://../target/debug/libopentycoon_client_ext.dylib"
+macos.release = "res://../target/release/libopentycoon_client_ext.dylib"

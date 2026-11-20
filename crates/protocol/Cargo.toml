@@ -1,0 +1,18 @@
+[package]
+name = "protocol"
+description = "OpenTycoon wire messages shared by server and client (placeholder until M2)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

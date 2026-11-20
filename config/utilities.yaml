@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=schema/utilities.schema.json
+# utilities.yaml: §6, R11, R12, R24. Rates are placeholders (£ per unit of volume per day).
+base_rates:
+  electricity: 0.02             # placeholder
+  gas: 0.01                     # placeholder
+  water: 0.01                   # placeholder
+  telecoms: 0.01                # placeholder
+internet:
+  upgrade_year: 1995            # R11
+  base_rate: 0.02               # placeholder
+nationalisation:
+  buyout_ratio: 1.0             # §9.1: holders bought out at book value

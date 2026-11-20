@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=schema/game.schema.json
+# game.yaml: world, clock, presets, bankruptcy, overdraft, net worth, leases, players.
+# Defaults from docs/spec.md §2, §3, §10b. Money is decimal pounds; ratios are decimals.
+world:
+  metres_per_lot_unit: 4        # R48
+  lot_size: [9, 9]              # R22
+  max_height: 100               # §4.1; per-type caps in businesses.yaml may not exceed it (R58)
+clock:
+  real_minutes_per_day: 20      # R34
+  years_per_day: 5              # R34
+  start_year: 1930
+  end_year: 2050                # 24 days
+  tick_game_seconds: 10         # §10a
+  trading_hours:
+    day:   { open: "07:00", close: "17:00" }   # R1
+    night: { open: "19:00", close: "23:50" }   # R1
+    hotel: { open: "23:30", close: "03:00" }   # R30, wraps midnight
+  schedule:
+    arrivals: "05:30"           # R53
+    settlement: "06:00"         # §2.2
+presets:                        # §2.4 [PROPOSED]
+  quick:    { start_year: 1930, end_year: 1960 }
+  standard: { start_year: 1930, end_year: 1990 }
+  full:     { start_year: 1930, end_year: 2050 }
+  modern:   { start_year: 1990, end_year: 2050 }
+  v1:       { start_year: 1930, end_year: 1950 }   # §10c v1 goal: 4 steps (spec text says "5 days"; see PR notes)
+bankruptcy:
+  strikes_to_bankrupt: 2        # §2.3
+  solvent_at_or_above: 0        # R3
+  sell_to_city_ratio: 0.5       # R5
+overdraft:
+  start_limit: 10000            # R7
+  increase_per_step: 2500       # R7
+  interest_rate: 0.0            # R32: no interest
+net_worth:
+  lot_property_uplift: 0.2      # R39
+leases:
+  term_years: 30                # §5.2
+players:
+  min: 2                        # §1
+  max: 6                        # §1
+  starting_cash: 7000           # R62: every player starts with £7,000 (configurable)

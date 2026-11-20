@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 6cbb8e22066bb17ae9abb9fc74ff8d1dcb625ba7ccd0b42e7444b73bd37a6a4e # shrinks to steps = [((0, OpenLandAuction { block: BlockId(0), bid: Money(150000) }), 377), ((0, OpenLandAuction { block: BlockId(0), bid: Money(150000) }), 352), ((0, OpenBusinessAuction { business: BusinessId(0), bid: Money(1500) }), 284), ((2, Pass), 371), ((0, OfferForAuction { item: Land(BlockId(5)) }), 116), ((0, Raise { by: Money(500000) }), 123), ((0, OpenLandAuction { block: BlockId(4), bid: Money(682200) }), 357)]

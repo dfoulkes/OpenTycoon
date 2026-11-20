@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=schema/map.schema.json
+# map.yaml: the v1 grey-box 3×3 test map (§10c, §11): one set per row, one tier per row.
+# The full 9×9 board (26 sets, 4 utilities, City Hall; R26) is post-v1 and will be another
+# map file. Prices and rates are placeholders until the balance harness tunes them.
+grid: { width: 3, height: 3 }
+tiers:                          # §5.3 desirability_mult
+  low:    { desirability_mult: 0.6 }
+  medium: { desirability_mult: 1.0 }
+  high:   { desirability_mult: 1.8 }
+land_base_rate: 0.05            # placeholder: £ per unit of building volume per day (§5.3)
+sets:
+  light_blue: { name: "East End",  band: light_blue }
+  orange:     { name: "West End",  band: orange }
+  green:      { name: "Mayfair & Belgravia", band: green }
+blocks:
+  - { id: old_kent_road, name: "Old Kent Road", row: 0, col: 0, tier: low,    kind: buildable, set: light_blue, land_base_price: 2000 }   # placeholder price
+  - { id: whitechapel,   name: "Whitechapel",   row: 0, col: 1, tier: low,    kind: buildable, set: light_blue, land_base_price: 2000 }   # placeholder price
+  - { id: bethnal_green, name: "Bethnal Green", row: 0, col: 2, tier: low,    kind: buildable, set: light_blue, land_base_price: 2200 }   # placeholder price
+  - { id: soho,          name: "Soho",          row: 1, col: 0, tier: medium, kind: buildable, set: orange,     land_base_price: 5000 }   # placeholder price
+  - { id: holborn,       name: "Holborn",       row: 1, col: 1, tier: medium, kind: buildable, set: orange,     land_base_price: 5000 }   # placeholder price
+  - { id: bloomsbury,    name: "Bloomsbury",    row: 1, col: 2, tier: medium, kind: buildable, set: orange,     land_base_price: 5500 }   # placeholder price
+  - { id: knightsbridge, name: "Knightsbridge", row: 2, col: 0, tier: high,   kind: buildable, set: green,      land_base_price: 11000 }  # placeholder price
+  - { id: belgravia,     name: "Belgravia",     row: 2, col: 1, tier: high,   kind: buildable, set: green,      land_base_price: 12000 }  # placeholder price
+  - { id: mayfair,       name: "Mayfair",       row: 2, col: 2, tier: high,   kind: buildable, set: green,      land_base_price: 14000 }  # placeholder price
+tube_stations:                  # §4.3; 1930 lines only on the v1 map
+  - { block: whitechapel, line: "District",  opens: 1930 }
+  - { block: holborn,     line: "Central",   opens: 1930 }
+  - { block: belgravia,   line: "Piccadilly", opens: 1930 }   # placeholder placement (Hyde Park Corner)
+city_apartments:                # R28: the city starts with one apartment block in each Low-tier set
+  business_type: apartments    # businesses.yaml type
+  sites:
+    - { block: whitechapel, position: [3, 0], size: [3, 3], height: 10 }   # placeholder size and height
