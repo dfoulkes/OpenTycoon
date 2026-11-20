@@ -1288,6 +1288,7 @@ fn check_landlord(config: &Config, errors: &mut Vec<ConfigError>) {
         name: "landlord",
     };
     block.common(cfg.aggression, cfg.cash_buffer);
+    block.share("bid_jitter", cfg.bid_jitter, 0, one, UNIT);
     block.share("min_tier_weight", cfg.min_tier_weight, 0, one, UNIT);
     block.share("rent", cfg.rent, 0, 10 * one, "between 0 and 10");
     block.building(
@@ -1308,6 +1309,7 @@ fn check_toff(config: &Config, errors: &mut Vec<ConfigError>) {
         name: "toff",
     };
     block.common(cfg.aggression, cfg.cash_buffer);
+    block.share("bid_jitter", cfg.bid_jitter, 0, one, UNIT);
     block.share("min_tier_weight", cfg.min_tier_weight, 0, one, UNIT);
     block.share(
         "price_premium",
@@ -1351,7 +1353,15 @@ fn check_speculator(config: &Config, errors: &mut Vec<ConfigError>) {
         name: "speculator",
     };
     block.common(cfg.aggression, cfg.cash_buffer);
+    block.share("bid_jitter", cfg.bid_jitter, 0, one, UNIT);
     block.share("min_tier_weight", cfg.min_tier_weight, 0, one, UNIT);
+    block.share(
+        "max_markup",
+        cfg.max_markup,
+        0,
+        10 * one,
+        "between 0 and 10",
+    );
     block.share(
         "bargain_share",
         cfg.bargain_share,
@@ -1371,6 +1381,7 @@ fn check_sir_penny_sugar(config: &Config, errors: &mut Vec<ConfigError>) {
         name: "sir_penny_sugar",
     };
     block.common(cfg.aggression, cfg.cash_buffer);
+    block.share("bid_jitter", cfg.bid_jitter, 0, one, UNIT);
     block.share("min_tier_weight", cfg.min_tier_weight, 0, one, UNIT);
     block.share("station_premium", cfg.station_premium, 0, one, UNIT);
     block.share(

@@ -451,6 +451,8 @@ fn roster_tunables_out_of_range_are_rejected() {
             "/landlord/rescue_after",
         ),
         ("/toff/aggression", "0", "/toff/aggression"),
+        ("/toff/bid_jitter", "1.5", "/toff/bid_jitter"),
+        ("/landlord/bid_jitter", "-0.1", "/landlord/bid_jitter"),
         ("/toff/cash_buffer", "-5", "/toff/cash_buffer"),
         ("/toff/price_premium", "5", "/toff/price_premium"),
         (

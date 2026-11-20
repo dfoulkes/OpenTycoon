@@ -18,7 +18,7 @@ personalities:
   speculator:
     name: "The Speculator"
     description: "Bids hard and flips."
-    weights: { land: 0.9, retail: 0.2, residential: 0.1, risk: 1.0, tier_low: 0.5, tier_medium: 0.7, tier_high: 0.8 }
+    weights: { land: 0.9, retail: 0.2, residential: 0.1, risk: 1.0, tier_low: 0.9, tier_medium: 0.3, tier_high: 0.2 }
   sir_penny_sugar:
     name: "Sir Penny Sugar"
     description: "Deals mostly in residential."
@@ -36,19 +36,21 @@ grocer:                         # §10: how the Grocer plays (placeholders; tune
   order_margin: 0.1             # tomorrow's order = today's sales × 1.1, capped at capacity (R2, R10)
   rescue_after: "22:00"         # a negative balance from here to midnight sells a shop to the city (R5)
 landlord:                       # §10: how the Landlord plays (placeholders; tune with sim-cli batch)
-  aggression: 0.35              # strength knob: pays at most this share of its bid ceiling for a lease (R7)
+  aggression: 0.31              # strength knob: pays at most this share of its bid ceiling for a lease (R7)
   cash_buffer: 500              # £ it never spends below (R3)
+  bid_jitter: 0.2               # each auction its maximum bid is scaled by a draw in [0.8, 1] from its own stream
   min_tier_weight: 0.5          # bids on tiers its personality weighs at least this (all three)
   max_leases: 4                 # hoards up to this many leases
   apartment_footprint: [3, 3]   # lot units (R22); it never builds retail
-  apartment_height: 12          # capped at the type's max_height (R58)
-  apartments_per_lot: 1         # flats as a sideline: rent from residents (R51) and land rent (§5.2)
+  apartment_height: 25          # capped at the type's max_height (R58)
+  apartments_per_lot: 2         # flats as a sideline: rent from residents (R51) and land rent (§5.2)
   rent: 1.0                     # × residential.reference_rent, fixed
   sell_within_years: 5          # offers a lease at auction (R33) this late in its term if that beats holding
   rescue_after: "22:00"         # a negative balance from here to midnight sells or offers something (R5)
 toff:                           # §10: how the Toff plays (placeholders; tune with sim-cli batch)
   aggression: 0.8               # strength knob: pays up for prime lots, at most this share of its bid ceiling
   cash_buffer: 1500             # a large buffer (R3)
+  bid_jitter: 0.2               # each auction its maximum bid is scaled by a draw in [0.8, 1] from its own stream
   min_tier_weight: 0.5          # High tier only, by its personality weights
   shop_types: [restaurant, clothes_store]   # preferred, if unlocked and not obsolete; else any retail, dearest goods first
   shop_footprint: [3, 3]        # lot units (R22)
@@ -58,28 +60,31 @@ toff:                           # §10: how the Toff plays (placeholders; tune w
   price_premium: 0.3            # prices 30% over reference: upper-class shoppers barely mind (§8.3)
   initial_order_share: 0.5      # a new shop's first order, as a share of capacity
   order_margin: 0.1             # tomorrow's order = today's sales × 1.1, capped at capacity (R2, R10)
-  rescue_after: "22:00"
+  rescue_after: "22:00"         # a negative balance from here to midnight sells a shop (R5)
 speculator:                     # §10: how the Speculator plays (placeholders; tune with sim-cli batch)
-  aggression: 0.5               # strength and risk knob: bids to this share of its ceiling, credit included (R7)
+  aggression: 0.51              # strength and risk knob: bids to this share of its ceiling, credit included (R7)
   cash_buffer: 0                # the smallest buffer
+  bid_jitter: 0.35              # each auction its maximum bid is scaled by a draw in [0.65, 1] from its own stream
   min_tier_weight: 0.5          # punts on tiers its personality weighs at least this
-  max_holdings: 2               # leases and businesses held at once
+  max_markup: 0.2               # pays at most 120% of base for a city lease: it has to sell on for more
+  max_holdings: 4               # leases and businesses held at once
   hold_hours: 6                 # game hours before it re-lists a purchase (R5, R33)
   bargain_share: 0.6            # on a player's offer, bids at most this share of book value
-  rescue_after: "21:00"
+  rescue_after: "21:00"         # earlier: it may have a lease to offer, and an auction takes hours
 sir_penny_sugar:                # §10, §7.2: how Sir Penny Sugar plays (placeholders; tune with sim-cli batch)
-  aggression: 0.35              # strength knob: pays at most this share of his bid ceiling for a lease (R7)
+  aggression: 0.34              # strength knob: pays at most this share of his bid ceiling for a lease (R7)
   cash_buffer: 400              # £ he never spends below (R3)
+  bid_jitter: 0.55              # each auction his maximum bid is scaled by a draw in [0.45, 1] from its own stream
   min_tier_weight: 0.5          # Low and Medium tier, by his personality weights
   station_premium: 0.1          # pays this much more of his ceiling for a lot with an open tube station
   apartment_footprint: [3, 3]   # lot units (R22)
-  apartment_height: 12          # capped at the type's max_height (R58)
-  apartments_per_lot: 4
+  apartment_height: 15          # capped at the type's max_height (R58)
+  apartments_per_lot: 2         # blocks per lease, the city's he buys included
   start_rent: 1.0               # × residential.reference_rent for a new block (R51)
-  rent_step: 0.1                # moves rent by 10% of reference each morning
+  rent_step: 0.45               # moves rent by 45% of reference each morning
   raise_at: 0.95                # occupancy at or above which he raises the rent
   cut_at: 0.6                   # occupancy at or below which he cuts it
-  min_rent: 0.5
-  max_rent: 3.0
+  min_rent: 0.5                 # × reference_rent
+  max_rent: 3.0                 # × reference_rent
   buy_city_blocks: true         # buys the city's apartment blocks at auction (R28)
-  rescue_after: "22:00"
+  rescue_after: "22:00"         # a negative balance from here to midnight sells a block (R5)
