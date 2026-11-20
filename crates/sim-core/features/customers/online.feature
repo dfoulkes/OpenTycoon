@@ -103,3 +103,12 @@ Feature: Online shopping from 1995
     Then "WebBun" has a brand of 0.3
     When the city runs to "07:00:00"
     Then "WebBun" has a brand of 0.35
+
+  @R15
+  Scenario: A good only online sellers sell is always bought online
+    Given the game starts in 2010
+    And the shipped config with "customers.yaml" key "/desires" set to "[{match: {window: day}, goods: {music_streams: 1.0}}]"
+    And a city of 100 working men aged "30-49"
+    And an online "music_streaming" seller "Tunes" on "old_kent_road" with 100000 music_streams
+    When the city runs to "12:00:00"
+    Then "Tunes" sold 100 music_streams online

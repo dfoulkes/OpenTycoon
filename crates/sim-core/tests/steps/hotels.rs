@@ -3,7 +3,7 @@
 //! (`steps::population::CityState`, shared with `steps::customers`).
 
 use cucumber::{given, then, when};
-use sim_core::businesses::{BusinessId, FitOutLevel};
+use sim_core::businesses::{BuildRequest, Business, BusinessId, FitOutLevel};
 use sim_core::customers::{Activity, Origin, Wave};
 use sim_core::economy::{AccountId, PlayerId};
 use sim_core::hotels::{self, HotelRefusal};
@@ -87,6 +87,35 @@ fn builds(
     game.tick();
 }
 
+#[given(regex = r#"^player (\d+) has a (\d+)-high (\d+)x(\d+) hotel on "([^"]+)"$"#)]
+fn has_hotel(w: &mut SimWorld, n: u8, height: u32, width: u32, depth: u32, name: String) {
+    // Built as the Build command would, without the unlock (that is unlock.feature's job).
+    let block = block_named(w, &name);
+    let game = world(w);
+    let config = game.config().clone();
+    let kind = &"hotel".to_owned();
+    let request = BuildRequest {
+        type_id: kind.clone(),
+        block,
+        footprint: Footprint {
+            x: 0,
+            y: 0,
+            w: width,
+            d: depth,
+        },
+        height,
+        owner: player(n),
+        fit_out: FitOutLevel::Medium,
+    };
+    let businesses = game.businesses_mut();
+    let id = BusinessId(businesses.next_id);
+    businesses.next_id += 1;
+    businesses.by_id.insert(
+        id,
+        Business::new(request, &config.businesses.types[kind], Money::ZERO),
+    );
+}
+
 #[then(regex = r#"^player (\d+) owns an? ([a-z_]+) on "([^"]+)"$"#)]
 fn owns(w: &mut SimWorld, n: u8, kind: String, name: String) {
     let block = block_named(w, &name);
@@ -100,8 +129,15 @@ fn owns(w: &mut SimWorld, n: u8, kind: String, name: String) {
 #[then(expr = "there is no hotel on {string}")]
 fn no_hotel(w: &mut SimWorld, name: String) {
     let block = block_named(w, &name);
-    let kind = world(w).config().businesses.hotel.building_type.clone();
-    assert_eq!(of_type_on(w, &kind, block), Vec::new());
+    let config = world(w).config().clone();
+    let hotels: Vec<_> = config
+        .businesses
+        .types
+        .keys()
+        .filter(|t| hotels::is_hotel(&config, t))
+        .flat_map(|t| of_type_on(w, t, block))
+        .collect();
+    assert_eq!(hotels, Vec::new());
 }
 
 #[then(
@@ -149,8 +185,7 @@ fn guests_of(w: &mut SimWorld, owner: AccountId) -> Vec<(BusinessId, u32, Money)
         .filter(|(_, b)| b.owner == owner && hotels::is_hotel(&config, &b.type_id))
         .map(|(id, b)| {
             let guests = game.customers().hotel_guests.get(id).copied().unwrap_or(0);
-            let good = &config.businesses.types[&b.type_id].goods[0];
-            let price = b.unit_price(good, &config.businesses).unwrap();
+            let price = hotels::room_price(&config, b).unwrap().0;
             (*id, guests, price)
         })
         .collect()
@@ -178,8 +213,7 @@ fn paid_at_check_in(w: &mut SimWorld, n: u8) {
 
 #[given(regex = r#"^a hotel "([^"]+)" on "([^"]+)" (\d+)×(\d+)×(\d+)$"#)]
 fn hotel(w: &mut SimWorld, name: String, block: String, fw: u32, fd: u32, h: u32) {
-    let kind = CityState::config(w).businesses.hotel.building_type;
-    CityState::add_building(w, &name, &kind, &block, (fw, fd, h), AccountId::City);
+    CityState::add_building(w, &name, "hotel", &block, (fw, fd, h), AccountId::City);
 }
 
 #[given(regex = r#"^a souvenir shop "([^"]+)" on "([^"]+)" with (\d+) souvenirs$"#)]
@@ -300,13 +334,13 @@ fn no_commuter_rooms(w: &mut SimWorld) {
 
 #[then(expr = "{int} tourists are wandering the streets")]
 fn wandering(w: &mut SimWorld, n: usize) {
-    let about = &w.city.customers.agents;
-    let wanderers = about
-        .iter()
-        .filter(|c| c.activity == Activity::Wandering)
-        .collect::<Vec<_>>();
+    let wanderers = &w.city.customers.wanderers;
     assert_eq!(wanderers.len(), n);
-    assert!(wanderers.iter().all(|c| c.origin == Origin::Tourist));
+    assert!(
+        wanderers
+            .iter()
+            .all(|c| c.origin == Origin::Tourist && c.activity == Activity::Wandering)
+    );
 }
 
 #[then("no commuter is on the map")]
@@ -327,6 +361,7 @@ fn nobody_checked_in(w: &mut SimWorld) {
 
 #[then("nobody is wandering")]
 fn nobody_wandering(w: &mut SimWorld) {
+    assert_eq!(w.city.customers.wanderers, Vec::new());
     assert!(
         w.city
             .customers
@@ -338,6 +373,7 @@ fn nobody_wandering(w: &mut SimWorld) {
 
 #[then("nobody is wandering or looking for a bed")]
 fn nobody_seeking(w: &mut SimWorld) {
+    assert_eq!(w.city.customers.wanderers, Vec::new());
     assert!(w.city.customers.agents.iter().all(|c| !matches!(
         c.activity,
         Activity::Wandering | Activity::SeekingBed | Activity::WalkingToHotel { .. }

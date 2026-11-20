@@ -36,6 +36,38 @@ fn online_bakery(w: &mut SimWorld, name: String, block: String, qty: i64) {
         .insert("bread".into(), qty);
 }
 
+#[given(regex = r#"^an online "([a-z_]+)" seller "([^"]+)" on "([^"]+)" with (\d+) ([a-z_]+)$"#)]
+fn online_seller(
+    w: &mut SimWorld,
+    kind: String,
+    name: String,
+    block: String,
+    qty: i64,
+    good: String,
+) {
+    let id = CityState::add_building(w, &name, &kind, &block, (3, 3, 4), AccountId::City);
+    w.city
+        .businesses
+        .by_id
+        .get_mut(&id)
+        .unwrap()
+        .stock
+        .insert(good, qty);
+}
+
+#[then(regex = r#"^"([^"]+)" sold (\d+) ([a-z_]+) online$"#)]
+fn sold_good_online(w: &mut SimWorld, shop: String, n: u32, good: String) {
+    let config = CityState::config(w);
+    let goods = GoodsIndex::new(&config.businesses.goods);
+    let good = goods.id(&good).unwrap();
+    let id = w.city.building(&shop);
+    let got: u32 = bread_sales(w, true)
+        .filter(|s| s.shop == id && s.good == good)
+        .map(|s| s.qty)
+        .sum();
+    assert_eq!(got, n);
+}
+
 #[given(regex = r#"^"([^"]+)" has a brand of ([\d.]+)$"#)]
 fn set_brand(w: &mut SimWorld, name: String, brand: f64) {
     let id = w.city.building(&name);
@@ -52,7 +84,7 @@ fn brand_is(w: &mut SimWorld, name: String, brand: f64) {
     );
 }
 
-fn bread_sales<'a>(w: &'a SimWorld, online: bool) -> impl Iterator<Item = &'a Sale> + 'a {
+fn bread_sales(w: &SimWorld, online: bool) -> impl Iterator<Item = &Sale> + '_ {
     w.city
         .reports
         .iter()
@@ -110,10 +142,10 @@ fn some_online(w: &mut SimWorld) {
 }
 
 #[then(regex = r#"^"([^"]+)" sold more bread online than "([^"]+)"$"#)]
-fn more_online(w: &mut SimWorld, a: String, b: String) {
-    let x = bread_units(w, true, Some(&a));
-    let y = bread_units(w, true, Some(&b));
-    assert!(x > y, "{x} vs {y}");
+fn more_online(w: &mut SimWorld, more: String, fewer: String) {
+    let high = bread_units(w, true, Some(&more));
+    let low = bread_units(w, true, Some(&fewer));
+    assert!(high > low, "{high} vs {low}");
 }
 
 #[then("no shopper spent more than their day budget")]

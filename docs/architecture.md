@@ -40,7 +40,8 @@ the split for M1 parallel work.
 | `businesses` | `src/businesses.rs` | buildings, types, prices, orders, stock, write-off | R2, R10, R13, R35, R41, R58 | types + cost formulas |
 | `utilities` | `src/utilities.rs` | utility bills, holders, auctions, nationalisation and privatisation | R11, R12, R24 | **real**: auctioned like land; elections move ownership |
 | `population` | `src/population.rs` | cohort model, births, ageing, arrivals | R6, R53, R60, R61 | types only |
-| `customers` | `src/customers.rs` | shoppers, shopping lists, shop scoring, movement | R25, R55, §8.3 | scoring primitives real |
+| `customers` | `src/customers/` | shoppers, shopping lists, shop scoring, movement, tourists' nights (wandering, looking for a bed), online demand (`online.rs`) | R15, R25, R38, R42, R55, R59, §8.3 | **real**: hotels and online from wave A |
+| `hotels` | `src/hotels.rs` | the Hotel unlock (full set) and one per set, rooms by volume, room offers and check-in | R14, R29, R30 | **real** (wave A) |
 | `ai` | `src/ai/` | AI personalities behind the `Brain` trait, each seat on its own RNG stream | §10 | **real** (M1): the Grocer (`ai.yaml` `grocer`); other personalities inert |
 | `events` | `src/events/` | history, random events, elections, insurance, front page, the modifier stack | R12, R16 | **real**: every §9 event as a typed modifier; world side in `src/world/events_phase.rs` |
 | `world` | `src/world.rs` | owns all state; runs the tick order; `Command`s; state hash | R40 | **real** (phases are stubs) |
@@ -91,7 +92,7 @@ approximate). `World::tick()` runs these phases **in this order, always**:
 | 5 | Settlement | 06:00 | economy (bills from land, utilities, businesses, population, events) | residents' rent from the shoppers' purse to each block's owner (R51, R63); land rent, utilities, insurance premiums, stock paid, may pass the limit (R32, R56); tomorrow's order delivered (R2); random building events rolled (§9); population joins the map |
 | 6 | Auctions | every tick | auctions | countdowns, turn timers, closing |
 | 7 | AI | every tick | ai | read the world, queue commands for the next tick |
-| 8 | Customers | every tick | customers | spawn, choose shops, walk, buy |
+| 8 | Customers | every tick | customers | spawn, buy online (from the Internet's arrival), choose shops, walk, buy; tourists wander, then take a Hotel room or the train (23:30–03:00); the world pays sales and room nights from the shoppers' purse |
 | 9 | Businesses | every tick | businesses | record sales, reputation, lost sales |
 
 `World::tick_observed` runs the same tick and calls an observer after each phase that ran; the

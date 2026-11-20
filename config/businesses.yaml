@@ -761,6 +761,6 @@ types:
     goods: []                   # rooms, not stock: priced by hotel.room_good
     utility_factor: { electricity: 1.2, gas: 1.0, water: 1.5, telecoms: 0.5 }   # placeholder
     unlock_year: 1930
-hotel:                          # §7.3; R14, R29, R30
-  building_type: hotel
+hotel:                          # §7.3; R14, R29, R30: every type with hours: hotel is a Hotel
+  room_good: room_night         # the price of a room night in every hours: hotel type (no stock)
   room_size: 4                  # placeholder: units of building volume per room (like flat_size, R50)

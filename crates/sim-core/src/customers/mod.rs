@@ -1,5 +1,5 @@
-//! Customers: walking agents, shopping lists, shop choice, movement, reputation
-//! (§8.1–§8.4; R25, R55, R59).
+//! Customers: walking agents, shopping lists, shop choice, movement, reputation, tourists'
+//! nights and online demand (§7.3, §7.5, §8.1–§8.4; R15, R25, R29, R38, R42, R55, R59).
 //!
 //! Owner boundary: individual shoppers on the map and the scoring that picks a shop. Counts,
 //! arrivals and homes come from [`crate::population`]; stock and prices from
@@ -16,23 +16,36 @@
 //!   has sold out by the time they arrive is a **lost sale**: its reputation drops and the
 //!   shopper re-scores.
 //! - **17:00** day trade closes: day shoppers still on the map despawn (§8.4).
-//! - **19:00** night trade: the same again for the night-out goods.
-//! - **23:50** night trade closes: residents walk home and visitors walk to the tube, then
-//!   despawn. Hotels are post-v1, so in v1 tourists take the train too (R59, partial).
+//! - **19:00** night trade: the same again for the night-out goods. While a Hotel stands in
+//!   the city every tourist comes out at night, list or no list: they need a bed.
+//! - A tourist who has finished their night list **wanders** until the hotels open (R42). From
+//!   **23:30** a bed is their last need (R38): they pick a Hotel with a free room they can
+//!   afford ([`crate::hotels::choose_hotel`]), walk there and check in, paying at check-in
+//!   (R29), or take the train home if there is none. Commuters always take the train and
+//!   residents go home (R59).
+//! - **23:50** night trade closes: residents walk home and commuters walk to the tube, then
+//!   despawn; tourists still shopping look for a bed instead.
+//! - **03:00** the hotels close: anyone still looking for a bed takes the train.
+//! - **Online (from the Internet's arrival, §7.5):** as each shopper sets out they roll once
+//!   per good on their list to buy it online instead ([`online`]); what they buy online is
+//!   off their list, so it never reaches the high street.
 //!
-//! Floats live only in [`scoring`] and [`shopping`]; state is integers.
+//! Floats live only in [`scoring`], [`shopping`] and [`online`]; state is integers.
 
 pub mod movement;
 pub mod online;
 pub mod scoring;
 pub mod shopping;
 pub mod shops;
+mod step;
+
+pub use step::tick;
 
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::businesses::{BusinessId, Businesses, Hours, LostSale as ShopLostSale};
+use crate::businesses::{BusinessId, Businesses, Hours};
 use crate::clock::Clock;
 use crate::config::{Config, CustomersConfig};
 use crate::events::Modifiers;
@@ -42,7 +55,7 @@ use crate::population::cohort::split_by_weights;
 use crate::population::{Cohort, Population, ResidentId, allowance};
 use crate::rng::{SimRng, below};
 
-use movement::{Cell, Geometry, step_towards};
+use movement::{Cell, Geometry};
 use shops::{GoodId, GoodsIndex, ShopOffer};
 
 /// A stable customer id.
@@ -138,6 +151,11 @@ pub struct Customers {
     pub next_id: u64,
     /// Reputation per shop, 0–1 as a rate (absent: `reputation.initial`).
     pub reputation: BTreeMap<BusinessId, Rate>,
+    /// Tourists wandering the streets until the hotels open (R42), in the order they finished
+    /// shopping. On the map (footfall) but with nothing to do, so they wait here rather than
+    /// in `agents`, which keeps the ticks before 23:30 as cheap as an empty street.
+    #[serde(default)]
+    pub wanderers: Vec<Customer>,
     /// Rooms taken tonight per Hotel (R30); cleared when the hotels open.
     #[serde(default)]
     pub hotel_guests: BTreeMap<BusinessId, u32>,
@@ -152,11 +170,12 @@ impl Customers {
         reputation_of(&self.reputation, shop, rules)
     }
 
-    /// Agents on the map (not waiting to appear).
+    /// Agents on the map (not waiting to appear), wanderers last.
     pub fn on_map(&self) -> impl Iterator<Item = &Customer> {
         self.agents
             .iter()
             .filter(|c| !matches!(c.activity, Activity::Waiting { .. }))
+            .chain(&self.wanderers)
     }
 }
 
@@ -247,8 +266,12 @@ pub fn run_phase(
 ) -> PhaseReport {
     let trading = inputs.clock.rules().trading;
     let now = inputs.clock.second_of_day();
-    if state.agents.is_empty() && now != trading.day.0 && now != trading.night.0 {
-        // Nobody about and no window opening: nothing to score (keeps idle ticks cheap).
+    let boundary = [trading.day, trading.night, trading.hotel]
+        .iter()
+        .any(|(open, close)| now == *open || now == *close);
+    if !boundary && idle(state, now) {
+        // Nobody about who can act and no window opening or closing: nothing to score (keeps
+        // idle ticks cheap; wandering tourists only wait for the hotels).
         return PhaseReport::default();
     }
     let goods = GoodsIndex::new(&inputs.config.businesses.goods);
@@ -271,6 +294,14 @@ pub fn run_phase(
     );
     let doors = front_doors(businesses, inputs.map, geometry);
     tick(state, inputs, &mut offers, &doors, &goods, businesses, rng)
+}
+
+/// True if no agent can act this tick: everyone is wandering or not out yet.
+fn idle(state: &Customers, now: u32) -> bool {
+    state
+        .agents
+        .iter()
+        .all(|c| matches!(c.activity, Activity::Waiting { from } if now < from))
 }
 
 /// Every building's front door.
@@ -298,128 +329,13 @@ pub fn station_cells(config: &Config, map: &Map, year: i32, geometry: Geometry) 
         .collect()
 }
 
-/// One tick of the customers phase (§8): window opens spawn a wave, closes end it, and every
-/// agent on the map takes one step (choose, walk, buy, or leave).
-pub fn tick(
-    state: &mut Customers,
-    inputs: PhaseInputs<'_>,
-    offers: &mut [ShopOffer],
-    doors: &BTreeMap<BusinessId, Cell>,
-    goods: &GoodsIndex,
-    businesses: &mut Businesses,
-    rng: &mut SimRng,
-) -> PhaseReport {
-    let mut report = PhaseReport::default();
-    let trading = inputs.clock.rules().trading;
-    let now = inputs.clock.second_of_day();
-
-    // Closes first, then opens (§8.4).
-    if now == trading.day.1 {
-        let before = state.agents.len();
-        state.agents.retain(|c| c.wave != Wave::Day);
-        report.despawned += (before - state.agents.len()) as u64;
-    }
-    if now == trading.night.1 {
-        let before = state.agents.len();
-        state
-            .agents
-            .retain(|c| !(c.wave == Wave::Night && matches!(c.activity, Activity::Waiting { .. })));
-        report.despawned += (before - state.agents.len()) as u64;
-        for c in &mut state.agents {
-            if c.wave == Wave::Night {
-                c.activity = Activity::Leaving;
-            }
-        }
-    }
-    if now == trading.day.0 {
-        report.spawned += spawn_wave(state, inputs, Wave::Day, doors, goods, rng);
-    }
-    if now == trading.night.0 {
-        report.spawned += spawn_wave(state, inputs, Wave::Night, doors, goods, rng);
-    }
-
-    let rules = &inputs.config.customers;
-    let geometry = inputs.geometry();
-    let cells = rules.movement.cells_per_tick;
-    let mut reputation = std::mem::take(&mut state.reputation);
-    let before = state.agents.len();
-    state.agents.retain_mut(|c| {
-        if let Activity::Waiting { from } = c.activity {
-            if now < from {
-                return true;
-            }
-            c.activity = Activity::Choosing;
-        }
-        match c.activity {
-            Activity::Waiting { .. } => true,
-            Activity::Choosing => {
-                c.activity = next_errand(c, offers, &reputation, rules, geometry, rng);
-                true
-            }
-            Activity::Walking { to, shop, good } => {
-                c.at = step_towards(c.at, to, cells);
-                if c.at == to {
-                    let outcome = businesses.try_sell(
-                        shop,
-                        goods.name(good),
-                        1,
-                        inputs.clock,
-                        &inputs.config.businesses,
-                    );
-                    let rep = reputation_of(&reputation, shop, rules);
-                    match outcome {
-                        Ok(amount) => {
-                            let amount = till_price(inputs, shop, goods.name(good), amount);
-                            c.budget -= amount;
-                            c.list.retain(|g| *g != good);
-                            report.sales.push(Sale {
-                                shop,
-                                good,
-                                qty: 1,
-                                amount,
-                                customer: c.id,
-                            });
-                            reputation.insert(
-                                shop,
-                                scoring::reputation_after_sale(rep, rules.reputation.sale_recovery),
-                            );
-                            adjust_offer(offers, shop, good, |s| s - 1);
-                        }
-                        Err(ShopLostSale::OutOfStock { .. }) => {
-                            report.lost.push(LostSale { shop, good });
-                            reputation.insert(
-                                shop,
-                                scoring::reputation_after_lost_sale(
-                                    rep,
-                                    rules.reputation.lost_sale_penalty,
-                                ),
-                            );
-                            adjust_offer(offers, shop, good, |_| 0);
-                        }
-                        // Shut, no such shop, not sold there: nothing lost, just re-score.
-                        Err(_) => adjust_offer(offers, shop, good, |_| 0),
-                    }
-                    c.activity = Activity::Choosing;
-                }
-                true
-            }
-            Activity::Leaving => {
-                c.at = step_towards(c.at, c.exit, cells);
-                c.at != c.exit
-            }
-            Activity::Wandering | Activity::SeekingBed | Activity::WalkingToHotel { .. } => {
-                c.activity = Activity::Leaving;
-                true
-            }
-        }
-    });
-    report.despawned += (before - state.agents.len()) as u64;
-    state.reputation = reputation;
-    report
-}
-
 /// What the till charges: the sale's price with any §9 price noise on this shop and good.
-fn till_price(inputs: PhaseInputs<'_>, shop: BusinessId, good: &str, amount: Money) -> Money {
+pub(crate) fn till_price(
+    inputs: PhaseInputs<'_>,
+    shop: BusinessId,
+    good: &str,
+    amount: Money,
+) -> Money {
     inputs.modifiers.price_factor(shop, good).apply(amount)
 }
 
@@ -482,14 +398,17 @@ pub fn wave_budget(rules: &CustomersConfig, after_rent: Money, wave: Wave) -> Mo
 
 /// Creates a window's shoppers (R25, R55, R59): every resident from their front door and
 /// every unhoused adult from a tube station, each with a freshly rolled list and the wave's
-/// budget. Those with nothing to buy or nothing to spend stay at home. Visitors split
-/// `commuter_share` commuters, the rest tourists, exactly per cohort.
+/// budget. Those with nothing to buy or nothing to spend stay at home, except that with
+/// `beds` (a Hotel in the city, night wave) every tourist with money comes out: a bed is
+/// their last need (R38). Visitors split `commuter_share` commuters, the rest tourists,
+/// exactly per cohort; tourists roll with `tourists.desire_boost` (R29).
 pub fn spawn_wave(
     state: &mut Customers,
     inputs: PhaseInputs<'_>,
     wave: Wave,
     doors: &BTreeMap<BusinessId, Cell>,
     goods: &GoodsIndex,
+    beds: bool,
     rng: &mut SimRng,
 ) -> u64 {
     let rules = &inputs.config.customers;
@@ -515,7 +434,7 @@ pub fn spawn_wave(
     let most = u64::try_from(pop.residential.residents.len()).map_or(0, |r| r + visitors);
     state.agents.reserve(usize::try_from(most).unwrap_or(0));
     // Every member of a cohort rolls from the same candidates this wave; resolve them once.
-    let mut candidates: BTreeMap<Cohort, shopping::Candidates> = BTreeMap::new();
+    let mut candidates: BTreeMap<(Cohort, bool), shopping::Candidates> = BTreeMap::new();
 
     let mut spawn = |state: &mut Customers,
                      cohort: Cohort,
@@ -526,15 +445,17 @@ pub fn spawn_wave(
         if budget <= Money::ZERO {
             return;
         }
-        let cohort_goods = candidates.entry(cohort).or_insert_with(|| {
-            shopping::candidates(rules, goods, cohort, window, year).scaled_by(
-                inputs.modifiers,
-                goods,
-                cohort.class,
-            )
+        let tourist = origin == Origin::Tourist;
+        let cohort_goods = candidates.entry((cohort, tourist)).or_insert_with(|| {
+            let base = if tourist {
+                shopping::tourist_candidates(rules, goods, cohort, window, year)
+            } else {
+                shopping::candidates(rules, goods, cohort, window, year)
+            };
+            base.scaled_by(inputs.modifiers, goods, cohort.class)
         });
         let list = shopping::roll_from(cohort_goods, rng);
-        if list.is_empty() {
+        if list.is_empty() && !(tourist && beds) {
             return;
         }
         let delay = u32::try_from(below(rng, spread_ticks + 1)).unwrap_or(0) * tick_secs;

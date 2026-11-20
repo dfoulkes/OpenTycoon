@@ -337,3 +337,84 @@ fn utility_reserve_prices_must_be_positive() {
         "/nationalisation/buyout_ratio",
     );
 }
+
+#[test]
+fn hotel_and_online_settings_are_checked_by_name() {
+    // §7.3, §7.5: the Hotel type, tourists' desire boost and the online shares.
+    for (file, pointer, value, text) in [
+        (
+            "businesses.yaml",
+            "/hotel/room_good",
+            "spa",
+            "/hotel/room_good",
+        ),
+        (
+            "businesses.yaml",
+            "/types/hotel/goods",
+            "[bread]",
+            "/types/hotel/goods",
+        ),
+        (
+            "businesses.yaml",
+            "/hotel/room_size",
+            "0",
+            "/hotel/room_size",
+        ),
+        (
+            "businesses.yaml",
+            "/types/hotel/stock_density",
+            "0.5",
+            "/types/hotel/stock_density",
+        ),
+        (
+            "customers.yaml",
+            "/tourists/desire_boost",
+            "{fudge: 2.0}",
+            "/tourists/desire_boost/fudge",
+        ),
+        (
+            "customers.yaml",
+            "/tourists/desire_boost",
+            "{souvenirs: -1.0}",
+            "/tourists/desire_boost/souvenirs",
+        ),
+        (
+            "customers.yaml",
+            "/online/share_by_year",
+            "{1995: 1.5}",
+            "/online/share_by_year/1995",
+        ),
+        (
+            "customers.yaml",
+            "/online/share_by_year",
+            "{soon: 0.1}",
+            "four-digit year",
+        ),
+        (
+            "customers.yaml",
+            "/online/good_multiplier",
+            "{fudge: 1.0}",
+            "/online/good_multiplier/fudge",
+        ),
+        (
+            "customers.yaml",
+            "/online/brand/max",
+            "0.1",
+            "/online/brand/initial",
+        ),
+        (
+            "customers.yaml",
+            "/online/brand/max",
+            "1.5",
+            "/online/brand/max",
+        ),
+        (
+            "businesses.yaml",
+            "/types/bakery/channel",
+            "telepathy",
+            "/types/bakery/channel",
+        ),
+    ] {
+        assert_names(load_with(file, pointer, value), file, text);
+    }
+}

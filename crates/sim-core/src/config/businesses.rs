@@ -26,14 +26,15 @@ pub struct BusinessesConfig {
     pub hotel: HotelSettings,
 }
 
-/// The Hotel (§7.3): which type it is and how its rooms are counted (R14, R29, R30).
+/// Hotels (§7.3): every type with `hours: hotel` is a Hotel; this says what a room is and how
+/// many a building has (R14, R29, R30).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct HotelSettings {
-    /// The business type id that is a Hotel. It trades in the hotel window (`hours: hotel`),
-    /// holds no stock (`stock_density: 0`) and sells one good, the room night, whose
-    /// `ref_price` is the reference room price (R30).
-    pub building_type: String,
+    /// The good a Hotel sells: one room for one night. Every Hotel type sells exactly this
+    /// good and holds no stock (`stock_density: 0`); its `ref_price` is the reference room
+    /// price and the price lever sets each Hotel's (R30).
+    pub room_good: String,
     /// Units of building volume per room: `rooms = volume ÷ room_size` (R30, like flats, R50).
     #[schemars(range(min = 1, max = 10000))]
     pub room_size: u32,

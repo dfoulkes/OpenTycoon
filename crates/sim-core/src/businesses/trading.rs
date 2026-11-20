@@ -100,17 +100,7 @@ impl Businesses {
         if !shop.is_trading(clock) {
             return Err(LostSale::Closed);
         }
-        let price = shop.unit_price(good, rules).ok_or(LostSale::NotSold)?;
-        let available = shop.stock_of(good);
-        if available < quantity {
-            shop.lost_sales_today = shop.lost_sales_today.saturating_add(1);
-            return Err(LostSale::OutOfStock { available });
-        }
-        let revenue = price.saturating_mul(quantity);
-        shop.stock.insert(good.to_owned(), available - quantity);
-        *shop.sold_today.entry(good.to_owned()).or_insert(0) += quantity;
-        shop.takings_today += revenue;
-        Ok(revenue)
+        sell_from_shelf(shop, good, quantity, rules)
     }
 
     /// Sells `quantity` of `good` online (§7.5): as [`Businesses::try_sell`], but the shop is
@@ -126,8 +116,14 @@ impl Businesses {
         quantity: i64,
         rules: &BusinessesConfig,
     ) -> Result<Money, LostSale> {
-        let _ = (id, good, quantity, rules);
-        Err(LostSale::Closed)
+        if quantity <= 0 {
+            return Err(LostSale::BadQuantity);
+        }
+        let shop = self.by_id.get_mut(&id).ok_or(LostSale::NoSuchShop)?;
+        if !shop.open {
+            return Err(LostSale::Closed);
+        }
+        sell_from_shelf(shop, good, quantity, rules)
     }
 
     /// Sets a good's price as a share of its reference price (§7.1). Must be above zero.
@@ -179,6 +175,27 @@ impl Businesses {
             Err(LeverError::NotSold(good.to_owned()))
         }
     }
+}
+
+/// Takes `quantity` of `good` off a shop's shelf at its price, recording the sale; a shelf
+/// with too little is a lost sale (§8.3). Callers have checked the shop may sell now.
+fn sell_from_shelf(
+    shop: &mut Business,
+    good: &str,
+    quantity: i64,
+    rules: &BusinessesConfig,
+) -> Result<Money, LostSale> {
+    let price = shop.unit_price(good, rules).ok_or(LostSale::NotSold)?;
+    let available = shop.stock_of(good);
+    if available < quantity {
+        shop.lost_sales_today = shop.lost_sales_today.saturating_add(1);
+        return Err(LostSale::OutOfStock { available });
+    }
+    let revenue = price.saturating_mul(quantity);
+    shop.stock.insert(good.to_owned(), available - quantity);
+    *shop.sold_today.entry(good.to_owned()).or_insert(0) += quantity;
+    shop.takings_today += revenue;
+    Ok(revenue)
 }
 
 #[cfg(test)]

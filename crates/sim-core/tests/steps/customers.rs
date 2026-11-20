@@ -346,6 +346,7 @@ fn still_about(w: &mut SimWorld) {
 
 #[then("nobody is on the map")]
 fn nobody(w: &mut SimWorld) {
+    assert_eq!(w.city.customers.wanderers, Vec::new(), "wanderers left");
     assert!(
         w.city.customers.agents.is_empty(),
         "{} left",

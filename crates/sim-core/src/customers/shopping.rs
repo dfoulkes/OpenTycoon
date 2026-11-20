@@ -127,8 +127,39 @@ pub fn candidates(
     window: Hours,
     year: i32,
 ) -> Candidates {
+    weighted_candidates(rules, goods, cohort, window, year, &BTreeMap::new())
+}
+
+/// [`candidates`] for a tourist: each `P(good)` times `tourists.desire_boost(good)`, capped at
+/// 1 (§7.3, R29: the Souvenir Shop's bonus from tourists).
+pub fn tourist_candidates(
+    rules: &CustomersConfig,
+    goods: &GoodsIndex,
+    cohort: Cohort,
+    window: Hours,
+    year: i32,
+) -> Candidates {
+    weighted_candidates(
+        rules,
+        goods,
+        cohort,
+        window,
+        year,
+        &rules.tourists.desire_boost,
+    )
+}
+
+fn weighted_candidates(
+    rules: &CustomersConfig,
+    goods: &GoodsIndex,
+    cohort: Cohort,
+    window: Hours,
+    year: i32,
+    boost: &BTreeMap<String, f64>,
+) -> Candidates {
     let mut out = Vec::new();
     for (name, p) in desire_weights(rules, cohort, window, year) {
+        let p = (p * boost.get(name).copied().unwrap_or(1.0)).min(1.0);
         let Some(id) = goods.id(name) else {
             continue;
         };

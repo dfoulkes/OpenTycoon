@@ -193,10 +193,10 @@
     },
     "HotelSettings": {
       "additionalProperties": false,
-      "description": "The Hotel (§7.3): which type it is and how its rooms are counted (R14, R29, R30).",
+      "description": "Hotels (§7.3): every type with `hours: hotel` is a Hotel; this says what a room is and how\nmany a building has (R14, R29, R30).",
       "properties": {
-        "building_type": {
-          "description": "The business type id that is a Hotel. It trades in the hotel window (`hours: hotel`),\nholds no stock (`stock_density: 0`) and sells one good, the room night, whose\n`ref_price` is the reference room price (R30).",
+        "room_good": {
+          "description": "The good a Hotel sells: one room for one night. Every Hotel type sells exactly this\ngood and holds no stock (`stock_density: 0`); its `ref_price` is the reference room\nprice and the price lever sets each Hotel's (R30).",
           "type": "string"
         },
         "room_size": {
@@ -208,7 +208,7 @@
         }
       },
       "required": [
-        "building_type",
+        "room_good",
         "room_size"
       ],
       "type": "object"

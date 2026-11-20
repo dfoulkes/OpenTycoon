@@ -63,7 +63,7 @@ Feature: A full set unlocks its one Hotel
 
   @R29 @R30
   Scenario: Room revenue is booked at check-in, in time for that midnight
-    Given player 1 owns a 10-high 3x3 "hotel" on "Mayfair"
+    Given player 1 has a 10-high 3x3 hotel on "Mayfair"
     When the game runs to "23:29"
     And the game runs to "23:59" watching player 1's balance
     Then some guests have checked in at player 1's hotel

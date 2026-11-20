@@ -163,8 +163,12 @@ impl Population {
 /// Tourists in the city: the share of the unhoused pool (`total − housed`, R27) who are not
 /// commuters (R59), split exactly per cohort as the shoppers are. Only they want a Hotel.
 pub fn tourists(pop: &Population, rules: &CustomersConfig) -> u64 {
-    let _ = rules;
-    pop.visitors()
+    let share = rules.visitors.commuter_share.rate().bp().unsigned_abs();
+    let unit = crate::money::BASIS_POINTS_PER_UNIT.unsigned_abs();
+    pop.pool
+        .values()
+        .map(|n| n - cohort::split_by_weights(*n, &[share, unit.saturating_sub(share)])[0])
+        .sum()
 }
 
 /// The band id (`"18-29"`) for a band index, or `""` if out of range.
