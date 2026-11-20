@@ -38,8 +38,8 @@ cargo run --release -p sim-cli -- batch config --brain scripted --set game.overd
   naming the file and key. `--set` is applied after `--preset`, so it wins.
 - **Brains** for the seats `ai.yaml` does not fill (`--brain`): `idle` does nothing (the control
   group); `scripted` opens an auction on the cheapest free lot at its base price once day trade
-  opens, then would build one shop (waiting on a build command in sim-core). The AI opponents
-  from `ai.yaml` play their own seats inside `World::tick`. Harness brains get their own RNG
+  opens, then builds one grocery on the lot it wins and orders its full capacity. The AI
+  opponents from `ai.yaml` (the Grocer) play their own seats inside `World::tick`. Harness brains get their own RNG
   stream (derived from the game seed and seat), so they never shift the world's draws.
 - **CSV columns**: `seed, winner (p<i> | tie | none), days_played, ticks, state_hash`, then
   `p<i>_net_worth_pence, p<i>_bankrupt` per seat, then `wall_ms`. `state_hash` equals

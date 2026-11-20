@@ -97,7 +97,8 @@ cargo perf
 ```
 
 Brains for the seats `ai.yaml` does not fill: `idle` (does nothing) and `scripted` (bids on the
-cheapest lot at day-trade open). The real AI opponents play their own seats inside the sim.
+cheapest lot at day-trade open, then builds one grocery on it and stocks it). The real AI
+opponents (in v1, the Grocer: `ai.yaml` `grocer`) play their own seats inside the sim.
 
 Godot client and its tests:
 

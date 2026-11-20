@@ -542,7 +542,104 @@ fn check_ai(config: &Config, errors: &mut Vec<ConfigError>) {
 /// `ai.yaml` `grocer` (§10): shares in range, and every shop it builds is a known day-trade
 /// type that its footprint and height fit (R22, R58).
 fn check_grocer(config: &Config, errors: &mut Vec<ConfigError>) {
-    let _ = (config, errors); // red: rules land in the next commit
+    let g = &config.ai.grocer;
+    let mut bad = |key: &str, message: String| {
+        err(errors, ConfigFile::Ai, format!("/grocer/{key}"), message);
+    };
+    let one = BASIS_POINTS_PER_UNIT;
+    let bp = |r: super::Ratio| r.rate().bp();
+    if !(0..=one).contains(&bp(g.min_tier_weight)) {
+        bad("min_tier_weight", "must be between 0 and 1".into());
+    }
+    if !(1..=one).contains(&bp(g.max_bid_share)) {
+        bad(
+            "max_bid_share",
+            "must be above 0 and at most 1: a bid can never pass the ceiling (R7)".into(),
+        );
+    }
+    if g.cash_buffer.money().is_negative() {
+        bad("cash_buffer", "must not be negative".into());
+    }
+    if !(0..one).contains(&bp(g.working_class_discount)) {
+        bad(
+            "working_class_discount",
+            "must be at least 0 and below 1".into(),
+        );
+    }
+    if bp(g.price_jitter) < 0 || bp(g.price_jitter) >= one - bp(g.working_class_discount) {
+        bad(
+            "price_jitter",
+            "must be at least 0 and below 1 − working_class_discount, so prices stay above zero"
+                .into(),
+        );
+    }
+    if !(1..=one).contains(&bp(g.initial_order_share)) {
+        bad(
+            "initial_order_share",
+            "must be above 0 and at most 1".into(),
+        );
+    }
+    if !(0..=one).contains(&bp(g.order_margin)) {
+        bad("order_margin", "must be between 0 and 1".into());
+    }
+    let day_close = config.game.clock.trading_hours.day.close;
+    if g.rescue_after.seconds_since_midnight() < day_close.seconds_since_midnight() {
+        bad(
+            "rescue_after",
+            format!("must be at or after day trade closes ({day_close}) in game.yaml"),
+        );
+    }
+    let lot = config.game.world.lot_size;
+    for (axis, (size, lot)) in g.shop_footprint.iter().zip(lot.iter()).enumerate() {
+        if *size == 0 || size > lot {
+            bad(
+                &format!("shop_footprint/{axis}"),
+                format!("{size} must be between 1 and the lot size {lot} (R22)"),
+            );
+        }
+    }
+    if g.shop_types.is_empty() {
+        bad("shop_types", "must name at least one shop type".into());
+    }
+    for (i, id) in g.shop_types.iter().enumerate() {
+        let at = format!("shop_types/{i}");
+        let Some(kind) = config.businesses.types.get(id) else {
+            bad(
+                &at,
+                format!("unknown business type {id:?} in businesses.yaml"),
+            );
+            continue;
+        };
+        if kind.hours != crate::businesses::Hours::Day || kind.goods.is_empty() {
+            bad(&at, format!("{id:?} is not a day-trade shop with goods"));
+        }
+        if !crate::businesses::placement::meets_min_footprint(
+            crate::land::Footprint {
+                x: 0,
+                y: 0,
+                w: g.shop_footprint[0],
+                d: g.shop_footprint[1],
+            },
+            kind.min_footprint,
+        ) {
+            bad(
+                "shop_footprint",
+                format!(
+                    "smaller than {id:?}'s min_footprint {:?}",
+                    kind.min_footprint
+                ),
+            );
+        }
+        if g.shop_height > kind.max_height {
+            bad(
+                "shop_height",
+                format!(
+                    "{} is taller than {id:?}'s max_height {} (R58)",
+                    g.shop_height, kind.max_height
+                ),
+            );
+        }
+    }
 }
 
 /// `map.yaml` `city_apartments` (R28): one block in each Low-tier set, on a known block, with
