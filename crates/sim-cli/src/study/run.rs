@@ -539,6 +539,7 @@ fn summary(
                 "max_win_share": num("max_win_share"),
                 "ai_bankruptcy_rate": num("ai_bankruptcy_rate"),
                 "idle_last_rate": num("idle_last_rate"),
+                "idle_below_solvent_rate": num("idle_below_solvent_rate"),
             }))
         })
         .collect();

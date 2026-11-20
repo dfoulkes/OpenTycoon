@@ -1,5 +1,5 @@
 //! Per-model metrics (R65): win shares with Wilson intervals, evenness, bankruptcy, the idle
-//! control seat, net-worth spread, the `balanced` flag and the ranking score. Definitions are
+//! control seat (below every solvent AI), net-worth spread, the `balanced` flag and the ranking score. Definitions are
 //! in docs/study.md; every number is computed from integer counts, so it is identical on any
 //! thread count and platform.
 
@@ -119,9 +119,22 @@ impl GameOutcome {
             && (0..self.net_worth.len()).all(|s| s == seat || key(s) > key(seat))
     }
 
-    /// R65's idle rule for `seat`. Stub: still the old rule (strictly last).
-    pub fn idle_below_solvent_ais(&self, _roster: &Roster, seat: usize) -> bool {
-        self.strictly_last(seat)
+    /// R65's idle rule: `seat` finished strictly below every AI that is still solvent (a tie
+    /// does not count). Bankrupt AIs are ignored; they are covered by the bankruptcy limit.
+    /// False if no AI is solvent: the idle seat then beat everyone.
+    pub fn idle_below_solvent_ais(&self, roster: &Roster, seat: usize) -> bool {
+        let key = |s: usize| (!self.bankrupt[s], self.net_worth[s]);
+        let mut solvent_ais = (0..self.net_worth.len())
+            .filter(|s| {
+                *s != seat
+                    && !self.bankrupt[*s]
+                    && roster
+                        .entries()
+                        .get(self.seating[*s])
+                        .is_some_and(Entry::is_ai)
+            })
+            .peekable();
+        solvent_ais.peek().is_some() && solvent_ais.all(|s| key(s) > key(seat))
     }
 }
 
@@ -229,7 +242,7 @@ pub struct ModelMetrics {
     /// idle seat.
     pub idle_below_solvent_rate: Option<f64>,
     /// R65: every AI win share within the bounds, AI bankruptcy below the limit, the idle
-    /// seat last often enough. Never true without an idle seat or games.
+    /// seat below every solvent AI often enough. Never true without an idle seat or games.
     pub balanced: bool,
     /// Ranking score: `evenness_entropy` (docs/study.md).
     pub score: f64,
@@ -301,7 +314,8 @@ pub fn metrics(roster: &Roster, tally: &Tally, criteria: &Criteria) -> ModelMetr
                 && e.win_share - SLACK <= criteria.max_win_share
         })
         && ai_bankruptcy_rate < criteria.max_bankruptcy_rate
-        && idle_last_rate.is_some_and(|r| r + SLACK >= criteria.min_idle_last_rate);
+        && idle_below_solvent_rate
+            .is_some_and(|r| r + SLACK >= criteria.min_idle_below_solvent_rate);
     ModelMetrics {
         games,
         no_winner: games.saturating_sub(tally.wins.iter().sum()),
@@ -357,6 +371,22 @@ mod tests {
     }
 
     #[test]
+    fn the_idle_rule_ignores_bankrupt_ais_but_needs_a_solvent_one() {
+        let roster = Roster::new(vec![
+            Entry::from_name("a"),
+            Entry::from_name("b"),
+            Entry::Idle,
+        ]);
+        let above_a_bankrupt = game(vec![900, -50, 500], vec![false, true, false]);
+        assert!(above_a_bankrupt.idle_below_solvent_ais(&roster, 2));
+        assert!(!above_a_bankrupt.strictly_last(2));
+        let above_a_solvent = game(vec![900, 400, 500], vec![false; 3]);
+        assert!(!above_a_solvent.idle_below_solvent_ais(&roster, 2));
+        let all_bankrupt = game(vec![-10, -50, 500], vec![true, true, false]);
+        assert!(!all_bankrupt.idle_below_solvent_ais(&roster, 2));
+    }
+
+    #[test]
     fn tally_counts_wins_and_the_idle_seat() {
         let roster = Roster::new(vec![Entry::from_name("grocer"), Entry::Idle]);
         let mut t = Tally::new(2);
@@ -368,9 +398,11 @@ mod tests {
         t.add(&roster, &g);
         assert_eq!(t.wins, vec![1, 1]);
         assert_eq!(t.idle_last, 1);
+        assert_eq!(t.idle_below_solvent, 1);
         assert_eq!(t.idle_rank_sum, 3);
         let m = metrics(&roster, &t, &Criteria::default());
         assert_eq!(m.idle_last_rate, Some(0.5));
+        assert_eq!(m.idle_below_solvent_rate, Some(0.5));
         assert!(!m.balanced);
         assert!((m.score - 1.0).abs() < 1e-12, "one AI is trivially even");
     }
@@ -385,7 +417,7 @@ mod tests {
             min_win_share: 0.0,
             max_win_share: 1.0,
             max_bankruptcy_rate: 1.0,
-            min_idle_last_rate: 0.0,
+            min_idle_below_solvent_rate: 0.0,
         };
         assert!(!metrics(&roster, &t, &loose).balanced);
     }

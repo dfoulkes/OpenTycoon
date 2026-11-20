@@ -19,7 +19,7 @@ criteria:                # R65
   min_win_share: 0.10    # every AI personality wins at least 10% of games ...
   max_win_share: 0.40    # ... and at most 40%
   max_bankruptcy_rate: 0.15   # AI bankruptcies below 15% of AI player-games
-  min_idle_last_rate: 1.0     # the idle seat always finishes strictly last
+  min_idle_below_solvent_rate: 1.0  # idle finishes below every solvent AI, every game
 
 parameters:
   # Land and leases
