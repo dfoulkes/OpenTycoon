@@ -10,6 +10,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::types::{Pounds, Ratio};
+use crate::businesses::Hours;
 use crate::population::{Class, Sex};
 
 /// Root of `customers.yaml`.
@@ -40,6 +41,13 @@ pub struct CustomersConfig {
     pub demographics: BTreeMap<String, Demographics>,
     /// `k_class` price sensitivity (§8.3).
     pub price_sensitivity: ClassF64,
+    /// `class_affinity(class, block_tier)` before the fit-out appeal multiplier (§8.3).
+    pub class_affinity: ClassTierF64,
+    /// Price sensitivity for luxury goods, which a higher price boosts mildly (§8.3).
+    #[schemars(range(min = 0.0, max = 100.0))]
+    pub luxury_price_boost: f64,
+    /// Walking and spawning on the map (§8.1, §8.4).
+    pub movement: MovementSettings,
     /// Shop reputation (§8.3).
     pub reputation: ReputationSettings,
     /// How fast a shop's pull falls with walking distance.
@@ -80,6 +88,9 @@ pub struct AllowanceSettings {
     pub age_multiplier: BTreeMap<String, Ratio>,
     /// Multiplier per sex.
     pub sex_multiplier: SexRatios,
+    /// Share of the after-rent allowance a shopper brings to day trade; night trade gets the
+    /// rest (§8.2, §8.4).
+    pub day_share: Ratio,
 }
 
 /// Money per class.
@@ -140,6 +151,15 @@ pub struct DesireMatch {
     pub age: Option<String>,
     /// Sex, if restricted.
     pub sex: Option<Sex>,
+    /// Trading window (`day` or `night`), if restricted: the "hour" in
+    /// `P(good | age, class, sex, hour, year)` (§8.2).
+    pub window: Option<Hours>,
+    /// First year the rule applies, if restricted.
+    #[schemars(range(min = 1800, max = 2500))]
+    pub from_year: Option<i32>,
+    /// Last year the rule applies, if restricted.
+    #[schemars(range(min = 1800, max = 2500))]
+    pub until_year: Option<i32>,
 }
 
 /// Population mix for an era. Each list must sum to 1.
@@ -164,6 +184,48 @@ pub struct ReputationSettings {
     /// Drop per lost sale, 0–1.
     #[schemars(range(min = 0.0, max = 1.0))]
     pub lost_sale_penalty: f64,
+    /// Share of the gap to 1 recovered per completed sale, 0–1 (a rolling stat).
+    #[schemars(range(min = 0.0, max = 1.0))]
+    pub sale_recovery: f64,
+}
+
+/// A float per class per tier (scoring inputs only).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ClassTierF64 {
+    /// Working class.
+    pub working: TierF64,
+    /// Middle class.
+    pub middle: TierF64,
+    /// Upper class.
+    pub upper: TierF64,
+}
+
+/// A float per desirability tier.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TierF64 {
+    /// Low tier.
+    #[schemars(range(min = 0.0, max = 100.0))]
+    pub low: f64,
+    /// Medium tier.
+    #[schemars(range(min = 0.0, max = 100.0))]
+    pub medium: f64,
+    /// High tier.
+    #[schemars(range(min = 0.0, max = 100.0))]
+    pub high: f64,
+}
+
+/// Walking and spawning (§8.1, §8.4).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MovementSettings {
+    /// Lot units walked per tick (1 unit = 4 m, 1 tick = 10 s: 3 ≈ 1.2 m/s).
+    #[schemars(range(min = 1, max = 100))]
+    pub cells_per_tick: u32,
+    /// Shoppers trickle onto the map over this many minutes after a window opens.
+    #[schemars(range(min = 0, max = 600))]
+    pub spawn_spread_minutes: u32,
 }
 
 /// Distance decay (§8.3).
@@ -189,4 +251,17 @@ pub struct ResidentialSettings {
     /// Minimum in-game years between moves (R54, default 10).
     #[schemars(range(min = 0, max = 500))]
     pub move_interval_years: u32,
+    /// The business type id in `businesses.yaml` that is an apartment block (R20, R50).
+    pub building_type: String,
+    /// Rent per flat per day until the owner sets one: the city's default (R4, R51).
+    pub default_rent: Pounds,
+    /// The reference rent for `price_factor` when people weigh flats (R51).
+    pub reference_rent: Pounds,
+    /// A flat whose desirability (class affinity × fit-out appeal) is at least this justifies
+    /// stretching to `stretch_share` (R52).
+    #[schemars(range(min = 0.0, max = 100.0))]
+    pub stretch_min_desirability: f64,
+    /// Whether unhoused people already in the city look again each morning, after the
+    /// arrivals, while flats stand empty (§7.2: everyone wants to live in the city).
+    pub rehunt_unhoused: bool,
 }
