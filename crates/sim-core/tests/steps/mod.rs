@@ -1,5 +1,6 @@
 //! Step definitions, one file per sim-core module. Add yours here.
 
+pub mod ai;
 pub mod auctions;
 pub mod clock;
 pub mod config;

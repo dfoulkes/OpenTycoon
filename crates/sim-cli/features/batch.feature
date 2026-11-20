@@ -29,13 +29,23 @@ Feature: Balance batch
     When the "idle" brain plays seat 0 for one day
     Then it issued 0 commands
 
-  @spec-11
+  @spec-11 @R23
   Scenario: The scripted brain opens with one bid on the cheapest lot at its base price
-    Given a new game of the "v1" preset
+    Given a new game of the "v1" preset with no AI opponents
     When the "scripted" brain plays seat 0 for one day
-    Then it issued 1 commands
-    And its first command opens an auction on "Old Kent Road" at £2000
+    Then its first command opens an auction on "Old Kent Road" at £2000
     And it bid during day trade
+
+  # The harness exercises building: after winning its lease the scripted brain builds one
+  # shop and stocks it.
+  @spec-11 @R2 @R22
+  Scenario: The scripted brain builds one shop on the lot it wins and stocks it
+    Given a new game of the "v1" preset with no AI opponents
+    When the "scripted" brain plays seat 0 for one day
+    Then it issued 3 commands
+    And its second command builds a "grocery" on "Old Kent Road"
+    And player 0 owns 1 shop on "Old Kent Road", touching the lot edge
+    And player 0's shop has a standing order for its full capacity
 
   @spec-11
   Scenario: sim-cli batch writes the CSV and prints the summary

@@ -123,7 +123,9 @@ fn run_to_time(w: &mut SimWorld, time: &str) {
 
 #[given(expr = "a new game with {int} players")]
 fn new_game(w: &mut SimWorld, players: u8) {
-    let config = w.config.load_ok();
+    // Scenarios script every player's moves; no AI seat plays (the Grocer is features/ai).
+    let mut config = w.config.load_ok();
+    config.ai.opponents.clear();
     w.economy.world = Some(World::new(config, 42, players));
     rebaseline(w);
 }

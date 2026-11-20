@@ -32,6 +32,8 @@ pub struct SimWorld {
     pub auctions: steps::auctions::AuctionState,
     /// City scene: population, apartments, shoppers (`steps::population`, `steps::customers`).
     pub city: steps::population::CityState,
+    /// A game with the Grocer in seat 1 (`steps::ai`).
+    pub ai: steps::ai::AiState,
 }
 
 fn main() {
