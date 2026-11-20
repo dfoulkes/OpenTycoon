@@ -579,36 +579,37 @@ OpenTycoon/
 | R12 | Utilities are auctioned like land. Elections decide nationalisation (Labour) and privatisation (Conservative), as in history. |
 | R13 | One building = one type (no stacked floors) |
 | R14 | Colour sets of 2 or 3 blocks, board-game style. Holding a full set unlocks a Hotel. |
-| R15 | E-commerce spend from 1995, taken from the customer's daily budget, with no travel |
+| R15 | E-commerce unlocks in 1995: spend taken from the customer's daily budget, with no travel (merges the former R36) |
 | R16 | Kept: desirability shifts, newspaper headlines, tube lines, fit-out, class split by era, reputation, all events, Sir Penny Sugar |
-| R17 | All constants configurable |
+| R17 | All constants configurable in YAML (§10b; merges the former R45) |
 | R18 | Warning UI deferred to the engine conversation |
 | R19 | Net worth = land value + property value + cash + stock, scored at the final midnight before stock is binned. Utilities count only through the cash they save and generate. |
-| R20 | Residential is always apartments, never houses. Full design is still to come. |
+| R20 | Residential is always apartments, never houses (designed in R50–R56). |
 | R21 | No offices or office jobs |
 | R22 | Every block is a 9×9 lot holding several businesses, and each business must touch the lot edge |
 | R23 | Minimum opening bid = the district's land base price, set by affluence (Mayfair high, Old Kent Road low) |
 | R24 | Utilities aren't a set. A holder's own bills for that utility net to zero, because they're paying themselves. |
 | R25 | Shoppers come from residences (apartments) and arrive at tube stations |
 | R26 | Sets laid out like a traditional board: 26 sets (one 2-block set at each end, 3-block sets in between), 4 utility blocks, City Hall in the centre |
-| R27 | Hotels serve tourists. tourist_pool = total population − housed population. |
+| R27 | Hotels serve tourists: the share of unhoused visitors set by R59 (housed residents never take a room). |
 | R28 | The city starts the game owning an apartment block in each Low-tier set. Players can buy them or win them at auction. |
 | R29 | Hotel mechanics as in §7.3: nightly bed demand, room revenue per guest, souvenir bonus, one Hotel per set |
-| R30 | Hotels trade 23:30–03:00, the only business open then. No stock: rooms are capacity set by volume, like apartments. |
+| R30 | Hotels trade 23:30–03:00 and are the only business open after night trade closes at 23:50 (the 20-minute overlap is deliberate, R38). No stock: rooms are capacity set by volume, like apartments. |
 | R31 | Net worth is recalculated every midnight, before the write-off |
 | R32 | The 06:00 bills can push a player past the overdraft limit. No interest. |
 | R33 | Leases can be auctioned but not sold directly |
 | R34 | Day length is 20 real minutes, and the year steps +5 every midnight (24-day full game) |
 | R35 | No staff costs |
-| R36 | E-commerce unlocks in 1995 |
+| R36 | Merged into R15 |
 | R37 | Single-player and multiplayer are both in scope |
 | R38 | The hotel's 23:30 opening overlaps night trade on purpose. A bed is a tourist's last need: hotel first, otherwise the train home. |
 | R39 | Lot value = land value + 20% of every property on the lot (any owner), credited to the leaseholder. Property value is credited to its owner. |
+| R40 | Client/server architecture: the server runs the simulation and clients display it |
 | R41 | Buildings don't wear. Property value = build cost. |
 | R42 | A tourist who has finished shopping wanders until 23:30, then takes a hotel room or the train home |
 | R43 | Immersive 3D, with a walkable street view and an RTS bird's-eye view (Manor Lords style) |
 | R44 | Single-player is multiplayer on 127.0.0.1, with the client/server split hidden from the player |
-| R45 | All values configurable in YAML (§10b) |
+| R45 | Merged into R17 |
 | R46 | No Microsoft stack. Linux first, macOS fine. |
 | R47 | Client: Godot 4 with GDScript plus Rust (godot-rust/gdext) |
 | R48 | World scale 4 m per lot unit by default, configurable |
@@ -627,13 +628,13 @@ OpenTycoon/
 | R61 | Population is a cohort model. Births per woman follow history, and children join the arrivals at 18. |
 | R62 | Players start with £7,000 cash (configurable) |
 | R63 | Shoppers' daily allowances are new money created each morning. No household accounts or wages. |
-| R64 | Balance is found by study: ~100 economic models (parameter sets), each tested over 500 games of the full 1930–2050 span, with demand changing by decade |
+| R64 | Balance is found by study: 300 economic models (parameter sets), each tested over 2,000 games of the full 1930–2050 span with seats rotated, demand changing by decade, AI behaviour held fixed |
 | R65 | A balanced model: every AI personality wins 10–40% of games (seats rotated), bankruptcy under 15% of player-games, and an idle player finishes below every AI that is still solvent, in every game. Models are ranked by how even the win shares are. |
 | R66 | AI personalities are opportunistic: each keeps its preferences but moves into residential (or any line) when it is earning more than its own; the Grocer stays pure retail |
 | R67 | The Landlord is a real residential rival: rent set by vacancy and a larger lease book |
 | R68 | A competently run shop must be profitable in every era: retail is fixed in the economy, not by loosening the balance rule |
-| R69 | Events act within a game day, never across whole days (a game day is a 5-year era). The 1970s three-day week becomes power cuts: shops shut for a few hours that day, with a front-page article. The locked stock order always arrives at 06:00 |
-| R40 | Client/server architecture: the server runs the simulation and clients display it |
+| R69 | Events act within a game day, never across whole days (a game day is a 5-year era). The 1970s three-day week becomes power cuts: shops shut for a few hours that day, with a front-page article. The locked stock order always arrives at 06:00. During a cut shoppers congregate on the streets and wait; if their window for an item ends while the lights are out, R70 applies and they move on to their next item. Demand or supply effects may span several eras (e.g. WWII rationing over 1940 and 1945); only closures are limited to within a day |
+| R70 | Each good is shopped for in a time window that depends on the shopper's age band, class and sex (e.g. young middle class buy clothes 15:00–17:00; upper-class seniors at 10:00). If the window is missed (shop dark in a power cut, sold out, closed), the shopper moves on to their next item; the missed good is not bought that day |
 
 ### Open
 
