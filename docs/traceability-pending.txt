@@ -2,6 +2,6 @@
 # The traceability test fails if an in-scope ruling is neither tagged nor listed here.
 # Shrink this file: when you tag a scenario that fully proves a ruling, delete its line.
 # Mark partly-proven rulings with 'partial:' so the report shows them.
-R59  # partial: 70/30 commuter/tourist split proven; everyone unhoused takes the train at close until hotels (post-v1)
+R36  # partial: no online spend before the Internet (1995) proven; e-commerce types' unlock_year comes with the era content
 R64  # partial: era content (1930–2050 businesses, goods, demand by decade) proven in sim-core; sim-cli study is built (crates/sim-cli/features/study.feature, outside cargo trace's sim-core scan); the 100 × 500 full-span run is still to do
 R65  # partial: the criteria and seat rotation are computed by sim-cli study (crates/sim-cli/features/study.feature); no model meets them yet

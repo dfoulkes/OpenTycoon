@@ -188,7 +188,12 @@ fn wants(w: &mut SimWorld, c: String, s: String, b: String, window: String, list
 
 #[when(expr = "the city runs to {string}")]
 fn city_runs_to(w: &mut SimWorld, time: String) {
-    let target = parse_hms(&time);
+    run_city_to(w, &time);
+}
+
+/// Runs the city's customers phase until the clock next reads `time` (`HH:MM:SS`).
+pub fn run_city_to(w: &mut SimWorld, time: &str) {
+    let target = parse_hms(time);
     loop {
         tick(w);
         if CityState::clock(w).second_of_day() == target {

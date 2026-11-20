@@ -33,6 +33,7 @@ goods:                          # ref_price: reference retail price; purchase_pr
   jewellery: { name: "Jewellery", ref_price: 40.00, purchase_price: 18.00, luxury: true }   # luxury margin 55%
   newspapers: { name: "Newspapers & magazines", ref_price: 0.30, purchase_price: 0.18, obsolete_year: 2010 }   # staple margin 40%
   souvenirs: { name: "Souvenirs", ref_price: 3.00, purchase_price: 1.50 }   # durable margin 50%
+  room_night: { name: "Hotel room (one night)", ref_price: 5.00, purchase_price: 0 }   # placeholder: never stocked (R30)
   toys: { name: "Toys", ref_price: 5.00, purchase_price: 2.50 }   # durable margin 50%
   consultations: { name: "Doctor's consultation", ref_price: 6.00, purchase_price: 1.20 }   # service margin 80%
   drinks: { name: "Drinks", ref_price: 1.50, purchase_price: 0.45 }   # drinks margin 70%
@@ -748,3 +749,18 @@ types:
     goods: []                   # flats, not goods
     utility_factor: { electricity: 0.8, gas: 0.8, water: 1.0, telecoms: 0.5 }   # profile: residential
     unlock_year: 1930
+  # The Hotel (§7.3; R14, R29, R30): unlocked by holding every block of a set, one per set.
+  # Trades 23:30–03:00 only; no stock (rooms = volume ÷ hotel.room_size). A room night is
+  # priced as hotel.room_good: its ref_price is the reference room price.
+  hotel:
+    name: "Hotel"
+    min_footprint: [3, 3]       # placeholder
+    max_height: 100             # R58: hotels can be towers
+    stock_density: 0            # no stock (R30)
+    hours: hotel                # R30
+    goods: []                   # rooms, not stock: priced by hotel.room_good
+    utility_factor: { electricity: 1.2, gas: 1.0, water: 1.5, telecoms: 0.5 }   # placeholder
+    unlock_year: 1930
+hotel:                          # §7.3; R14, R29, R30
+  building_type: hotel
+  room_size: 4                  # placeholder: units of building volume per room (like flat_size, R50)

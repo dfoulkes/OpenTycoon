@@ -36,29 +36,29 @@ Feature: Every era brings its own businesses
       | ev_charging_hub   | 3 | 4 | 2020   | 2025   |
       | vr_arcade         | 3 | 3 | 2025   | 2030   |
 
-  # §7.4: the 1930 set, then each era's additions (apartments count from 1930).
+  # §7.4: the 1930 set, then each era's additions (apartments and the Hotel count from 1930).
   @R64
   Scenario Outline: Each era adds to what can be built
     Then <count> business types can be built in <year>
 
     Examples:
       | year | count |
-      | 1930 | 23    |
-      | 1945 | 27    |
-      | 1950 | 31    |
-      | 1960 | 35    |
-      | 1970 | 39    |
-      | 1980 | 43    |
-      | 1990 | 49    |
-      | 1995 | 51    |
-      | 2000 | 54    |
-      | 2005 | 56    |
-      | 2010 | 59    |
-      | 2015 | 62    |
-      | 2020 | 65    |
-      | 2025 | 67    |
-      | 2030 | 71    |
-      | 2050 | 71    |
+      | 1930 | 24    |
+      | 1945 | 28    |
+      | 1950 | 32    |
+      | 1960 | 36    |
+      | 1970 | 40    |
+      | 1980 | 44    |
+      | 1990 | 50    |
+      | 1995 | 52    |
+      | 2000 | 55    |
+      | 2005 | 57    |
+      | 2010 | 60    |
+      | 2015 | 63    |
+      | 2020 | 66    |
+      | 2025 | 68    |
+      | 2030 | 72    |
+      | 2050 | 72    |
 
   # §7.5: online sellers are declared here; their demand model is the e-commerce module's.
   @R64

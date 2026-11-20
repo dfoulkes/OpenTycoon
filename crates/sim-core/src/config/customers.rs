@@ -56,6 +56,49 @@ pub struct CustomersConfig {
     pub distance_decay: DistanceDecay,
     /// Apartment affordability (R50, R52, R54).
     pub residential: ResidentialSettings,
+    /// Tourists' tastes: the souvenir bonus (§7.3, R29).
+    pub tourists: TouristSettings,
+    /// Online demand from 1995 (§7.5; R15, R36).
+    pub online: OnlineSettings,
+}
+
+/// Tourists' tastes (§7.3, R29).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TouristSettings {
+    /// Multiplier on `P(good)` for tourists, per good id (the souvenir bonus); the result is
+    /// capped at 1. Goods not named are unchanged.
+    pub desire_boost: BTreeMap<String, f64>,
+}
+
+/// Online demand (§7.5; R15, R36).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct OnlineSettings {
+    /// The share of each good's demand bought online, by year: straight lines between the
+    /// years given, flat after the last, and 0 before the first. Each shopper rolls once per
+    /// good on their list: online with this probability, otherwise they walk (§7.5).
+    pub share_by_year: BTreeMap<String, f64>,
+    /// Multiplier on the share per good id (absent: 1). `online_share(year, good)` is
+    /// `share_by_year(year) × good_multiplier(good)`, capped at 1.
+    pub good_multiplier: BTreeMap<String, f64>,
+    /// Online sellers' brand stat, which builds over time (§7.5).
+    pub brand: BrandSettings,
+}
+
+/// An online seller's brand: `min(max, initial + growth_per_day × days)` (§7.5).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BrandSettings {
+    /// Brand of a new online seller, 0–1.
+    #[schemars(range(min = 0.0, max = 1.0))]
+    pub initial: f64,
+    /// Added at the start of each day's trade, 0–1.
+    #[schemars(range(min = 0.0, max = 1.0))]
+    pub growth_per_day: f64,
+    /// The most a brand can reach, 0–1.
+    #[schemars(range(min = 0.0, max = 1.0))]
+    pub max: f64,
 }
 
 /// Visitor split (R59).

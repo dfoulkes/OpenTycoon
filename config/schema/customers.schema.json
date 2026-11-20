@@ -65,6 +65,39 @@
       ],
       "type": "object"
     },
+    "BrandSettings": {
+      "additionalProperties": false,
+      "description": "An online seller's brand: `min(max, initial + growth_per_day × days)` (§7.5).",
+      "properties": {
+        "growth_per_day": {
+          "description": "Added at the start of each day's trade, 0–1.",
+          "format": "double",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        "initial": {
+          "description": "Brand of a new online seller, 0–1.",
+          "format": "double",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        "max": {
+          "description": "The most a brand can reach, 0–1.",
+          "format": "double",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "initial",
+        "growth_per_day",
+        "max"
+      ],
+      "type": "object"
+    },
     "Class": {
       "description": "Social class (§8.1).",
       "oneOf": [
@@ -408,6 +441,38 @@
       ],
       "type": "object"
     },
+    "OnlineSettings": {
+      "additionalProperties": false,
+      "description": "Online demand (§7.5; R15, R36).",
+      "properties": {
+        "brand": {
+          "$ref": "#/$defs/BrandSettings",
+          "description": "Online sellers' brand stat, which builds over time (§7.5)."
+        },
+        "good_multiplier": {
+          "additionalProperties": {
+            "format": "double",
+            "type": "number"
+          },
+          "description": "Multiplier on the share per good id (absent: 1). `online_share(year, good)` is\n`share_by_year(year) × good_multiplier(good)`, capped at 1.",
+          "type": "object"
+        },
+        "share_by_year": {
+          "additionalProperties": {
+            "format": "double",
+            "type": "number"
+          },
+          "description": "The share of each good's demand bought online, by year: straight lines between the\nyears given, flat after the last, and 0 before the first. Each shopper rolls once per\ngood on their list: online with this probability, otherwise they walk (§7.5).",
+          "type": "object"
+        }
+      },
+      "required": [
+        "share_by_year",
+        "good_multiplier",
+        "brand"
+      ],
+      "type": "object"
+    },
     "ReputationSettings": {
       "additionalProperties": false,
       "description": "Shop reputation (§8.3).",
@@ -571,6 +636,24 @@
       ],
       "type": "object"
     },
+    "TouristSettings": {
+      "additionalProperties": false,
+      "description": "Tourists' tastes (§7.3, R29).",
+      "properties": {
+        "desire_boost": {
+          "additionalProperties": {
+            "format": "double",
+            "type": "number"
+          },
+          "description": "Multiplier on `P(good)` for tourists, per good id (the souvenir bonus); the result is\ncapped at 1. Goods not named are unchanged.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "desire_boost"
+      ],
+      "type": "object"
+    },
     "VisitorSettings": {
       "additionalProperties": false,
       "description": "Visitor split (R59).",
@@ -674,6 +757,10 @@
       "$ref": "#/$defs/Obsolescence",
       "description": "How demand fades after a good's or a type's obsolete year (§7.1)."
     },
+    "online": {
+      "$ref": "#/$defs/OnlineSettings",
+      "description": "Online demand from 1995 (§7.5; R15, R36)."
+    },
     "price_sensitivity": {
       "$ref": "#/$defs/ClassF64",
       "description": "`k_class` price sensitivity (§8.3)."
@@ -685,6 +772,10 @@
     "residential": {
       "$ref": "#/$defs/ResidentialSettings",
       "description": "Apartment affordability (R50, R52, R54)."
+    },
+    "tourists": {
+      "$ref": "#/$defs/TouristSettings",
+      "description": "Tourists' tastes: the souvenir bonus (§7.3, R29)."
     },
     "visitors": {
       "$ref": "#/$defs/VisitorSettings",
@@ -709,7 +800,9 @@
     "movement",
     "reputation",
     "distance_decay",
-    "residential"
+    "residential",
+    "tourists",
+    "online"
   ],
   "title": "CustomersConfig",
   "type": "object"

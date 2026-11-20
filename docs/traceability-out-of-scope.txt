@@ -2,21 +2,13 @@
 # (crates/sim-core/tests/traceability.rs) does not require scenarios for these. Tagging one
 # anyway is welcome and is reported. Format: R-id, then the reason after '#'.
 # Move an id out of this file when its feature enters scope.
-R14  # post-v1: Hotel unlock (sets themselves are config-validated)
-R15  # post-v1: e-commerce from 1995
 R16  # post-v1: flavour features (headlines, tube lines, fit-out, reputation land with their modules)
 R18  # deferred: warning UI belongs to the client
 R20  # post-v1: residential design
 R21  # negative rule with nothing to build (no offices)
 R26  # post-v1: the full 9×9 board; v1 uses the 3×3 grey-box map
-R27  # post-v1: hotels and tourists
-R29  # post-v1: hotels
-R30  # post-v1: hotels (the clock's hotel window is already tagged)
-R36  # post-v1: e-commerce from 1995
 R37  # architecture: single and multiplayer (M2/M5), not sim behaviour
-R38  # post-v1: hotels (the overlap window is already tagged)
 R40  # architecture: client/server split (M2)
-R42  # post-v1: tourists
 R43  # client: 3D walk and RTS views (M3/M4)
 R44  # architecture: single-player on 127.0.0.1 (M2)
 R46  # platform: proved by CI on Linux and macOS

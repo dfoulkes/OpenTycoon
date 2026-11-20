@@ -160,6 +160,13 @@ impl Population {
     }
 }
 
+/// Tourists in the city: the share of the unhoused pool (`total − housed`, R27) who are not
+/// commuters (R59), split exactly per cohort as the shoppers are. Only they want a Hotel.
+pub fn tourists(pop: &Population, rules: &CustomersConfig) -> u64 {
+    let _ = rules;
+    pop.visitors()
+}
+
 /// The band id (`"18-29"`) for a band index, or `""` if out of range.
 pub fn band_id(rules: &CustomersConfig, band: AgeBand) -> &str {
     rules

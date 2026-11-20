@@ -36,6 +36,8 @@ pub struct SimWorld {
     pub ai: steps::ai::AiState,
     /// Two games for determinism checks (`steps::events`).
     pub events: steps::events::EventsState,
+    /// Hotel scenarios (`steps::hotels`).
+    pub hotels: steps::hotels::HotelsState,
 }
 
 fn main() {

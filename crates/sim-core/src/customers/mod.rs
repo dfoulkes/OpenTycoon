@@ -23,6 +23,7 @@
 //! Floats live only in [`scoring`] and [`shopping`]; state is integers.
 
 pub mod movement;
+pub mod online;
 pub mod scoring;
 pub mod shopping;
 pub mod shops;
@@ -91,6 +92,18 @@ pub enum Activity {
     },
     /// Heading for their exit (home or a tube station), then off the map.
     Leaving,
+    /// A tourist with nothing left to buy, wandering the streets until the hotels open
+    /// (R42). Still footfall; buys nothing.
+    Wandering,
+    /// A tourist looking for a bed: their last need of the day (R38).
+    SeekingBed,
+    /// Walking to a Hotel for a room.
+    WalkingToHotel {
+        /// The Hotel's door.
+        to: Cell,
+        /// The Hotel.
+        hotel: BusinessId,
+    },
 }
 
 /// One shopper on the map. Money is pence; position is a walking-grid cell.
@@ -125,6 +138,12 @@ pub struct Customers {
     pub next_id: u64,
     /// Reputation per shop, 0–1 as a rate (absent: `reputation.initial`).
     pub reputation: BTreeMap<BusinessId, Rate>,
+    /// Rooms taken tonight per Hotel (R30); cleared when the hotels open.
+    #[serde(default)]
+    pub hotel_guests: BTreeMap<BusinessId, u32>,
+    /// Brand per online seller, 0–1 (absent: `online.brand.initial`, §7.5).
+    #[serde(default)]
+    pub brand: BTreeMap<BusinessId, Rate>,
 }
 
 impl Customers {
@@ -165,6 +184,19 @@ pub struct LostSale {
     pub good: GoodId,
 }
 
+/// A tourist took a room (R29). Room revenue is booked at check-in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct CheckIn {
+    /// The Hotel.
+    pub hotel: BusinessId,
+    /// What the guest paid for the night.
+    pub amount: Money,
+    /// The guest.
+    pub customer: CustomerId,
+    /// Where they came from (only ever a tourist, R59).
+    pub origin: Origin,
+}
+
 /// What one tick of the customers phase did.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct PhaseReport {
@@ -176,6 +208,10 @@ pub struct PhaseReport {
     pub sales: Vec<Sale>,
     /// Lost sales, in the order they happened.
     pub lost: Vec<LostSale>,
+    /// Online sales (no travel, §7.5), in the order they happened.
+    pub online_sales: Vec<Sale>,
+    /// Hotel check-ins, in the order they happened (R29).
+    pub check_ins: Vec<CheckIn>,
 }
 
 /// Read-only inputs for the customers phase.
@@ -370,6 +406,10 @@ pub fn tick(
             Activity::Leaving => {
                 c.at = step_towards(c.at, c.exit, cells);
                 c.at != c.exit
+            }
+            Activity::Wandering | Activity::SeekingBed | Activity::WalkingToHotel { .. } => {
+                c.activity = Activity::Leaving;
+                true
             }
         }
     });
