@@ -6,3 +6,4 @@
 # everyone who runs the test benefits from these saved cases.
 cc dbeba9872690cbf8b30a5949de994afd6e69815ccffb42daa299b92ea100e410 # shrinks to (w, h) = (1, 4), river_row = 1
 cc 3fc9af79306a6b1c7852f79f4fc169b960fd6e43dde4951adc713ca4f6a1be2e # shrinks to (w, h, labels) = (1, 2, [None, None]), river_row = 0, bridges = {0}
+cc 1cfc5f59d4ef544a78ea369a44dc1358dc893eb5b37f70ef5e3b63f54f5e7396 # shrinks to (w, h, labels) = (2, 4, [None, None, None, None, None, None, None, None]), river_row = 0, bridges = {1, 5, 6}

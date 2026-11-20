@@ -264,7 +264,9 @@ impl World {
     /// `ai.yaml` opponents in the last seats.
     pub fn seated(config: Config, seed: u64, players: u8, ai: &[(PlayerId, String)]) -> Self {
         let clock = Clock::new(ClockRules::from_config(&config.game.clock));
-        let map = Map::from_config(&config.map);
+        let mut map = Map::from_config(&config.map);
+        // A game that starts late starts with the desirability shifts already made (§4.2).
+        map.apply_desirability(&config.map, clock.year());
         let auctions =
             AuctionHouse::new(AuctionRules::from_config(&config.auctions, clock.rules()));
         let businesses = city_apartments(&map, &config);
@@ -426,6 +428,30 @@ impl World {
         self.businesses.lock_orders(); // R2: tomorrow's order locks at midnight
         self.check_solvency();
         self.lease_expiry();
+        self.desirability_step();
+    }
+
+    /// End of phase 3, land's part: the year has stepped, so districts take the tier and land
+    /// base price of their latest shift (§4.2, R16, R23), each announced on the front page.
+    fn desirability_step(&mut self) {
+        let year = self.clock.year();
+        let shifts = self.map.apply_desirability(&self.config.map, year);
+        let headlines: Vec<String> = shifts
+            .into_iter()
+            .map(|s| s.headline)
+            .filter(|h| !h.is_empty())
+            .collect();
+        if headlines.is_empty() {
+            return;
+        }
+        let page = &mut self.events.front_page;
+        if page.year != year {
+            *page = crate::events::FrontPage {
+                year,
+                headlines: Vec::new(),
+            };
+        }
+        page.headlines.extend(headlines);
     }
 
     /// Net worth for every active player (R19, R31, R39). The clock has already stepped, so

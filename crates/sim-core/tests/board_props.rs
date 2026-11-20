@@ -152,6 +152,6 @@ proptest! {
         let row = river_row % (h - 1);
         let map = grid(w, h, &vec![Some(0); (w * h) as usize], Some((row, vec![])));
         let north = map.reachable_by_road(BlockId(0), None);
-        prop_assert_eq!(north.len() as u32, (row + 1) * w);
+        prop_assert_eq!(north.len(), ((row + 1) * w) as usize);
     }
 }

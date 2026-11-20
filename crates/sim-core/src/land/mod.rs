@@ -175,7 +175,7 @@ pub struct Map {
 pub struct RiverCrossing {
     /// The river runs along the south edge of this row.
     pub south_of_row: u32,
-    /// Columns with a bridge, ascending.
+    /// Columns with a bridge.
     pub bridges: Vec<u32>,
 }
 

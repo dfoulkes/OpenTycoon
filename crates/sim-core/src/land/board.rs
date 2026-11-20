@@ -10,8 +10,10 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 
 use super::{BlockId, Map, Tier};
+use crate::config::Pounds;
 use crate::config::map::MapConfig;
 use crate::economy::AccountId;
+use crate::money::Money;
 use crate::utilities::UtilityKind;
 
 /// Why a map operation was refused.
@@ -47,72 +49,210 @@ pub struct TierShift {
 
 impl Map {
     /// The block at `row`, `col`.
-    pub fn block_at(&self, _row: u32, _col: u32) -> Option<BlockId> {
-        None
+    pub fn block_at(&self, row: u32, col: u32) -> Option<BlockId> {
+        if row >= self.height || col >= self.width {
+            return None;
+        }
+        // Blocks are row-major with one per cell on a valid board; fall back to a search if
+        // the board is not (config validation reports that).
+        let guess = row.checked_mul(self.width)?.checked_add(col)?;
+        match self.block(BlockId(guess)) {
+            Some(b) if b.row == row && b.col == col => Some(BlockId(guess)),
+            _ => self
+                .blocks
+                .iter()
+                .position(|b| b.row == row && b.col == col)
+                .and_then(|i| u32::try_from(i).ok())
+                .map(BlockId),
+        }
+    }
+
+    /// True if a road joins the two vertically adjacent rows `north` and `north + 1` at `col`:
+    /// always, unless the river runs between them away from a bridge (§4.1).
+    fn crossable(&self, north: u32, col: u32) -> bool {
+        self.river
+            .as_ref()
+            .is_none_or(|r| r.south_of_row != north || r.bridges.contains(&col))
     }
 
     /// Blocks one road segment away: the four grid neighbours, except across the river away
     /// from a bridge (§4.1). In north, west, east, south order.
-    pub fn road_neighbours(&self, _id: BlockId) -> Vec<BlockId> {
-        Vec::new()
+    pub fn road_neighbours(&self, id: BlockId) -> Vec<BlockId> {
+        let Some(b) = self.block(id) else {
+            return Vec::new();
+        };
+        let (row, col) = (b.row, b.col);
+        let mut out = Vec::with_capacity(4);
+        if row > 0 && self.crossable(row - 1, col) {
+            out.extend(self.block_at(row - 1, col));
+        }
+        if col > 0 {
+            out.extend(self.block_at(row, col - 1));
+        }
+        out.extend(self.block_at(row, col + 1));
+        if self.crossable(row, col) {
+            out.extend(self.block_at(row + 1, col));
+        }
+        out
     }
 
     /// Every block reachable by road from `from`, travelling only through blocks in `within`
-    /// (all blocks if `None`). Includes `from`.
+    /// (all blocks if `None`). Includes `from`; empty if `from` is unknown or outside `within`.
     pub fn reachable_by_road(
         &self,
         from: BlockId,
-        _within: Option<&BTreeSet<BlockId>>,
+        within: Option<&BTreeSet<BlockId>>,
     ) -> BTreeSet<BlockId> {
-        BTreeSet::from([from])
+        let allowed = |id: &BlockId| within.is_none_or(|w| w.contains(id));
+        let mut seen = BTreeSet::new();
+        if self.block(from).is_none() || !allowed(&from) {
+            return seen;
+        }
+        seen.insert(from);
+        let mut frontier = vec![from];
+        while let Some(at) = frontier.pop() {
+            for next in self.road_neighbours(at) {
+                if allowed(&next) && seen.insert(next) {
+                    frontier.push(next);
+                }
+            }
+        }
+        seen
     }
 
     /// True if `blocks` form one road-connected group without leaving it (a set's blocks are
     /// adjacent, §4.1). Empty is connected.
-    pub fn connected_by_road(&self, _blocks: &[BlockId]) -> bool {
-        true
+    pub fn connected_by_road(&self, blocks: &[BlockId]) -> bool {
+        let Some(first) = blocks.first() else {
+            return true;
+        };
+        let group: BTreeSet<BlockId> = blocks.iter().copied().collect();
+        self.reachable_by_road(*first, Some(&group)) == group
     }
 
     /// The blocks of a colour set, in id order. Empty for an unknown set.
-    pub fn set_blocks(&self, _set: &str) -> Vec<BlockId> {
-        Vec::new()
+    pub fn set_blocks(&self, set: &str) -> Vec<BlockId> {
+        self.blocks
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| b.set.as_deref() == Some(set))
+            .filter_map(|(i, _)| u32::try_from(i).ok().map(BlockId))
+            .collect()
     }
 
     /// True if `holder` holds the lease on every block of `set` (R14: unlocks the Hotel).
     /// False for an unknown or empty set.
-    pub fn holds_full_set(&self, _holder: AccountId, _set: &str) -> bool {
-        false
+    pub fn holds_full_set(&self, holder: AccountId, set: &str) -> bool {
+        let blocks = self.set_blocks(set);
+        !blocks.is_empty()
+            && blocks.iter().all(|id| {
+                self.block(*id)
+                    .and_then(|b| b.lease.as_ref())
+                    .is_some_and(|l| l.holder == holder)
+            })
     }
 
     /// Every set `holder` holds in full, in set-id order.
-    pub fn full_sets_held_by(&self, _holder: AccountId) -> Vec<&str> {
-        Vec::new()
+    pub fn full_sets_held_by(&self, holder: AccountId) -> Vec<&str> {
+        self.sets()
+            .into_iter()
+            .filter(|(_, blocks)| {
+                blocks.iter().all(|id| {
+                    self.block(*id)
+                        .and_then(|b| b.lease.as_ref())
+                        .is_some_and(|l| l.holder == holder)
+                })
+            })
+            .map(|(set, _)| set)
+            .collect()
     }
 
     /// The block holding a utility, if the board has one.
-    pub fn utility_block(&self, _kind: UtilityKind) -> Option<BlockId> {
-        None
+    pub fn utility_block(&self, kind: UtilityKind) -> Option<BlockId> {
+        self.blocks
+            .iter()
+            .position(|b| b.utility == Some(kind))
+            .and_then(|i| u32::try_from(i).ok())
+            .map(BlockId)
     }
 
     /// Records damage to a block in `year` (the Blitz, §4.2, is raised by
     /// [`crate::events`]). The map only records it; what the damage does to buildings is the
     /// caller's to apply through [`crate::businesses`].
-    pub fn damage_block(&mut self, _id: BlockId, _year: i32) -> Result<(), MapError> {
+    pub fn damage_block(&mut self, id: BlockId, year: i32) -> Result<(), MapError> {
+        let block = self
+            .blocks
+            .get_mut(id.0 as usize)
+            .ok_or(MapError::UnknownBlock)?;
+        block.damaged_in = Some(year);
         Ok(())
     }
 
     /// Brings every block's tier and land base price to `year` (§4.2, R16, R23): the latest
     /// desirability shift at or before `year`, else the block's starting values. Returns the
-    /// blocks that changed, in id order, with the shift's headline.
-    pub fn apply_desirability(&mut self, _config: &MapConfig, _year: i32) -> Vec<TierShift> {
-        Vec::new()
+    /// blocks that changed, in id order, with the shift's headline (empty when a block goes
+    /// back to its starting values). Idempotent: the same year twice changes nothing.
+    pub fn apply_desirability(&mut self, config: &MapConfig, year: i32) -> Vec<TierShift> {
+        let mut changes = Vec::new();
+        for (i, block) in self.blocks.iter_mut().enumerate() {
+            let Some(start) = config.blocks.iter().find(|b| b.id == block.key) else {
+                continue;
+            };
+            // The latest shift at or before `year`; a later entry wins a tie.
+            let shift = config
+                .desirability_shifts
+                .iter()
+                .filter(|s| s.block == block.key && s.year <= year)
+                .max_by_key(|s| s.year);
+            let (tier, price, headline) = match shift {
+                Some(s) => (s.tier, s.land_base_price.money(), s.headline.clone()),
+                None => (
+                    start.tier,
+                    start.land_base_price.map_or(Money::ZERO, Pounds::money),
+                    String::new(),
+                ),
+            };
+            if (tier, price) == (block.tier, block.land_base_price) {
+                continue;
+            }
+            let from = block.tier;
+            block.tier = tier;
+            block.land_base_price = price;
+            if let Ok(i) = u32::try_from(i) {
+                changes.push(TierShift {
+                    block: BlockId(i),
+                    from,
+                    to: tier,
+                    headline,
+                });
+            }
+        }
+        changes
     }
 }
 
 /// Blocks with an open tube station in `year` and their footfall weights, in the order the
-/// stations first appear in `map.yaml` (§4.3). Blocks with no open line are left out.
-pub fn stations_in(_map: &Map, _config: &MapConfig, _year: i32) -> Vec<StationWeight> {
-    Vec::new()
+/// stations first appear in `map.yaml` (§4.3). Blocks with no open line are left out; a line
+/// missing from `tube_lines` (refused at load) adds nothing.
+pub fn stations_in(map: &Map, config: &MapConfig, year: i32) -> Vec<StationWeight> {
+    let mut out: Vec<StationWeight> = Vec::new();
+    for station in config.tube_stations.iter().filter(|s| s.opens <= year) {
+        let Some(line) = config.tube_lines.get(&station.line) else {
+            continue;
+        };
+        let Some(block) = map.block_id(&station.block) else {
+            continue;
+        };
+        match out.iter_mut().find(|s| s.block == block) {
+            Some(s) => s.weight = s.weight.saturating_add(line.footfall_weight),
+            None => out.push(StationWeight {
+                block,
+                weight: line.footfall_weight,
+            }),
+        }
+    }
+    out.retain(|s| s.weight > 0);
+    out
 }
 
 #[cfg(test)]
@@ -141,7 +281,10 @@ mod tests {
     fn block_at_finds_every_cell() {
         let (map, _) = full();
         for (i, b) in map.blocks.iter().enumerate() {
-            assert_eq!(map.block_at(b.row, b.col), Some(BlockId(i as u32)));
+            assert_eq!(
+                map.block_at(b.row, b.col),
+                Some(BlockId(u32::try_from(i).unwrap()))
+            );
         }
         assert_eq!(map.block_at(9, 0), None);
     }
@@ -219,7 +362,7 @@ mod tests {
             Money::from_pounds(12_000)
         );
         // Applying the same year again changes nothing and says nothing.
-        assert!(map.apply_desirability(&config, 1990).is_empty());
+        assert_eq!(map.apply_desirability(&config, 1990), vec![]);
         // Going back restores the starting values.
         map.apply_desirability(&config, 1930);
         assert_eq!(map.block(docklands).unwrap().tier, Tier::Low);
