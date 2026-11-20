@@ -14,7 +14,7 @@
 # Run size: 2,000 games per model puts a win share within about ±2 points (95% Wilson
 # half-width at p = 0.2 is ~1.8 points), enough to tell 10% from 40% apart with margin;
 # the rest of the compute goes on more models (R64's ~100 is a floor), because the search
-# space below has ~25 dimensions and a Latin hypercube covers it better with more points.
+# space below has 32 dimensions and a Latin hypercube covers it better with more points.
 models: 300              # model 0 is always the shipped config
 games_per_model: 2000    # rounded up to whole seat rotations (2,004 for six seats)
 preset: full             # 1930–2050; falls back to the longest preset if missing
@@ -111,6 +111,17 @@ parameters:
     expect:
       - { key: customers.desires.10.match,  equals: { window: day,   from_year: 2030, until_year: 2050 } }
       - { key: customers.desires.11.match,  equals: { window: night, from_year: 2030, until_year: 2050 } }
+  # Residential (docs/economy.md "Residential levers"). Over 120 years flat rent from minted
+  # allowances (R63) is the strongest income, so the residential AI dominated every study that
+  # left these alone. The first four are existing rules; the last three are study levers that
+  # are off in the shipped config. Model 0 shows the cap as empty (shipped: no cap).
+  - { name: flat_size,       key: customers.residential.flat_size,           min: 2,    max: 8,    kind: integer }   # shipped 4 (R50): half to double the flat, so double to half the flats
+  - { name: comfortable,     key: customers.residential.comfortable_share,   min: 0.10, max: 0.30 }   # shipped 0.2 (R52)
+  - { name: stretch,         key: customers.residential.stretch_share,       min: 0.30, max: 0.60 }   # shipped 0.5 (R52); never below comfortable's max, so always valid
+  - { name: move_interval,   key: customers.residential.move_interval_years, min: 5,    max: 20,   kind: integer }   # shipped 10 (R54)
+  - { name: rent_cap,        key: customers.residential.max_rent_per_flat,   min: 2.0,  max: 12.0, distribution: log_uniform }   # shipped null (no cap); £ per flat per day. The AIs ask £3 (reference) up to £9 (Sir Penny's max), so the top of the range is no cap in effect
+  - { name: rent_tax,        key: customers.residential.rent_tax,            min: 0.0,  max: 0.30 }   # shipped 0: share of rent to the city
+  - { name: commute_pref,    key: customers.residential.commute_preference,  min: 0.0,  max: 0.50 }   # shipped 0: share of adults who commute rather than rent
   # AI tunables
   - { name: grocer_bid,     key: ai.grocer.max_bid_share,           min: 0.1,  max: 0.6 }   # shipped 0.3 of the bid ceiling
   - { name: grocer_buffer,  key: ai.grocer.cash_buffer,             min: 100,  max: 1000,  distribution: log_uniform, kind: integer }   # shipped £300

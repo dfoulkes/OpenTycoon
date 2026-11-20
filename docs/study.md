@@ -216,7 +216,7 @@ build, 2026-11-20:
 So the R64 study, 100 models × 504 games of `full` (50,400 games), is about **10 minutes** on
 that machine today. The shipped `study/study.yaml` runs 300 models × 2,004 games (2,000 rounded up to
 six-seat rotations; 601,200 games): 2,000 games puts a win share within about ±2 points, and
-the extra compute goes on more models for its ~25 parameters. At the rate above that is about
+the extra compute goes on more models for its 26 parameters. At the rate above that is about
 **2 hours**, before the cost of the full roster. Per-game cost scales with what the AI and the population do: expect it to
 grow as more personalities, the full map, hotels and online land, and re-measure from
 `summary.json` `timing` after a few models (the progress line prints an ETA).
