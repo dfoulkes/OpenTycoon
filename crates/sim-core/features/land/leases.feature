@@ -6,8 +6,10 @@ Feature: Leases and land rent
   only by auction.
 
   Background:
+    # The arithmetic below is the 3×3 map's.
+    Given the shipped config on the v1 map
     # Enough cash to stay solvent through the midnights these scenarios run past (§2.3).
-    Given the shipped config with "game.yaml" key "/players/starting_cash" set to "20000"
+    And the shipped config with "game.yaml" key "/players/starting_cash" set to "20000"
     And a game with 3 players
 
   @R9

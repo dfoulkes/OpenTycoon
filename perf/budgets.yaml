@@ -9,19 +9,19 @@
 # Every tick limit derives from one root, the shipped-scenario day budget D = 20 ms (docs/perf.md
 # "Deriving the budgets"). perf-budget refuses a file whose limits disagree with each other.
 tolerance: 0.2
-reference_machine: "a 10-core arm64 laptop, release build (2026-11-20, M1 wave 3: customers real)"
+reference_machine: "a 10-core arm64 laptop, release build (2026-11-20, M1 wave 3: customers real; game_day_ms, tick_mean_us and tick_p99_us scaled by the measured 9x9/3x3 ratio when the shipped scenario moved to the full board)"
 budgets:
   game_day_ms:
     limit: 20
-    baseline: 1.9
+    baseline: 2.2   # 1.9 on the 3x3 map x 1.18 (9x9 / 3x3, same machine and run)
     why: "root: D = 20 ms per game day at the shipped 2,000 adults; ~10x the measured day; real time, 4x play and the 1,000-game sweep all fit inside it (perf.md)"
   tick_mean_us:
     limit: 2.315
-    baseline: 0.22
+    baseline: 0.26   # 0.22 x 1.18
     why: "D / 8,640 ticks: the same budget per tick, so it passes exactly when game_day_ms does"
   tick_p99_us:
     limit: 46
-    baseline: 3.4
+    baseline: 5.0   # 3.4 x 1.47
     why: "20 x the mean budget (measured p99/mean is 14-17); at the limit the slowest 1% of ticks use at most 20% of D"
   game_day_ms_10k_agents:
     limit: 100

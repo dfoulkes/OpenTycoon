@@ -1,8 +1,8 @@
 # yaml-language-server: $schema=schema/map.schema.json
 # map.yaml: every board a game can be played on, and the tier multipliers and land rate they
-# share (§4, §5). `map` picks the board: `v1` is the grey-box 3×3 test map (§10c, §11), `full`
-# the 9×9 board (R26). Prices and rates are placeholders until the balance study tunes them.
-map: v1
+# share (§4, §5). `map` picks the board: `full` is the 9×9 board the game is played on (R26);
+# `v1` is the grey-box 3×3 test map (§10c, §11), kept for scenarios about it. Prices and rates are placeholders until the balance study tunes them.
+map: full
 tiers:                          # §5.3 desirability_mult
   low:    { desirability_mult: 0.6 }
   medium: { desirability_mult: 1.0 }

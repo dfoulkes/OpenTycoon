@@ -2,8 +2,8 @@
 # events.yaml: §9. Each event fires on the year step covering its year (1939 on the 1935 step,
 # the Blitz on 1940, Decimal Day on 1970, the crash on 2005). Effects are typed modifiers: some
 # change the world once, the rest sit on the modifier stack for `days` game days (one day is a
-# 5-year step). Block ids are map.yaml's; on the v1 3×3 map the East End row stands in for the
-# East End and City, Holborn for the City. Durations and sizes are placeholders.
+# 5-year step). Block ids are the full board's (map.yaml); a v1 game skips the ones its 3×3
+# map lacks. Durations and sizes are placeholders.
 groups:                         # goods that effects target, by name (businesses.yaml ids)
   luxury: [clothes, meals]
   staples: [groceries]          # §9 "meat, dairy and sugar"; bread was not rationed in the war
@@ -21,7 +21,7 @@ historical:
     year: 1940
     headline: "The Blitz: East End Ablaze"
     effects:
-      - { kind: destroy_buildings, blocks: [whitechapel, bethnal_green, old_kent_road, holborn], chance: 0.1, compensation: 0.5 }  # chance placeholder
+      - { kind: destroy_buildings, blocks: [whitechapel, bethnal_green, stepney, mile_end, docklands, spitalfields, the_city, st_pauls], chance: 0.1, compensation: 0.5 }  # chance placeholder
   - id: coronation
     year: 1953
     headline: "Long Live the Queen"
@@ -47,13 +47,13 @@ historical:
     year: 1986
     headline: "Big Bang in the City"
     effects:
-      - { kind: desirability_change, blocks: [holborn], tier: high }
+      - { kind: desirability_change, blocks: [spitalfields, tower_hill], tier: high }   # the City is High already: Big Bang lifts its fringe
       - { kind: class_shift, from: middle, to: upper, share: 0.1 }        # placeholder share
   - id: canary_wharf
     year: 1987
     headline: "Canary Wharf Rises"
     effects:
-      - { kind: flavour }       # no Docklands block on the v1 map
+      - { kind: footfall, blocks: [docklands], factor: 1.5, days: 2 }      # placeholder; map.yaml moves Docklands to High on the same step
   - id: dotcom
     year: 2000
     headline: "Dot-com Fever"
@@ -74,7 +74,7 @@ historical:
     year: 2012
     headline: "London Olympics Open"
     effects:
-      - { kind: footfall, blocks: [old_kent_road, whitechapel, bethnal_green], factor: 1.5, days: 1 }
+      - { kind: footfall, blocks: [stratford, hackney, mile_end, bethnal_green], factor: 1.5, days: 1 }
   - id: pandemic
     year: 2020
     headline: "Lockdown"

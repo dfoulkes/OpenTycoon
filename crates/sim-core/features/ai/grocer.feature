@@ -8,7 +8,7 @@ Feature: The Grocer
   today's sales, and keeps cash in hand so it is never caught short at midnight.
 
   Background:
-    Given the shipped config
+    Given the shipped config on the v1 map
 
   @spec-10 @R23
   Scenario: It opens with a bid at the base price on the cheapest Low-tier lot

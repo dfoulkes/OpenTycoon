@@ -5,7 +5,7 @@ Feature: The midnight solvency check and bankruptcy
   stock go to the city, which runs the businesses at default settings and can never go bust.
 
   Background:
-    Given the shipped config
+    Given the shipped config on the v1 map
     # The v1 placeholder bakery and bread this arithmetic is written against (the shipped
     # stats are era content: docs/economy.md).
     And the shipped config with "businesses.yaml" key "/goods/bread" set to "{name: Bread, ref_price: 0.10, purchase_price: 0.04}"

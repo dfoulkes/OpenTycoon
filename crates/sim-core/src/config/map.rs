@@ -105,6 +105,11 @@ impl MapFile {
             blocks: board.blocks,
             tube_stations: board.tube_stations,
             city_apartments: board.city_apartments,
+            ids_on_any_board: MapChoice::ALL
+                .into_iter()
+                .filter_map(|c| self.boards.get(c))
+                .flat_map(|b| b.blocks.iter().map(|x| x.id.clone()))
+                .collect(),
         })
     }
 }
@@ -158,12 +163,21 @@ pub struct MapConfig {
     pub tube_stations: Vec<TubeStation>,
     /// The city's starting apartment blocks: one in each Low-tier set (R28).
     pub city_apartments: CityApartments,
+    /// Block ids on any board in `map.yaml`, for other files' references (events name the full
+    /// board's districts; a v1 game skips the ones its map lacks).
+    #[serde(default)]
+    pub ids_on_any_board: std::collections::BTreeSet<String>,
 }
 
 impl MapConfig {
     /// The JSON pointer in `map.yaml` of `rest` inside this board, e.g. `/boards/full/blocks/3`.
     pub fn pointer(&self, rest: &str) -> String {
         format!("/boards/{}{rest}", self.board.key())
+    }
+
+    /// Block ids on any board in `map.yaml` ([`MapConfig::ids_on_any_board`]).
+    pub fn block_ids_on_any_board(&self) -> std::collections::BTreeSet<&str> {
+        self.ids_on_any_board.iter().map(String::as_str).collect()
     }
 
     /// True unless the river lies outside the grid: it must run between two rows.

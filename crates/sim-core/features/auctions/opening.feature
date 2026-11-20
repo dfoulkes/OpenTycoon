@@ -5,7 +5,7 @@ Feature: Opening an auction
   running at a time, and bidding starts 120 real seconds after the opening bid.
 
   Background:
-    Given the shipped config
+    Given the shipped config on the v1 map
 
   @R23
   Scenario Outline: The minimum opening bid is the district's land base price

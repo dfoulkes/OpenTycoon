@@ -623,3 +623,11 @@ fn event_acts_on(w: &mut SimWorld, event: String, name: String) {
     });
     assert!(named, "{} does not act on {name}", event.id);
 }
+
+#[given("the shipped config on the v1 map")]
+fn shipped_on_v1(w: &mut SimWorld) {
+    let mut sources = crate::common::shipped_sources();
+    crate::common::set_key(&mut sources, "map.yaml", "/map", "v1");
+    w.config.sources = Some(sources);
+    w.clock.reset();
+}

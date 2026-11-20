@@ -38,7 +38,7 @@ proptest! {
 
     #[test]
     fn stock_stays_within_zero_and_capacity_and_is_conserved(ops in prop::collection::vec(op(), 1..60)) {
-        let config = common::shipped_config();
+        let config = common::shipped_config_v1(); // shops on the v1 map's block 0
         let map = Map::from_config(&config.map);
         let mut clock = Clock::new(ClockRules::from_config(&config.game.clock));
         let mut shops = Businesses::default();

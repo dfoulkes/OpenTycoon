@@ -500,7 +500,7 @@ fn check_effect(
     errors: &mut Vec<ConfigError>,
 ) {
     use super::events::Effect;
-    let blocks: BTreeSet<&str> = config.map.blocks.iter().map(|b| b.id.as_str()).collect();
+    let blocks = config.map.block_ids_on_any_board();
     let target_ok =
         |t: &str| config.events.groups.contains_key(t) || config.businesses.goods.contains_key(t);
     let mut named_blocks: &[String] = &[];
@@ -575,7 +575,7 @@ fn check_effect(
                 errors,
                 ConfigFile::Events,
                 format!("{at}/blocks"),
-                format!("unknown block {block:?} (not in map.yaml)"),
+                format!("unknown block {block:?} (on no board in map.yaml)"),
             );
         }
     }

@@ -5,7 +5,7 @@ Feature: A full set unlocks its one Hotel
   A Hotel is the reward for holding a whole colour set, and each set gets one.
 
   Background:
-    Given the shipped config
+    Given the shipped config on the v1 map
     And a new game with 2 players
 
   @R14

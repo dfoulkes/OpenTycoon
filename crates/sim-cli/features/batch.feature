@@ -33,7 +33,7 @@ Feature: Balance batch
   Scenario: The scripted brain opens with one bid on the cheapest lot at its base price
     Given a new game of the "v1" preset with no AI opponents
     When the "scripted" brain plays seat 0 for one day
-    Then its first command opens an auction on "Old Kent Road" at £2000
+    Then its first command opens an auction on "Old Kent Road" at £1000
     And it bid during day trade
 
   # The harness exercises building: after winning its lease the scripted brain builds one
