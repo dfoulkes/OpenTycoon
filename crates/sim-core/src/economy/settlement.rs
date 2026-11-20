@@ -138,14 +138,26 @@ pub fn settlement_bills(
     bills
 }
 
-/// Residents' rent (R51, §7.2): one bill per apartment block, from the shoppers' purse to the
-/// block's owner (player or city). Zero bills are dropped.
+/// Residents' rent (R51, §7.2): per apartment block, a bill from the shoppers' purse to the
+/// block's owner (player or city) for the rent less its rent tax, then one to the city for the
+/// tax (a study lever, 0 by default). Zero bills are dropped.
 pub fn resident_rent_bills(due: &[RentDue]) -> impl Iterator<Item = Bill> + '_ {
-    due.iter().filter(|d| d.amount > Money::ZERO).map(|d| Bill {
-        from: AccountId::Shoppers,
-        to: d.landlord,
-        amount: d.amount,
-    })
+    due.iter()
+        .flat_map(|d| {
+            [
+                Bill {
+                    from: AccountId::Shoppers,
+                    to: d.landlord,
+                    amount: d.amount - d.tax,
+                },
+                Bill {
+                    from: AccountId::Shoppers,
+                    to: AccountId::City,
+                    amount: d.tax,
+                },
+            ]
+        })
+        .filter(|b| b.amount > Money::ZERO)
 }
 
 /// Daily overdraft interest for each overdrawn player, paid to the city. The shipped rate is
