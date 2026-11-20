@@ -42,6 +42,7 @@ fn tick(w: &mut SimWorld) {
             map: &map,
             clock: &clock,
             population: &city.population,
+            modifiers: &sim_core::events::Modifiers::default(),
         },
         &mut city.businesses,
         &mut rng,

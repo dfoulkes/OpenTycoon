@@ -21,6 +21,7 @@ pub fn check(config: &Config) -> Vec<ConfigError> {
     check_ai(config, &mut errors);
     check_city_apartments(config, &mut errors);
     check_auctions(config, &mut errors);
+    check_utilities(config, &mut errors);
     errors
 }
 
@@ -494,33 +495,222 @@ fn check_desires(config: &Config, bands: &BTreeSet<&str>, errors: &mut Vec<Confi
 }
 
 fn check_events(config: &Config, errors: &mut Vec<ConfigError>) {
-    use super::events::Effect;
-    let blocks: BTreeSet<&str> = config.map.blocks.iter().map(|b| b.id.as_str()).collect();
-    for (i, event) in config.events.historical.iter().enumerate() {
-        for (j, effect) in event.effects.iter().enumerate() {
-            let named = match effect {
-                Effect::DesirabilityChange { blocks, .. }
-                | Effect::DestroyBuildings { blocks, .. } => blocks.as_slice(),
-                _ => &[],
-            };
-            for block in named {
-                if !blocks.contains(block.as_str()) {
-                    err(
-                        errors,
-                        ConfigFile::Events,
-                        format!("/historical/{i}/effects/{j}/blocks"),
-                        format!("unknown block {block:?} (not in map.yaml)"),
-                    );
-                }
+    let rules = &config.events;
+    for (name, goods) in &rules.groups {
+        for (i, good) in goods.iter().enumerate() {
+            if !config.businesses.goods.contains_key(good) {
+                err(
+                    errors,
+                    ConfigFile::Events,
+                    format!("/groups/{name}/{i}"),
+                    format!("unknown good {good:?} (not in businesses.yaml goods)"),
+                );
             }
         }
     }
-    for year in config.events.elections.weights.keys() {
+    for (i, event) in rules.historical.iter().enumerate() {
+        for (j, effect) in event.effects.iter().enumerate() {
+            check_effect(
+                config,
+                effect,
+                &format!("/historical/{i}/effects/{j}"),
+                errors,
+            );
+        }
+    }
+    for (i, event) in rules.random_era.events.iter().enumerate() {
+        for (j, effect) in event.effects.iter().enumerate() {
+            check_effect(
+                config,
+                effect,
+                &format!("/random_era/events/{i}/effects/{j}"),
+                errors,
+            );
+        }
+    }
+    check_share(
+        errors,
+        "/random_era/chance_per_step",
+        rules.random_era.chance_per_step.rate(),
+    );
+    for (i, event) in rules.random.iter().enumerate() {
+        check_share(
+            errors,
+            &format!("/random/{i}/daily_chance"),
+            event.daily_chance.rate(),
+        );
+        check_share(
+            errors,
+            &format!("/random/{i}/insured_payout"),
+            event.insured_payout.rate(),
+        );
+    }
+    check_share(
+        errors,
+        "/insurance/premium_rate",
+        rules.insurance.premium_rate.rate(),
+    );
+    for (year, w) in &rules.elections.weights {
         check_year_key(
             errors,
             ConfigFile::Events,
             format!("/elections/weights/{year}"),
             year,
+        );
+        if w.labour.rate().bp() < 0 || w.conservative.rate().bp() < 0 {
+            err(
+                errors,
+                ConfigFile::Events,
+                format!("/elections/weights/{year}"),
+                "election weights can't be negative".into(),
+            );
+        }
+    }
+}
+
+/// A share (chance, payout, premium) must be between 0 and 1.
+fn check_share(errors: &mut Vec<ConfigError>, pointer: &str, share: Rate) {
+    if !(0..=BASIS_POINTS_PER_UNIT).contains(&share.bp()) {
+        err(
+            errors,
+            ConfigFile::Events,
+            pointer.to_owned(),
+            "must be between 0 and 1".into(),
+        );
+    }
+}
+
+/// One event effect: blocks, goods, groups and business types it names must exist; shares
+/// lie in 0..=1; factors are not negative; open days fit in the week.
+fn check_effect(
+    config: &Config,
+    effect: &super::events::Effect,
+    at: &str,
+    errors: &mut Vec<ConfigError>,
+) {
+    use super::events::Effect;
+    let blocks: BTreeSet<&str> = config.map.blocks.iter().map(|b| b.id.as_str()).collect();
+    let target_ok =
+        |t: &str| config.events.groups.contains_key(t) || config.businesses.goods.contains_key(t);
+    let mut named_blocks: &[String] = &[];
+    let mut target: Option<&str> = None;
+    let mut factor = None;
+    match effect {
+        Effect::DesirabilityChange { blocks, .. } => named_blocks = blocks,
+        Effect::DestroyBuildings {
+            blocks,
+            chance,
+            compensation,
+        } => {
+            named_blocks = blocks;
+            check_share(errors, &format!("{at}/chance"), chance.rate());
+            factor = Some(("compensation", compensation.rate()));
+        }
+        Effect::Footfall {
+            blocks, factor: f, ..
+        } => {
+            named_blocks = blocks;
+            factor = Some(("factor", f.rate()));
+        }
+        Effect::DemandMultiplier {
+            target: t,
+            factor: f,
+            ..
+        } => {
+            target = t.as_deref();
+            factor = Some(("factor", f.rate()));
+        }
+        Effect::SupplyCap {
+            target: t, share, ..
+        } => {
+            target = Some(t);
+            check_share(errors, &format!("{at}/share"), share.rate());
+        }
+        Effect::OpenDays { open, of, .. } => {
+            if *of == 0 || open > of {
+                err(
+                    errors,
+                    ConfigFile::Events,
+                    format!("{at}/open"),
+                    format!("open days must be at most `of` ({open} of {of})"),
+                );
+            }
+        }
+        Effect::PriceNoise { spread, .. } => {
+            check_share(errors, &format!("{at}/spread"), spread.rate());
+        }
+        Effect::LandValue { factor: f } => factor = Some(("factor", f.rate())),
+        Effect::PropertyValue { types, factor: f } => {
+            factor = Some(("factor", f.rate()));
+            for (k, t) in types.iter().enumerate() {
+                if !config.businesses.types.contains_key(t) {
+                    err(
+                        errors,
+                        ConfigFile::Events,
+                        format!("{at}/types/{k}"),
+                        format!("unknown business type {t:?} (not in businesses.yaml)"),
+                    );
+                }
+            }
+        }
+        Effect::ClassShift { share, .. } => {
+            check_share(errors, &format!("{at}/share"), share.rate());
+        }
+        Effect::DecimalCurrency | Effect::Flavour => {}
+    }
+    for block in named_blocks {
+        if !blocks.contains(block.as_str()) {
+            err(
+                errors,
+                ConfigFile::Events,
+                format!("{at}/blocks"),
+                format!("unknown block {block:?} (not in map.yaml)"),
+            );
+        }
+    }
+    if let Some(t) = target.filter(|t| !target_ok(t)) {
+        err(
+            errors,
+            ConfigFile::Events,
+            format!("{at}/target"),
+            format!("unknown target {t:?} (not a group in events.yaml or a good)"),
+        );
+    }
+    if let Some((key, f)) = factor.filter(|(_, f)| f.bp() < 0) {
+        err(
+            errors,
+            ConfigFile::Events,
+            format!("{at}/{key}"),
+            format!("can't be negative ({})", f.bp()),
+        );
+    }
+}
+
+/// `utilities.yaml`: reserve prices are positive; the buy-out ratio is not negative (R12).
+fn check_utilities(config: &Config, errors: &mut Vec<ConfigError>) {
+    let u = &config.utilities;
+    let r = &u.reserve_prices;
+    for (key, price) in [
+        ("electricity", r.electricity),
+        ("gas", r.gas),
+        ("water", r.water),
+        ("telecoms", r.telecoms),
+    ] {
+        if price.money() <= crate::money::Money::ZERO {
+            err(
+                errors,
+                ConfigFile::Utilities,
+                format!("/reserve_prices/{key}"),
+                "a utility's reserve price must be above zero".into(),
+            );
+        }
+    }
+    if u.nationalisation.buyout_ratio.rate().bp() < 0 {
+        err(
+            errors,
+            ConfigFile::Utilities,
+            "/nationalisation/buyout_ratio".into(),
+            "can't be negative".into(),
         );
     }
 }

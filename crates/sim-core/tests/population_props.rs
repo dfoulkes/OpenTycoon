@@ -133,7 +133,7 @@ proptest! {
             clock.advance();
             let report = run_phase(
                 &mut customers,
-                PhaseInputs { config: &config, map: &map, clock: &clock, population: &pop },
+                PhaseInputs { config: &config, map: &map, clock: &clock, population: &pop, modifiers: &sim_core::events::Modifiers::default() },
                 &mut businesses,
                 &mut rng,
             );

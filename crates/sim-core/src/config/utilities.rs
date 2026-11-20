@@ -15,6 +15,9 @@ pub struct UtilitiesConfig {
     pub internet: InternetSettings,
     /// Elections and ownership (R12).
     pub nationalisation: NationalisationSettings,
+    /// Minimum opening bid for each utility at auction, like a block's land base price (R12,
+    /// R23).
+    pub reserve_prices: UtilityRates,
 }
 
 /// Base rate per utility.
@@ -46,6 +49,8 @@ pub struct InternetSettings {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct NationalisationSettings {
-    /// Buy-out price on nationalisation, as a share of book value (default 1.0).
+    /// Buy-out price on nationalisation, as a share of book value (default 1.0). Book value is
+    /// what the holder paid for the utility at auction: utilities don't wear, like buildings
+    /// (R41).
     pub buyout_ratio: Ratio,
 }

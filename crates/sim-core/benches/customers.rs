@@ -162,6 +162,7 @@ fn bench_day(c: &mut Criterion) {
                             map: &map,
                             clock: &clock,
                             population: &pop,
+                            modifiers: &sim_core::events::Modifiers::default(),
                         },
                         &mut businesses,
                         &mut rng,

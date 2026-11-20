@@ -4,9 +4,14 @@ base_rates:
   electricity: 0.02             # placeholder
   gas: 0.01                     # placeholder
   water: 0.01                   # placeholder
-  telecoms: 0.01                # placeholder
+  telecoms: 0.01                # placeholder: the telephone exchange
 internet:
-  upgrade_year: 1995            # R11
+  upgrade_year: 1995            # R11: the exchange becomes the internet; every building pays it
   base_rate: 0.02               # placeholder
 nationalisation:
-  buyout_ratio: 1.0             # §9.1: holders bought out at book value
+  buyout_ratio: 1.0             # §9.1: holders bought out at book value (the price they paid)
+reserve_prices:                 # R12: minimum opening bid per utility, like land_base_price
+  electricity: 3000             # placeholder
+  gas: 2000                     # placeholder
+  water: 2000                   # placeholder
+  telecoms: 2000                # placeholder

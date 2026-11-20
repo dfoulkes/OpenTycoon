@@ -11,8 +11,9 @@ use crate::businesses::{BusinessId, Businesses};
 use crate::clock::Clock;
 use crate::config::Config;
 use crate::config::businesses::Good;
+use crate::events::Modifiers;
 use crate::land::Map;
-use crate::money::Money;
+use crate::money::{BASIS_POINTS_PER_UNIT, Money};
 use crate::population::Class;
 use crate::population::residential::fit_out_appeal;
 
@@ -119,4 +120,38 @@ pub fn shop_offers(
         }
     }
     out
+}
+
+/// Applies the event modifiers in force (§9) to this tick's offers: shops shut by an open-days
+/// rule (the three-day week) drop out, shelf prices carry any price noise, and each shop's pull
+/// is scaled by its block's footfall. A no-op with no modifiers in force.
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::float_arithmetic,
+    reason = "footfall scales the shop's pull, a customer scoring input (docs/engineering.md)"
+)]
+pub fn apply_modifiers(
+    offers: &mut Vec<ShopOffer>,
+    map: &Map,
+    businesses: &Businesses,
+    modifiers: &Modifiers,
+    day: u32,
+    goods: &GoodsIndex,
+) {
+    if modifiers.is_empty() {
+        return;
+    }
+    offers.retain(|o| modifiers.may_trade(o.shop, day));
+    for o in offers.iter_mut() {
+        o.price = modifiers
+            .price_factor(o.shop, goods.name(o.good))
+            .apply(o.price);
+        let block = businesses.get(o.shop).map(|b| b.block);
+        if let Some(block) = block.filter(|b| map.block(*b).is_some()) {
+            let f = modifiers.footfall(block).bp() as f64 / BASIS_POINTS_PER_UNIT as f64;
+            for a in &mut o.affinity {
+                *a *= f;
+            }
+        }
+    }
 }

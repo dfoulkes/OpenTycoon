@@ -9,11 +9,13 @@
 //!    order.
 //! 3. **Midnight reckoning** (if midnight): net worth (R31), stock write-off (R1), solvency
 //!    and bankruptcy (R3, R4), lease expiry (R9), credit-limit step (R7), events and
-//!    front page (§9), population year step (R61).
+//!    front page: the election, history, rationing caps on the locked orders (§9, §9.1),
+//!    population year step (R61).
 //! 4. **Arrivals** (if 05:30): new population arrives and house-hunts (R53).
 //! 5. **Settlement** (if 06:00): residents' rent from the shoppers' purse to their landlords
-//!    (R51, R63), then land rent, utilities and stock bills paid (R32, R56), tomorrow's order
-//!    delivered (R2), population joins the map.
+//!    (R51, R63), then land rent, utilities, insurance and stock bills paid (R32, R56, §9),
+//!    tomorrow's order delivered (R2), random building events rolled (§9), population joins
+//!    the map.
 //! 6. **Auctions** advance countdowns and turn timers (§5.1).
 //! 7. **AI** looks at the world and queues commands for the next tick (§10).
 //! 8. **Customers** spawn, choose shops, walk and buy (§8).
@@ -44,7 +46,9 @@ use crate::money::{Money, Rate};
 use crate::population::Population;
 use crate::population::residential::{self, RentDue};
 use crate::rng::{SimRng, seeded};
-use crate::utilities::Utilities;
+use crate::utilities::{Utilities, UtilityKind};
+
+mod events_phase;
 
 /// Something a player (human or AI) asks the world to do. Clients only ever send commands; the
 /// world decides what happens (R40). Wire forms live in the `protocol` crate.
@@ -128,6 +132,19 @@ pub enum Command {
         building: BusinessId,
         /// Rent per flat per day.
         rent: Money,
+    },
+    /// Open an auction on an unheld utility with an opening bid of at least its reserve price
+    /// (R12: auctioned like land).
+    OpenUtilityAuction {
+        /// The utility.
+        utility: UtilityKind,
+        /// Opening bid.
+        bid: Money,
+    },
+    /// Take out or cancel insurance on all your buildings against random events (§9).
+    SetInsurance {
+        /// Insured?
+        insured: bool,
     },
 }
 
@@ -275,7 +292,7 @@ impl World {
             utilities: Utilities::default(),
             population: Population::new(&config.customers, config.game.clock.start_year),
             customers: Customers::default(),
-            events: Events::default(),
+            events: Events::new(seed),
             ai,
             queued: Vec::new(),
             net_worth: NetWorthBoard::default(),
@@ -304,6 +321,7 @@ impl World {
         after(Phase::Commands);
         if fired.midnight {
             self.midnight_reckoning();
+            // red: events_step not wired yet
             self.population_year_step();
             after(Phase::Midnight);
         }
@@ -313,6 +331,7 @@ impl World {
         }
         if fired.settlement {
             self.settlement();
+            // red: random_incidents not wired yet
             after(Phase::Settlement);
         }
         self.auctions_phase();
@@ -356,8 +375,12 @@ impl World {
                 | Command::OpenBusinessAuction { .. }
                 | Command::OfferForAuction { .. }
                 | Command::Raise { .. }
-                | Command::Pass => self.apply_auction_command(player, &command),
+                | Command::Pass
+                | Command::OpenUtilityAuction { .. } => {
+                    self.apply_auction_command(player, &command);
+                }
                 Command::SetRent { .. } => self.apply_population_command(player, &command),
+                Command::SetInsurance { insured } => self.set_insurance(player, insured),
             }
         }
     }
@@ -441,6 +464,7 @@ impl World {
             );
             if outcome == Solvency::Bankrupt {
                 *status = PlayerStatus::Bankrupt;
+                self.utilities.release(account); // R4: back to the city, open for bids
                 let handover = economy::bankruptcy::assets_of(account, &self.map, &self.businesses);
                 economy::bankruptcy::hand_over_to_city(
                     &handover,
@@ -492,6 +516,7 @@ impl World {
             self.config.game.overdraft.interest_rate.rate(),
         );
         bills.extend(economy::settlement::resident_rent_bills(&rent_due));
+        // red: insurance premiums not billed yet
         bills.extend(economy::settlement::settlement_bills(
             &self.map,
             &self.businesses,
@@ -526,6 +551,9 @@ impl World {
                 self.open_business_auction(player, *business, *bid)
             }
             Command::OfferForAuction { item } => self.offer_for_auction(player, *item),
+            Command::OpenUtilityAuction { utility, bid } => {
+                self.open_utility_auction(player, *utility, *bid)
+            }
             Command::Raise { by } => {
                 let ceiling = self.bid_ceiling(player).unwrap_or(Money::ZERO);
                 let bidders = self.active_players();
@@ -618,7 +646,7 @@ impl World {
                 }
                 Money::ZERO
             }
-            AuctionItem::Utility(_) => return Err(AuctionError::Unknown),
+            AuctionItem::Utility(kind) => self.utility_offer_reserve(player, kind)?,
         };
         let opening = Opening {
             item,
@@ -643,6 +671,10 @@ impl World {
             return;
         };
         let buyer = AccountId::Player(winner);
+        if self.utility_sale_void(item) {
+            self.auctions.mark_defaulted();
+            return;
+        }
         // The ceiling was checked at each bid; if the winner has since gone bankrupt or the
         // 06:00 bills took them past it, the sale defaults and the item stays with its seller.
         let paid = self.is_active(winner)
@@ -679,7 +711,7 @@ impl World {
                     b.owner = buyer;
                 }
             }
-            AuctionItem::Utility(_) => {}
+            AuctionItem::Utility(_) => {} // red: utility sale not applied yet
         }
     }
 
@@ -737,6 +769,7 @@ impl World {
                 map: &self.map,
                 clock: &self.clock,
                 population: &self.population,
+                modifiers: &self.events.modifiers,
             },
             &mut self.businesses,
             &mut self.rng,

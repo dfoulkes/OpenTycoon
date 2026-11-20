@@ -38,11 +38,11 @@ the split for M1 parallel work.
 | `land` | `src/land.rs` | map, blocks, sets, footprints, leases, land rent | R9, R10, R14, R22, R33 | primitives real |
 | `auctions` | `src/auctions.rs` | the one-at-a-time auction state machine | R5, R8, R23 | types only |
 | `businesses` | `src/businesses.rs` | buildings, types, prices, orders, stock, write-off | R2, R10, R13, R35, R41, R58 | types + cost formulas |
-| `utilities` | `src/utilities.rs` | utility bills, holders | R11, R12, R24 | types + bill formula |
+| `utilities` | `src/utilities.rs` | utility bills, holders, auctions, nationalisation and privatisation | R11, R12, R24 | **real**: auctioned like land; elections move ownership |
 | `population` | `src/population.rs` | cohort model, births, ageing, arrivals | R6, R53, R60, R61 | types only |
 | `customers` | `src/customers.rs` | shoppers, shopping lists, shop scoring, movement | R25, R55, §8.3 | scoring primitives real |
 | `ai` | `src/ai/` | AI personalities behind the `Brain` trait, each seat on its own RNG stream | §10 | **real** (M1): the Grocer (`ai.yaml` `grocer`); other personalities inert |
-| `events` | `src/events.rs` | history, random events, elections, front page | R12, R16 | step selection real |
+| `events` | `src/events/` | history, random events, elections, insurance, front page, the modifier stack | R12, R16 | **real**: every §9 event as a typed modifier; world side in `src/world/events_phase.rs` |
 | `world` | `src/world.rs` | owns all state; runs the tick order; `Command`s; state hash | R40 | **real** (phases are stubs) |
 | support | `src/rng.rs`, `src/hash.rs` | seeded RNG helpers; portable state hash | — | **real** |
 
@@ -86,9 +86,9 @@ approximate). `World::tick()` runs these phases **in this order, always**:
 |---|---|---|---|---|
 | 1 | Clock | every tick | clock | advance; report `ClockEvents { midnight, arrivals, settlement, game_over }` |
 | 2 | Commands | every tick | world → each module | apply queued player and AI commands in submission order |
-| 3 | Midnight reckoning | 00:00 | economy (+ land, businesses, events, population) | net worth (R31, before write-off) → stock write-off (R1) → solvency/bankruptcy (R3, R4) → lease expiry (R9) → credit-limit step (R7) → events and front page (§9) → population year step (R61) |
+| 3 | Midnight reckoning | 00:00 | economy (+ land, businesses, events, population) | net worth (R31, before write-off) → stock write-off (R1) → solvency/bankruptcy (R3, R4) → lease expiry (R9) → credit-limit step (R7) → events and front page: election, history, rationing caps on the locked orders (§9, §9.1) → population year step (R61) |
 | 4 | Arrivals | 05:30 | population | new population arrives and house-hunts (R53) |
-| 5 | Settlement | 06:00 | economy (bills from land, utilities, businesses, population) | residents' rent from the shoppers' purse to each block's owner (R51, R63); land rent, utilities, stock paid, may pass the limit (R32, R56); tomorrow's order delivered (R2); population joins the map |
+| 5 | Settlement | 06:00 | economy (bills from land, utilities, businesses, population, events) | residents' rent from the shoppers' purse to each block's owner (R51, R63); land rent, utilities, insurance premiums, stock paid, may pass the limit (R32, R56); tomorrow's order delivered (R2); random building events rolled (§9); population joins the map |
 | 6 | Auctions | every tick | auctions | countdowns, turn timers, closing |
 | 7 | AI | every tick | ai | read the world, queue commands for the next tick |
 | 8 | Customers | every tick | customers | spawn, choose shops, walk, buy |
@@ -108,9 +108,13 @@ Rules that keep the order meaningful:
 - **Money moves only through `economy::Ledger`.** Modules compute what is owed and hand
   `economy::Bill`s to settlement; nothing writes balances directly. The ledger's total is
   conserved (proptest).
-- **One RNG.** `World` owns the only `SimRng`; phases draw from it in phase order. Adding a draw
-  changes downstream randomness, which is fine; drawing in a data-dependent order (e.g. iterating
-  a `HashMap`) is not, and is banned by clippy.
+- **Event modifiers.** Lasting event effects (demand, supply caps, open days, price noise,
+  footfall) live on one stack, `events::Modifiers`; modules query it rather than special-case
+  an event. Customers read it through `PhaseInputs::modifiers`.
+- **One RNG.** `World` owns the only `SimRng`; phases draw from it in phase order. AI seats
+  and the events module each draw from their own seeded stream instead, so they never shift
+  the world's draws. Adding a draw changes downstream randomness, which is fine; drawing in a
+  data-dependent order (e.g. iterating a `HashMap`) is not, and is banned by clippy.
 
 ## Module interfaces
 

@@ -2,15 +2,12 @@
 # (crates/sim-core/tests/traceability.rs) does not require scenarios for these. Tagging one
 # anyway is welcome and is reported. Format: R-id, then the reason after '#'.
 # Move an id out of this file when its feature enters scope.
-R11  # post-v1: utilities and eras past 1950
-R12  # post-v1: utilities auctions and elections
 R14  # post-v1: Hotel unlock (sets themselves are config-validated)
 R15  # post-v1: e-commerce from 1995
 R16  # post-v1: flavour features (headlines, tube lines, fit-out, reputation land with their modules)
 R18  # deferred: warning UI belongs to the client
 R20  # post-v1: residential design
 R21  # negative rule with nothing to build (no offices)
-R24  # post-v1: utility holders
 R26  # post-v1: the full 9×9 board; v1 uses the 3×3 grey-box map
 R27  # post-v1: hotels and tourists
 R29  # post-v1: hotels

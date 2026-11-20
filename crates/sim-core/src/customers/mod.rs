@@ -34,6 +34,7 @@ use serde::{Deserialize, Serialize};
 use crate::businesses::{BusinessId, Businesses, Hours, LostSale as ShopLostSale};
 use crate::clock::Clock;
 use crate::config::{Config, CustomersConfig};
+use crate::events::Modifiers;
 use crate::land::Map;
 use crate::money::{Money, Rate};
 use crate::population::cohort::split_by_weights;
@@ -188,6 +189,8 @@ pub struct PhaseInputs<'a> {
     pub clock: &'a Clock,
     /// Who lives here.
     pub population: &'a Population,
+    /// Event modifiers in force (§9): demand, open days, price noise, footfall.
+    pub modifiers: &'a Modifiers,
 }
 
 impl PhaseInputs<'_> {
@@ -221,6 +224,14 @@ pub fn run_phase(
         inputs.clock,
         &goods,
         geometry,
+    );
+    shops::apply_modifiers(
+        &mut offers,
+        inputs.map,
+        businesses,
+        inputs.modifiers,
+        inputs.clock.day(),
+        &goods,
     );
     let doors = front_doors(businesses, inputs.map, geometry);
     tick(state, inputs, &mut offers, &doors, &goods, businesses, rng)
@@ -322,6 +333,7 @@ pub fn tick(
                     let rep = reputation_of(&reputation, shop, rules);
                     match outcome {
                         Ok(amount) => {
+                            let amount = till_price(inputs, shop, goods.name(good), amount);
                             c.budget -= amount;
                             c.list.retain(|g| *g != good);
                             report.sales.push(Sale {
@@ -364,6 +376,11 @@ pub fn tick(
     report.despawned += (before - state.agents.len()) as u64;
     state.reputation = reputation;
     report
+}
+
+/// What the till charges: the sale's price with any §9 price noise on this shop and good.
+fn till_price(inputs: PhaseInputs<'_>, shop: BusinessId, good: &str, amount: Money) -> Money {
+    inputs.modifiers.price_factor(shop, good).apply(amount)
 }
 
 fn reputation_of(
@@ -469,9 +486,13 @@ pub fn spawn_wave(
         if budget <= Money::ZERO {
             return;
         }
-        let cohort_goods = candidates
-            .entry(cohort)
-            .or_insert_with(|| shopping::candidates(rules, goods, cohort, window, year));
+        let cohort_goods = candidates.entry(cohort).or_insert_with(|| {
+            shopping::candidates(rules, goods, cohort, window, year).scaled_by(
+                inputs.modifiers,
+                goods,
+                cohort.class,
+            )
+        });
         let list = shopping::roll_from(cohort_goods, rng);
         if list.is_empty() {
             return;
