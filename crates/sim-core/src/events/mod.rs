@@ -206,6 +206,36 @@ pub struct StepInputs<'a> {
 }
 
 impl Events {
+    /// Every `land_value` factor among the events fired so far, in firing order (§9: the 2008
+    /// crash). Net worth's market land price reads them (docs/economy.md "Land value"); an
+    /// event id missing from `rules` (config validation rules it out) contributes nothing.
+    pub fn land_value_factors(&self, rules: &EventsConfig) -> Vec<Rate> {
+        let effects = |id: &str| -> &[Effect] {
+            rules
+                .historical
+                .iter()
+                .find(|e| e.id == id)
+                .map(|e| e.effects.as_slice())
+                .or_else(|| {
+                    rules
+                        .random_era
+                        .events
+                        .iter()
+                        .find(|e| e.id == id)
+                        .map(|e| e.effects.as_slice())
+                })
+                .unwrap_or(&[])
+        };
+        self.fired
+            .iter()
+            .flat_map(|f| effects(&f.id))
+            .filter_map(|e| match e {
+                Effect::LandValue { factor } => Some(factor.rate()),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// A fresh newspaper for a game seeded with `game_seed`.
     pub fn new(game_seed: u64) -> Self {
         Events {

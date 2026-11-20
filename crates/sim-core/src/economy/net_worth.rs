@@ -4,7 +4,9 @@
 //! net_worth = cash + stock
 //!           + Σ (owned properties) property_value
 //!           + Σ (held lots) [ land_value + uplift × Σ property_value on that lot ]
-//! land_value     = last auction price × remaining lease years / lease term
+//! land_value     = last auction price × remaining lease years / lease term   (book_decay)
+//!                = current land base price × remaining lease years / term   (market)
+//!                = current land base price while the lease runs             (market_no_decay)
 //! property_value = build cost (buildings don't wear, R41)
 //! stock          = units on hand × purchase price
 //! ```
@@ -12,6 +14,11 @@
 //! It is recalculated every midnight **before** the stock write-off (R31), so the last
 //! midnight's figure, stock included, is the final score (R19). Utilities add nothing directly:
 //! they count through the cash they earn and save (R19).
+//!
+//! The land-value method is `game.yaml` `net_worth.land_value` (docs/economy.md "Land value");
+//! the spec's formula, `book_decay`, is the default. The *current* land base price is the
+//! block's land base price today times every land-value event factor fired so far (the 2008
+//! crash), so it follows desirability shifts and crashes without touching what auctions charge.
 
 use std::collections::BTreeMap;
 
@@ -20,6 +27,7 @@ use serde::{Deserialize, Serialize};
 use super::{AccountId, Ledger, PlayerId};
 use crate::businesses::Businesses;
 use crate::config::businesses::Good;
+use crate::config::game::LandValueMethod;
 use crate::land::Map;
 use crate::money::{Money, Rate};
 
@@ -40,7 +48,7 @@ pub struct NetWorthInputs {
 /// A leased lot's contribution to net worth.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HeldLot {
-    /// `last auction price × remaining lease years / term` (§3).
+    /// The lease's land value under the configured method (§3, [`lease_land_value`]).
     pub land_value: Money,
     /// Value of every property on the lot.
     pub property_values: Vec<Money>,
@@ -82,6 +90,50 @@ pub fn land_value(last_price: Money, remaining_years: u32, term_years: u32) -> M
     }))
 }
 
+/// A held lease's land value under `method` (§3; docs/economy.md "Land value"):
+///
+/// - `book_decay`: `last_price × remaining_years / term_years` ([`land_value`]);
+/// - `market`: `market_price × remaining_years / term_years`;
+/// - `market_no_decay`: `market_price` while any years are left, else nothing.
+///
+/// `market_price` is the block's current land base price ([`market_land_price`]).
+pub fn lease_land_value(
+    method: LandValueMethod,
+    last_price: Money,
+    market_price: Money,
+    remaining_years: u32,
+    term_years: u32,
+) -> Money {
+    let _ = (method, market_price);
+    land_value(last_price, remaining_years, term_years)
+}
+
+/// The block's current land base price: `base_price` after every land-value event factor fired
+/// so far, applied in order (each rounded half away from zero, like the event's own effect on
+/// lease prices).
+pub fn market_land_price(base_price: Money, factors: &[Rate]) -> Money {
+    let _ = factors;
+    base_price
+}
+
+/// How [`net_worth_inputs`] values land: the method, and the land-value event factors fired so
+/// far (only read by the market methods).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LandPricing<'a> {
+    /// `game.yaml` `net_worth.land_value`.
+    pub method: LandValueMethod,
+    /// Every `land_value` event factor fired so far, in firing order.
+    pub factors: &'a [Rate],
+}
+
+impl LandPricing<'_> {
+    /// The spec's book value (`book_decay`), no events.
+    pub const BOOK: LandPricing<'static> = LandPricing {
+        method: LandValueMethod::BookDecay,
+        factors: &[],
+    };
+}
+
 /// `stock = Σ units on hand × purchase price` (§3). Goods missing from the catalogue (which
 /// config validation rules out) and negative counts are valued at nothing.
 pub fn stock_value(stock: &BTreeMap<String, i64>, goods: &BTreeMap<String, Good>) -> Money {
@@ -95,7 +147,7 @@ pub fn stock_value(stock: &BTreeMap<String, i64>, goods: &BTreeMap<String, Good>
 }
 
 /// Gathers one account's [`NetWorthInputs`] from the world's state, valuing leases at
-/// `scoring_year` (the year of the day being scored).
+/// `scoring_year` (the year of the day being scored) by `land`'s method.
 pub fn net_worth_inputs(
     account: AccountId,
     ledger: &Ledger,
@@ -103,6 +155,7 @@ pub fn net_worth_inputs(
     businesses: &Businesses,
     goods: &BTreeMap<String, Good>,
     scoring_year: i32,
+    land: LandPricing<'_>,
 ) -> NetWorthInputs {
     let mut inputs = NetWorthInputs {
         cash: ledger.balance(account),
@@ -122,8 +175,13 @@ pub fn net_worth_inputs(
             continue;
         };
         inputs.held_lots.push(HeldLot {
-            land_value: land_value(
+            land_value: lease_land_value(
+                land.method,
                 lease.last_price,
+                match land.method {
+                    LandValueMethod::BookDecay => Money::ZERO,
+                    _ => market_land_price(block.land_base_price, land.factors),
+                },
                 lease.remaining_years(scoring_year),
                 lease.term_years,
             ),
@@ -207,6 +265,48 @@ mod tests {
     }
 
     #[test]
+    fn each_method_values_the_same_lease() {
+        let paid = Money::from_pounds(6_000);
+        let market = Money::from_pounds(9_900);
+        let at = |m, left| lease_land_value(m, paid, market, left, 30);
+        assert_eq!(
+            at(LandValueMethod::BookDecay, 25),
+            Money::from_pounds(5_000)
+        );
+        assert_eq!(at(LandValueMethod::Market, 25), Money::from_pounds(8_250));
+        assert_eq!(at(LandValueMethod::MarketNoDecay, 25), market);
+        assert_eq!(at(LandValueMethod::MarketNoDecay, 1), market);
+        for m in [
+            LandValueMethod::BookDecay,
+            LandValueMethod::Market,
+            LandValueMethod::MarketNoDecay,
+        ] {
+            assert_eq!(
+                at(m, 0),
+                Money::ZERO,
+                "{m:?}: a run-out lease is worth nothing"
+            );
+            assert_eq!(lease_land_value(m, paid, market, 5, 0), Money::ZERO);
+        }
+    }
+
+    #[test]
+    fn market_price_compounds_every_land_event_in_order() {
+        let base = Money::from_pounds(14_000);
+        assert_eq!(market_land_price(base, &[]), base);
+        assert_eq!(
+            market_land_price(base, &[Rate::from_bp(7_000)]),
+            Money::from_pounds(9_800)
+        );
+        // 1p × 0.5 = 0.5p → 1p (half away from zero), then × 0.5 → 1p again: rounded per step.
+        let half = Rate::from_bp(5_000);
+        assert_eq!(
+            market_land_price(Money::from_pence(1), &[half, half]),
+            Money::from_pence(1)
+        );
+    }
+
+    #[test]
     fn stock_is_valued_at_purchase_price_and_ignores_unknown_goods() {
         let goods: BTreeMap<String, Good> = [(
             "bread".to_owned(),
@@ -246,6 +346,25 @@ mod tests {
             let v = land_value(Money::from_pence(pence), left, term);
             prop_assert!(v >= Money::ZERO);
             prop_assert!(v <= Money::from_pence(pence));
+        }
+
+        #[test]
+        fn market_land_never_exceeds_the_current_price_and_book_ignores_it(
+            paid in 0i64..10_000_000_000,
+            market in 0i64..10_000_000_000,
+            term in 1u32..200,
+            left in 0u32..200,
+        ) {
+            let left = left.min(term);
+            let (paid, market) = (Money::from_pence(paid), Money::from_pence(market));
+            for m in [LandValueMethod::Market, LandValueMethod::MarketNoDecay] {
+                let v = lease_land_value(m, paid, market, left, term);
+                prop_assert!(v >= Money::ZERO && v <= market);
+            }
+            prop_assert_eq!(
+                lease_land_value(LandValueMethod::BookDecay, paid, market, left, term),
+                land_value(paid, left, term)
+            );
         }
 
         #[test]

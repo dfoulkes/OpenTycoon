@@ -34,6 +34,7 @@ overdraft:
   interest_rate: 0.0            # R32: no interest
 net_worth:
   lot_property_uplift: 0.2      # R39
+  land_value: book_decay        # §3: book_decay | market | market_no_decay (docs/economy.md "Land value")
 leases:
   term_years: 30                # §5.2
 players:

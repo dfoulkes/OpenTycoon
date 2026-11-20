@@ -143,6 +143,24 @@ pub struct OverdraftSettings {
 pub struct NetWorthSettings {
     /// Share of every property's value credited to the lot's leaseholder (R39, default 0.2).
     pub lot_property_uplift: Ratio,
+    /// How a held lease's land is valued (§3; docs/economy.md "Land value"). Default
+    /// `book_decay`, the spec's `last auction price × years left / term`.
+    pub land_value: LandValueMethod,
+}
+
+/// How a held lease's land counts towards net worth (§3). The spec's formula is
+/// `book_decay`; the others are balance-study candidates (docs/economy.md "Land value").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LandValueMethod {
+    /// `last auction price × remaining lease years / term` (§3, the default).
+    #[default]
+    BookDecay,
+    /// `current land base price × remaining lease years / term`: the block's price today
+    /// (moved by desirability shifts and land-value events such as the 2008 crash).
+    Market,
+    /// `current land base price` while the lease runs, nothing once it has run out.
+    MarketNoDecay,
 }
 
 /// Land leases (§5.2).

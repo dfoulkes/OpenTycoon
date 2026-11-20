@@ -262,6 +262,13 @@ fn runs_for_days(w: &mut SimWorld, days: u64) {
     }
 }
 
+#[when(expr = "{string} gentrifies and its land base price rises to {string}")]
+fn gentrifies(w: &mut SimWorld, block: String, price: String) {
+    // What a desirability shift does to the block's price (§4.2), without the year it waits for.
+    let id = block_id(w, &block);
+    world(w).map_mut().blocks[id.0 as usize].land_base_price = money(&price);
+}
+
 #[when(regex = r#"^(player \d+|the city)'s balance changes to "([^"]+)"$"#)]
 fn balance_changes(w: &mut SimWorld, who: String, amount: String) {
     has_balance(w, who, amount);
@@ -344,6 +351,22 @@ fn finished(w: &mut SimWorld) {
 fn leader(w: &mut SimWorld, n: u8) {
     let ranking = world(w).net_worth().ranking();
     assert_eq!(ranking.first().map(|r| r.0), Some(player(n)), "{ranking:?}");
+}
+
+#[then(expr = "land is valued by {string}")]
+fn land_valued_by(w: &mut SimWorld, method: String) {
+    let config = w.config.load_ok();
+    let shown = serde_json::to_value(config.game.net_worth.land_value).unwrap();
+    assert_eq!(shown, serde_json::Value::String(method));
+}
+
+#[then(expr = "the land base price of {string} is {string}")]
+fn land_base_price_is(w: &mut SimWorld, block: String, price: String) {
+    let id = block_id(w, &block);
+    assert_eq!(
+        world(w).map().blocks[id.0 as usize].land_base_price,
+        money(&price)
+    );
 }
 
 #[then(expr = "{string} is unleased")]

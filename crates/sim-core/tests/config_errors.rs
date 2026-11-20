@@ -163,6 +163,7 @@ fn economy_keys_reject_negative_and_out_of_range_values() {
         ("/overdraft/increase_per_step", "-2500"),
         ("/overdraft/interest_rate", "-0.01"),
         ("/net_worth/lot_property_uplift", "-0.2"),
+        ("/net_worth/land_value", "freehold"),
     ] {
         assert_names(load_with("game.yaml", pointer, value), "game.yaml", pointer);
     }
