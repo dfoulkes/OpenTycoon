@@ -710,7 +710,7 @@ fn owed(w: &mut SimWorld, name: String, amount: String) {
         &config,
         &w.city.population.residential,
     );
-    let due = rent_due(&w.city.population.residential, &l);
+    let due = rent_due(&w.city.population.residential, &l, &config.customers);
     let bill = due.iter().find(|d| d.building == id).unwrap();
     assert_eq!(bill.amount, pounds(&amount));
     assert_eq!(bill.landlord, w.city.businesses.by_id[&id].owner);

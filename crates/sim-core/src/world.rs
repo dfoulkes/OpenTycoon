@@ -11,7 +11,8 @@
 //!    and bankruptcy (R3, R4), lease expiry (R9), credit-limit step (R7), events and
 //!    front page (§9), population year step (R61).
 //! 4. **Arrivals** (if 05:30): new population arrives and house-hunts (R53).
-//! 5. **Settlement** (if 06:00): rent, utilities and stock bills paid (R32), tomorrow's order
+//! 5. **Settlement** (if 06:00): residents' rent from the shoppers' purse to their landlords
+//!    (R51, R63), then land rent, utilities and stock bills paid (R32, R56), tomorrow's order
 //!    delivered (R2), population joins the map.
 //! 6. **Auctions** advance countdowns and turn timers (§5.1).
 //! 7. **AI** looks at the world and queues commands for the next tick (§10).
@@ -407,10 +408,13 @@ impl World {
         self.ledger.mint(AccountId::Shoppers, allowances);
     }
 
-    /// Phase 5, economy's part: overdraft interest (0 by default, R32), then every building's
-    /// rent, utilities and stock order, paid with no limit check (R32). Delivery of the order
-    /// (R2) and the population joining the map follow (their owners).
+    /// Phase 5, economy's part: overdraft interest (0 by default, R32), residents' rent out of
+    /// the shoppers' purse to each block's owner (R51, R63; §8.2: before anyone shops), then
+    /// every building's rent, utilities and stock order (apartment blocks too, R56), paid with
+    /// no limit check (R32). Delivery of the order (R2) and the population joining the map
+    /// follow (their owners).
     fn settlement(&mut self) {
+        let rent_due = self.rent_due();
         let active = self
             .players
             .iter()
@@ -421,6 +425,7 @@ impl World {
             active,
             self.config.game.overdraft.interest_rate.rate(),
         );
+        bills.extend(economy::settlement::resident_rent_bills(&rent_due));
         bills.extend(economy::settlement::settlement_bills(
             &self.map,
             &self.businesses,
@@ -673,8 +678,9 @@ impl World {
         }
     }
 
-    /// Rent residents owe at the 06:00 settlement, per apartment block (R51, §7.2). Economy
-    /// settles it: the payers are the residents, whose rent comes out of their allowance.
+    /// Rent residents owe at the 06:00 settlement, per apartment block (R51, §7.2), each
+    /// resident's capped at their allowance (R63). Economy settles it from the shoppers' purse
+    /// to the block's owner.
     pub fn rent_due(&self) -> Vec<RentDue> {
         let listings = residential::listings(
             &self.businesses,
@@ -682,7 +688,11 @@ impl World {
             &self.config,
             &self.population.residential,
         );
-        residential::rent_due(&self.population.residential, &listings)
+        residential::rent_due(
+            &self.population.residential,
+            &listings,
+            &self.config.customers,
+        )
     }
 
     /// Phase 9. Owner: businesses.
