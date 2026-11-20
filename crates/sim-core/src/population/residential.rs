@@ -15,6 +15,7 @@ use crate::businesses::{BusinessId, Businesses, FitOutLevel, stock_capacity};
 use crate::config::Config;
 use crate::config::CustomersConfig;
 use crate::config::customers::ResidentialSettings;
+use crate::config::types::Pounds;
 use crate::customers::scoring;
 use crate::economy::{AccountId, PlayerId};
 use crate::land::{BlockId, Map, Tier, land_rent_per_day, volume};
@@ -143,7 +144,14 @@ pub struct FlatListing {
     pub rent: Money,
 }
 
-/// Every apartment block on the map, in building id order.
+/// The rent residents see and pay: the owner's, held to `max_rent_per_flat` if that study
+/// lever is set (docs/economy.md "Residential levers"; off by default).
+pub fn capped_rent(rent: Money, cap: Option<Money>) -> Money {
+    cap.map_or(rent, |cap| rent.min(cap))
+}
+
+/// Every apartment block on the map, in building id order. Each listing's rent is what
+/// residents pay ([`capped_rent`]).
 pub fn listings(
     businesses: &Businesses,
     map: &Map,
@@ -164,7 +172,10 @@ pub fn listings(
                 tier,
                 appeal: fit_out_appeal(config, b.fit_out),
                 flats: flats(volume(b.height, b.footprint), rules.flat_size),
-                rent: residential.rent(*id, rules.default_rent.money()),
+                rent: capped_rent(
+                    residential.rent(*id, rules.default_rent.money()),
+                    rules.max_rent_per_flat.map(Pounds::money),
+                ),
             })
         })
         .collect()
@@ -355,14 +366,22 @@ fn shuffled_people(counts: &BTreeMap<Cohort, u64>, rng: &mut SimRng) -> Vec<Coho
     people
 }
 
-/// Houses as many of `people` as will take a flat. A cohort that fails once fails for the
-/// rest of the pass (flats only fill up), so it is skipped without re-scoring. Returns the
-/// people left unhoused, in order.
+/// Flats let per building during the 05:30 phase, and how many more people may still be
+/// housed this morning ([`house_room`]; `None`: no limit).
+struct Lets {
+    occupancy: BTreeMap<BusinessId, u32>,
+    room: Option<u64>,
+}
+
+/// Houses as many of `people` as will take a flat, and at most `lets.room` of them if set (the
+/// commute-preference lever, [`house_room`]). A cohort that fails once fails for the rest of
+/// the pass (flats only fill up), so it is skipped without re-scoring. Returns the people left
+/// unhoused, in order.
 fn house_all(
     people: Vec<Cohort>,
     residential: &mut Residential,
     listings: &[FlatListing],
-    occupancy: &mut BTreeMap<BusinessId, u32>,
+    lets: &mut Lets,
     rules: &CustomersConfig,
     year: i32,
     rng: &mut SimRng,
@@ -370,15 +389,18 @@ fn house_all(
     let mut failed: BTreeSet<Cohort> = BTreeSet::new();
     let mut left = Vec::new();
     for cohort in people {
-        if failed.contains(&cohort) {
+        if failed.contains(&cohort) || lets.room == Some(0) {
             left.push(cohort);
             continue;
         }
-        match choose_flat(cohort, listings, occupancy, rules, rng) {
+        match choose_flat(cohort, listings, &lets.occupancy, rules, rng) {
             HouseHunt::Housed(i) => {
                 let building = listings[i].building;
                 residential.house(cohort, building, year);
-                *occupancy.entry(building).or_insert(0) += 1;
+                *lets.occupancy.entry(building).or_insert(0) += 1;
+                if let Some(n) = lets.room.as_mut() {
+                    *n -= 1;
+                }
             }
             HouseHunt::PricedOut | HouseHunt::NoVacancy => {
                 failed.insert(cohort);
@@ -389,10 +411,27 @@ fn house_all(
     left
 }
 
+/// How many more people this morning's house-hunt may house under the commute-preference
+/// lever: `⌊adults × (1 − commute_preference)⌋ − housed`, never below 0, where `adults`
+/// counts residents, the unhoused and today's arrivals. `None` when the lever is off (0, the
+/// default): no limit (docs/economy.md "Residential levers").
+pub fn house_room(pop: &Population, rules: &CustomersConfig) -> Option<u64> {
+    let preference = rules.residential.commute_preference.rate();
+    if preference == Rate::ZERO {
+        return None;
+    }
+    let adults = u128::from(pop.total_adults() + pop.pending_arrivals());
+    let keep = u128::try_from((Rate::ONE.bp() - preference.bp()).max(0)).unwrap_or(0);
+    let unit = u128::try_from(Rate::ONE.bp()).unwrap_or(1);
+    let cap = u64::try_from(adults * keep / unit).unwrap_or(u64::MAX);
+    Some(cap.saturating_sub(pop.housed()))
+}
+
 /// The 05:30 phase (R53, R54): the train's arrivals house-hunt first, in a seeded random
 /// order; then (if `rehunt_unhoused`) the city's unhoused look again while flats stand empty;
 /// then residents whose move window is open move if somewhere scores better and passes the
-/// same affordability rule. Everyone not housed joins the pool as a commuter or tourist.
+/// same affordability rule. Everyone not housed joins the pool as a commuter or tourist. With
+/// the commute-preference lever on, the first two steps house no more than [`house_room`].
 pub fn arrivals(
     pop: &mut Population,
     listings: &[FlatListing],
@@ -401,7 +440,10 @@ pub fn arrivals(
     rng: &mut SimRng,
 ) -> ArrivalsReport {
     let mut report = ArrivalsReport::default();
-    let mut occupancy = pop.residential.occupancy();
+    let mut lets = Lets {
+        occupancy: pop.residential.occupancy(),
+        room: house_room(pop, rules),
+    };
 
     // 1. The train's arrivals look for a flat first.
     let pending = std::mem::take(&mut pop.pending);
@@ -411,7 +453,7 @@ pub fn arrivals(
         people,
         &mut pop.residential,
         listings,
-        &mut occupancy,
+        &mut lets,
         rules,
         year,
         rng,
@@ -423,14 +465,14 @@ pub fn arrivals(
     }
 
     // 2. The city's unhoused try again while anything stands empty.
-    if rules.residential.rehunt_unhoused && listings.iter().any(|l| vacant(l, &occupancy)) {
+    if rules.residential.rehunt_unhoused && listings.iter().any(|l| vacant(l, &lets.occupancy)) {
         let people = shuffled_people(&pop.pool, rng);
         let before = people.len() as u64;
         let left = house_all(
             people,
             &mut pop.residential,
             listings,
-            &mut occupancy,
+            &mut lets,
             rules,
             year,
             rng,
@@ -455,12 +497,12 @@ pub fn arrivals(
         let Some(r) = pop.residential.residents.get(&id).copied() else {
             continue;
         };
-        if let Some(i) = better_flat(&r, listings, &occupancy, rules, rng) {
+        if let Some(i) = better_flat(&r, listings, &lets.occupancy, rules, rng) {
             let to = listings[i].building;
-            if let Some(n) = occupancy.get_mut(&r.home) {
+            if let Some(n) = lets.occupancy.get_mut(&r.home) {
                 *n = n.saturating_sub(1);
             }
-            *occupancy.entry(to).or_insert(0) += 1;
+            *lets.occupancy.entry(to).or_insert(0) += 1;
             if let Some(m) = pop.residential.residents.get_mut(&id) {
                 m.home = to;
                 m.moved_year = year;
@@ -491,7 +533,8 @@ pub struct RentDue {
 /// shoppers' purse, §7.2). The payers are the residents themselves: their rent comes out of
 /// their allowance first (§8.2). Residents have no savings (R63), so each pays
 /// `min(rent, allowance)`: an owner who puts the rent past someone's allowance collects the
-/// allowance and no more.
+/// allowance and no more. `rent_tax` of each building's total goes to the city (a study lever,
+/// 0 by default), rounded half away from zero.
 pub fn rent_due(
     residential: &Residential,
     listings: &[FlatListing],
@@ -518,7 +561,13 @@ pub fn rent_due(
             .or_insert_with(|| allowance(rules, r.cohort));
         entry.amount += l.rent.min(budget).max(Money::ZERO);
     }
-    due.into_values().collect()
+    let tax = rules.residential.rent_tax.rate();
+    due.into_values()
+        .map(|mut d| {
+            d.tax = tax.apply(d.amount);
+            d
+        })
+        .collect()
 }
 
 /// An apartment block's daily running costs (R56).
@@ -657,6 +706,41 @@ mod tests {
         assert_eq!(due(Money::from_pounds(30))[0].flats_let, 2);
         assert_eq!(due(Money::ZERO)[0].amount, Money::ZERO);
         assert_eq!(due(Money::ZERO).len(), 1);
+    }
+
+    #[test]
+    fn a_rent_cap_only_ever_lowers_the_rent() {
+        let three = Money::from_pounds(3);
+        assert_eq!(capped_rent(three, None), three);
+        assert_eq!(capped_rent(three, Some(Money::from_pounds(5))), three);
+        assert_eq!(capped_rent(three, Some(three)), three);
+        assert_eq!(
+            capped_rent(three, Some(Money::from_pence(250))),
+            Money::from_pence(250)
+        );
+        assert_eq!(capped_rent(three, Some(Money::ZERO)), Money::ZERO);
+    }
+
+    #[test]
+    fn house_room_is_unlimited_by_default_and_rounds_down() {
+        let mut config = crate::economy::test_support::shipped_config();
+        let cohort = Cohort {
+            band: super::super::AgeBand(1),
+            sex: super::super::Sex::Male,
+            class: super::super::Class::Working,
+        };
+        let mut pop = Population::default();
+        pop.pending.insert(cohort, 9);
+        pop.pool.insert(cohort, 1);
+        pop.residential.house(cohort, BusinessId(0), 1930);
+        assert_eq!(house_room(&pop, &config.customers), None);
+        // 11 adults, 30% prefer to commute: ⌊11 × 0.7⌋ = 7 housed at most, 1 already is.
+        config.customers.residential.commute_preference =
+            crate::config::types::Ratio(Rate::from_bp(3000));
+        assert_eq!(house_room(&pop, &config.customers), Some(6));
+        // Everyone prefers to commute: no room, and nobody is evicted.
+        config.customers.residential.commute_preference = crate::config::types::Ratio(Rate::ONE);
+        assert_eq!(house_room(&pop, &config.customers), Some(0));
     }
 
     #[test]

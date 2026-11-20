@@ -299,8 +299,13 @@ fn check_customers_m1(config: &Config, bands: &BTreeSet<&str>, errors: &mut Vec<
             c.residential.comfortable_share,
         ),
         ("/residential/stretch_share", c.residential.stretch_share),
+        ("/residential/rent_tax", c.residential.rent_tax),
+        (
+            "/residential/commute_preference",
+            c.residential.commute_preference,
+        ),
     ] {
-        if share.rate() > Rate::ONE {
+        if share.rate() > Rate::ONE || share.rate() < Rate::ZERO {
             err(
                 errors,
                 file,
@@ -308,6 +313,17 @@ fn check_customers_m1(config: &Config, bands: &BTreeSet<&str>, errors: &mut Vec<
                 "must be between 0 and 1".into(),
             );
         }
+    }
+    if c.residential
+        .max_rent_per_flat
+        .is_some_and(|cap| cap.money().is_negative())
+    {
+        err(
+            errors,
+            file,
+            "/residential/max_rent_per_flat".into(),
+            "must be at least 0, or null for no cap".into(),
+        );
     }
     if c.residential.stretch_share.rate() < c.residential.comfortable_share.rate() {
         err(
