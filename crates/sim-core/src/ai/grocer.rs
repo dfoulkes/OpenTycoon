@@ -438,6 +438,10 @@ mod tests {
             initial_order_share: Ratio(Rate::from_bp(5_000)),
             order_margin: Ratio(TEN_PERCENT),
             rescue_after: ClockTime::from_hm(22, 0).unwrap_or_default(),
+            opportunism: crate::economy::test_support::shipped_config()
+                .ai
+                .grocer
+                .opportunism,
         }
     }
 }

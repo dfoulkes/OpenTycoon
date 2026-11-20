@@ -89,6 +89,8 @@ pub struct RosterState {
     after_building: Vec<(PlayerId, Money)>,
     hashes: Vec<u64>,
     holdings: Vec<(usize, usize)>,
+    /// (player, building) for every existing building a player gained (bought at auction).
+    bought: Vec<(PlayerId, BusinessId)>,
 }
 
 fn state(w: &mut SimWorld) -> &mut RosterState {
@@ -158,6 +160,12 @@ fn advance(st: &mut RosterState, rival: bool) {
         }
     }
     let before_ids: BTreeSet<BusinessId> = world.businesses().by_id.keys().copied().collect();
+    let before_owners: BTreeMap<BusinessId, AccountId> = world
+        .businesses()
+        .by_id
+        .iter()
+        .map(|(id, b)| (*id, b.owner))
+        .collect();
     let before_leases = holders(world);
     world.tick();
     let year = world.clock().year();
@@ -173,6 +181,13 @@ fn advance(st: &mut RosterState, rival: bool) {
             if let AccountId::Player(p) = b.owner {
                 gained_building.insert(p);
             }
+        }
+    }
+    for (id, b) in &world.businesses().by_id {
+        if let (Some(before), AccountId::Player(p)) = (before_owners.get(id), b.owner)
+            && *before != b.owner
+        {
+            st.bought.push((p, *id));
         }
     }
     let mut gained_lease = BTreeSet::new();
@@ -269,7 +284,7 @@ fn has_station(world: &World, block: BlockId) -> bool {
 // --- Given -----------------------------------------------------------------------------------
 
 #[given(
-    regex = r"^(the Landlord|the Toff|the Speculator|Sir Penny Sugar) plays seat 1 against a scripted rival in seat 0$"
+    regex = r"^(the Grocer|the Landlord|the Toff|the Speculator|Sir Penny Sugar) plays seat 1 against a scripted rival in seat 0$"
 )]
 fn seat_focus(w: &mut SimWorld, who: String) {
     state(w).focus = Some(id_of(&who));
@@ -304,7 +319,7 @@ fn rival_paid(w: &mut SimWorld, name: String, paid: String) {
 }
 
 #[given(
-    regex = r#"^(the Landlord|the Toff|the Speculator|Sir Penny Sugar) holds the lease on "([^"]+)"$"#
+    regex = r#"^(the Grocer|the Landlord|the Toff|the Speculator|Sir Penny Sugar) holds the lease on "([^"]+)"$"#
 )]
 fn focus_holds(w: &mut SimWorld, who: String, name: String) {
     let term = game(w).config().game.leases.term_years;
@@ -712,7 +727,9 @@ fn only_residential(w: &mut SimWorld, who: String) {
     assert!(other.is_empty(), "{other:?}");
 }
 
-#[then(regex = r"^(the Toff|Sir Penny Sugar) put up at least (\d+) (shop|apartment block)s?$")]
+#[then(
+    regex = r"^(the Grocer|the Toff|Sir Penny Sugar) put up at least (\d+) (shop|apartment block)s?$"
+)]
 fn put_up(w: &mut SimWorld, who: String, n: usize, what: String) {
     let st = &w.roster;
     let me = AccountId::Player(player_of(st, &who));
@@ -982,4 +999,200 @@ fn held_at_end(w: &mut SimWorld) {
     for (leases, buildings) in &w.roster.holdings {
         assert!(*leases > 0 && *buildings > 0, "{:?}", w.roster.holdings);
     }
+}
+
+// --- R66: opportunism -----------------------------------------------------------------------
+
+#[given(regex = r"^the reference rent is £(\d+)\.(\d\d)$")]
+fn reference_rent(w: &mut SimWorld, pounds: u32, pence: u32) {
+    common::set_key(
+        w.config.sources_mut(),
+        "customers.yaml",
+        "/residential/reference_rent",
+        &format!("{pounds}.{pence:02}"),
+    );
+}
+
+#[given("the rival holds every lease")]
+fn rival_holds_every_lease(w: &mut SimWorld) {
+    rival_holds_all(w, String::new());
+}
+
+#[when(regex = r"^seat 1 plays for (\d+) game days?$")]
+fn seat_plays_for(w: &mut SimWorld, days: u64) {
+    let ticks = days * 24 * ticks_per_hour(w);
+    play_ticks(w, ticks);
+}
+
+fn apartment_type(st: &RosterState) -> String {
+    st.game
+        .as_ref()
+        .unwrap()
+        .config()
+        .customers
+        .residential
+        .building_type
+        .clone()
+}
+
+/// The focus's apartment blocks standing now.
+fn focus_blocks(st: &RosterState) -> Vec<(BusinessId, sim_core::businesses::Business)> {
+    let apartments = apartment_type(st);
+    let world = st.game.as_ref().unwrap();
+    world
+        .businesses()
+        .owned_by(AccountId::Player(FOCUS))
+        .filter(|(_, b)| b.type_id == apartments)
+        .map(|(id, b)| (id, b.clone()))
+        .collect()
+}
+
+#[then(regex = r#"^the Toff (did|didn't) put up an apartment block on "(.+)"$"#)]
+fn toff_flats_on(w: &mut SimWorld, did: String, name: String) {
+    let block = block_named(game(w), &name);
+    let st = &w.roster;
+    let apartments = apartment_type(st);
+    let world = st.game.as_ref().unwrap();
+    let count = st
+        .built
+        .iter()
+        .filter(|b| {
+            b.owner == AccountId::Player(FOCUS)
+                && b.type_id == apartments
+                && world
+                    .businesses()
+                    .get(b.id)
+                    .is_some_and(|x| x.block == block)
+        })
+        .count();
+    assert_eq!(count > 0, did == "did", "{count} apartment blocks");
+}
+
+#[then("every Toff apartment block has high fit-out")]
+fn toff_flats_high(w: &mut SimWorld) {
+    let blocks = focus_blocks(&w.roster);
+    assert!(!blocks.is_empty(), "no apartment block");
+    for (id, b) in blocks {
+        assert_eq!(b.fit_out, FitOutLevel::High, "{id:?}");
+    }
+}
+
+#[then(regex = r"^the rent on every Toff apartment block is above £(\d+)\.(\d\d)$")]
+fn toff_rent_above(w: &mut SimWorld, pounds: i64, pence: i64) {
+    let floor = Money::from_pence(pounds * 100 + pence);
+    let blocks = focus_blocks(&w.roster);
+    assert!(!blocks.is_empty(), "no apartment block");
+    let world = w.roster.game.as_ref().unwrap();
+    for (id, _) in blocks {
+        let rent = world.population().residential.rents.get(&id).copied();
+        assert!(rent.is_some_and(|r| r > floor), "{id:?} let at {rent:?}");
+    }
+}
+
+#[then(regex = r"^the (Grocer|Toff) never put up an apartment block$")]
+fn never_flats(w: &mut SimWorld, who: String) {
+    let st = &w.roster;
+    let player = player_of(st, &format!("the {who}"));
+    let me = AccountId::Player(player);
+    let apartments = apartment_type(st);
+    let flats: Vec<_> = st
+        .built
+        .iter()
+        .filter(|b| b.owner == me && b.type_id == apartments)
+        .collect();
+    assert!(flats.is_empty(), "{flats:?}");
+    let tried: Vec<_> = st
+        .issued
+        .iter()
+        .filter(|i| {
+            i.player == player
+                && matches!(&i.command, Command::Build { type_id, .. } if *type_id == apartments)
+        })
+        .collect();
+    assert!(tried.is_empty(), "{tried:?}");
+}
+
+#[then(regex = r"^the Speculator (bought|never bid on) an apartment block$")]
+fn speculator_flats(w: &mut SimWorld, how: String) {
+    let st = &w.roster;
+    let apartments = apartment_type(st);
+    let world = st.game.as_ref().unwrap();
+    let is_flats = |id: BusinessId| {
+        world
+            .businesses()
+            .get(id)
+            .is_some_and(|b| b.type_id == apartments)
+    };
+    if how == "bought" {
+        assert!(
+            st.bought.iter().any(|(p, id)| *p == FOCUS && is_flats(*id)),
+            "bought {:?}",
+            st.bought
+        );
+    } else {
+        let bids: Vec<_> = st
+            .issued
+            .iter()
+            .filter(|i| {
+                i.player == FOCUS
+                    && match i.command {
+                        Command::OpenBusinessAuction { business, .. } => is_flats(business),
+                        Command::Raise { .. } => {
+                            matches!(i.on_auction, Some(AuctionItem::Business(id)) if is_flats(id))
+                        }
+                        _ => false,
+                    }
+            })
+            .collect();
+        assert!(bids.is_empty(), "{bids:?}");
+    }
+}
+
+#[then("the Speculator offered an apartment block it bought for auction")]
+fn speculator_relisted(w: &mut SimWorld) {
+    let st = &w.roster;
+    let relisted = st.bought.iter().any(|(p, id)| {
+        *p == FOCUS
+            && st.issued.iter().any(|i| {
+                i.player == FOCUS
+                    && i.command
+                        == Command::OfferForAuction {
+                            item: AuctionItem::Business(*id),
+                        }
+            })
+    });
+    assert!(relisted, "bought {:?}", st.bought);
+}
+
+#[then(
+    regex = r"^after every building it put up, at most (\d+)% of the Toff's buildings by build cost were apartment blocks$"
+)]
+fn toff_within_cap(w: &mut SimWorld, percent: i64) {
+    let st = &w.roster;
+    let apartments = apartment_type(st);
+    let world = st.game.as_ref().unwrap();
+    assert_eq!(
+        world.config().ai.toff.opportunism.max_outside_share.rate(),
+        Rate::from_bp(percent * 100)
+    );
+    let (mut flats, mut all) = (0i64, 0i64);
+    let mut checked = 0;
+    for b in st
+        .built
+        .iter()
+        .filter(|b| b.owner == AccountId::Player(FOCUS))
+    {
+        let cost = world.businesses().get(b.id).unwrap().build_cost.pence();
+        all += cost;
+        if b.type_id == apartments {
+            flats += cost;
+            checked += 1;
+        }
+        assert!(
+            flats * 100 <= percent * all,
+            "{flats} of {all} in apartment blocks after {:?}",
+            b.id
+        );
+    }
+    assert!(checked > 0, "built no apartment block");
 }

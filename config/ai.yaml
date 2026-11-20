@@ -35,6 +35,20 @@ grocer:                         # §10: how the Grocer plays (placeholders; tune
   initial_order_share: 1.0      # a new shop's first order, as a share of capacity
   order_margin: 0.1             # tomorrow's order = today's sales × 1.1, capped at capacity (R2, R10)
   rescue_after: "22:00"         # a negative balance from here to midnight sells a shop to the city (R5)
+  opportunism:                  # R66: off: the Grocer stays pure retail
+    enabled: false
+    threshold: 0.25             # another line must earn this much more per £ tied up than its own
+    max_outside_share: 0.5      # at most this share of its holdings outside its home line
+    apartment_footprint: [3, 3] # lot units (R22)
+    apartment_height: 12        # capped at the type's max_height (R58)
+    apartments_per_lot: 2
+    fit_out: low
+    start_rent: 1.0             # × residential.reference_rent for a new block (R51)
+    rent_step: 0.3              # then by vacancy, each morning: up when ≥ raise_at let, down when ≤ cut_at
+    raise_at: 0.95
+    cut_at: 0.6
+    min_rent: 0.5
+    max_rent: 2.0
 landlord:                       # §10: how the Landlord plays (placeholders; tune with sim-cli batch)
   aggression: 0.31              # strength knob: pays at most this share of its bid ceiling for a lease (R7)
   cash_buffer: 500              # £ it never spends below (R3)
@@ -61,6 +75,20 @@ toff:                           # §10: how the Toff plays (placeholders; tune w
   initial_order_share: 0.5      # a new shop's first order, as a share of capacity
   order_margin: 0.1             # tomorrow's order = today's sales × 1.1, capped at capacity (R2, R10)
   rescue_after: "22:00"         # a negative balance from here to midnight sells a shop (R5)
+  opportunism:                  # R66: luxury flats on its High lots when they out-earn its shops
+    enabled: true
+    threshold: 0.25             # another line must earn this much more per £ tied up than its own
+    max_outside_share: 0.4      # at most this share of its holdings outside its home line
+    apartment_footprint: [3, 3] # lot units (R22)
+    apartment_height: 15        # capped at the type's max_height (R58)
+    apartments_per_lot: 2
+    fit_out: high
+    start_rent: 2.0             # × residential.reference_rent for a new block (R51)
+    rent_step: 0.3              # then by vacancy, each morning: up when ≥ raise_at let, down when ≤ cut_at
+    raise_at: 0.95
+    cut_at: 0.6
+    min_rent: 1.0
+    max_rent: 4.0
 speculator:                     # §10: how the Speculator plays (placeholders; tune with sim-cli batch)
   aggression: 0.51              # strength and risk knob: bids to this share of its ceiling, credit included (R7)
   cash_buffer: 0                # the smallest buffer
@@ -71,6 +99,21 @@ speculator:                     # §10: how the Speculator plays (placeholders; 
   hold_hours: 6                 # game hours before it re-lists a purchase (R5, R33)
   bargain_share: 0.6            # on a player's offer, bids at most this share of book value
   rescue_after: "21:00"         # earlier: it may have a lease to offer, and an auction takes hours
+  apartment_hold_hours: 48      # holds an apartment block two game days, collecting rent, before re-listing it
+  opportunism:                  # R66: buys (or builds) apartment blocks to flip when they out-earn land
+    enabled: true
+    threshold: 0.25             # another line must earn this much more per £ tied up than its own
+    max_outside_share: 0.5      # at most this share of its holdings outside its home line
+    apartment_footprint: [3, 3] # lot units (R22)
+    apartment_height: 15        # capped at the type's max_height (R58)
+    apartments_per_lot: 1
+    fit_out: low
+    start_rent: 1.0             # × residential.reference_rent for a new block (R51)
+    rent_step: 0.3              # then by vacancy, each morning: up when ≥ raise_at let, down when ≤ cut_at
+    raise_at: 0.95
+    cut_at: 0.6
+    min_rent: 0.5
+    max_rent: 2.0
 sir_penny_sugar:                # §10, §7.2: how Sir Penny Sugar plays (placeholders; tune with sim-cli batch)
   aggression: 0.34              # strength knob: pays at most this share of his bid ceiling for a lease (R7)
   cash_buffer: 400              # £ he never spends below (R3)

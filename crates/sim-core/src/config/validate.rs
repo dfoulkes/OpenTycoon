@@ -654,6 +654,11 @@ fn check_ai(config: &Config, errors: &mut Vec<ConfigError>) {
         }
     }
     check_grocer(config, errors);
+    Block {
+        errors,
+        name: "grocer",
+    }
+    .opportunism(config, &config.ai.grocer.opportunism);
     check_roster(config, errors);
 }
 
@@ -989,6 +994,70 @@ impl Block<'_> {
         }
     }
 
+    /// A vacancy rent rule (R51): `[start_rent, rent_step, raise_at, cut_at, min_rent,
+    /// max_rent]`, keys under `prefix` (`""` or `"opportunism/"`).
+    fn vacancy_rent(&mut self, prefix: &str, rule: [super::Ratio; 6]) {
+        let one = BASIS_POINTS_PER_UNIT;
+        let [start, step, raise_at, cut_at, min, max] = rule;
+        let key = |k: &str| format!("{prefix}{k}");
+        self.share(
+            &key("rent_step"),
+            step,
+            1,
+            10 * one,
+            "above 0 and at most 10",
+        );
+        self.share(&key("raise_at"), raise_at, 0, one, UNIT);
+        if cut_at.rate() >= raise_at.rate() || cut_at.rate().bp() < 0 {
+            self.bad(&key("cut_at"), "must be at least 0 and below raise_at");
+        }
+        self.share(&key("min_rent"), min, 0, 10 * one, "between 0 and 10");
+        self.share(&key("max_rent"), max, 0, 10 * one, "between 0 and 10");
+        if min.rate() > max.rate() {
+            self.bad(&key("min_rent"), "must be at most max_rent");
+        }
+        if start.rate() < min.rate() || start.rate() > max.rate() {
+            self.bad(&key("start_rent"), "must be between min_rent and max_rent");
+        }
+    }
+
+    /// `opportunism` (R66): the switch threshold, the cap and the apartments it builds.
+    fn opportunism(&mut self, config: &Config, o: &super::ai::OpportunismConfig) {
+        let one = BASIS_POINTS_PER_UNIT;
+        self.share(
+            "opportunism/threshold",
+            o.threshold,
+            0,
+            10 * one,
+            "between 0 and 10",
+        );
+        self.share(
+            "opportunism/max_outside_share",
+            o.max_outside_share,
+            0,
+            one,
+            UNIT,
+        );
+        self.vacancy_rent(
+            "opportunism/",
+            [
+                o.start_rent,
+                o.rent_step,
+                o.raise_at,
+                o.cut_at,
+                o.min_rent,
+                o.max_rent,
+            ],
+        );
+        self.building(
+            config,
+            "opportunism/apartment",
+            config.customers.residential.building_type.as_str(),
+            o.apartment_footprint,
+            o.apartment_height,
+        );
+    }
+
     fn common(&mut self, aggression: super::Ratio, buffer: super::Pounds) {
         self.share(
             "aggression",
@@ -1119,6 +1188,7 @@ fn check_toff(config: &Config, errors: &mut Vec<ConfigError>) {
     );
     block.share("order_margin", cfg.order_margin, 0, one, UNIT);
     block.rescue(config, cfg.rescue_after);
+    block.opportunism(config, &cfg.opportunism);
     for (i, id) in cfg.shop_types.iter().enumerate() {
         match config.businesses.types.get(id) {
             None => block.bad(
@@ -1162,6 +1232,7 @@ fn check_speculator(config: &Config, errors: &mut Vec<ConfigError>) {
         "above 0 and at most 1",
     );
     block.rescue(config, cfg.rescue_after);
+    block.opportunism(config, &cfg.opportunism);
 }
 
 fn check_sir_penny_sugar(config: &Config, errors: &mut Vec<ConfigError>) {
@@ -1176,25 +1247,17 @@ fn check_sir_penny_sugar(config: &Config, errors: &mut Vec<ConfigError>) {
     block.share("bid_jitter", cfg.bid_jitter, 0, one, UNIT);
     block.share("min_tier_weight", cfg.min_tier_weight, 0, one, UNIT);
     block.share("station_premium", cfg.station_premium, 0, one, UNIT);
-    block.share(
-        "rent_step",
-        cfg.rent_step,
-        1,
-        10 * one,
-        "above 0 and at most 10",
+    block.vacancy_rent(
+        "",
+        [
+            cfg.start_rent,
+            cfg.rent_step,
+            cfg.raise_at,
+            cfg.cut_at,
+            cfg.min_rent,
+            cfg.max_rent,
+        ],
     );
-    block.share("raise_at", cfg.raise_at, 0, one, UNIT);
-    if cfg.cut_at.rate() >= cfg.raise_at.rate() || cfg.cut_at.rate().bp() < 0 {
-        block.bad("cut_at", "must be at least 0 and below raise_at");
-    }
-    block.share("min_rent", cfg.min_rent, 0, 10 * one, "between 0 and 10");
-    block.share("max_rent", cfg.max_rent, 0, 10 * one, "between 0 and 10");
-    if cfg.min_rent.rate() > cfg.max_rent.rate() {
-        block.bad("min_rent", "must be at most max_rent");
-    }
-    if cfg.start_rent.rate() < cfg.min_rent.rate() || cfg.start_rent.rate() > cfg.max_rent.rate() {
-        block.bad("start_rent", "must be between min_rent and max_rent");
-    }
     block.building(
         config,
         "apartment",
