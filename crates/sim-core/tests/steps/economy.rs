@@ -31,7 +31,9 @@ fn world(w: &mut SimWorld) -> &mut World {
 }
 
 fn rebaseline(w: &mut SimWorld) {
-    w.economy.baseline = world(w).ledger().total();
+    // Net of minted allowances (R63), so the baseline only moves with created/destroyed money.
+    let ledger = world(w).ledger();
+    w.economy.baseline = ledger.total() - ledger.minted();
 }
 
 fn player(n: u8) -> PlayerId {
@@ -400,6 +402,8 @@ fn owns_nothing(w: &mut SimWorld, n: u8) {
 
 #[then("no money was created or destroyed")]
 fn conserved(w: &mut SimWorld) {
+    // Only shoppers' allowances are new money (R63).
     let baseline = w.economy.baseline;
-    assert_eq!(world(w).ledger().total(), baseline);
+    let ledger = world(w).ledger();
+    assert_eq!(ledger.total() - ledger.minted(), baseline);
 }
