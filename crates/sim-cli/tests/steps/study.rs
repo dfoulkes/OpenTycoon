@@ -108,9 +108,7 @@ fn a_study(w: &mut HarnessWorld, models: u32, seed: u64) {
     });
 }
 
-#[given(
-    expr = "the parameter {string} on {string} from {float} to {float}, {word}, {word}"
-)]
+#[given(expr = "the parameter {string} on {string} from {float} to {float}, {word}, {word}")]
 fn a_parameter(
     w: &mut HarnessWorld,
     name: String,
@@ -163,7 +161,10 @@ fn different_seed(w: &mut HarnessWorld, seed: u64) {
     let mut def = w.study.def.clone().unwrap();
     def.seed = seed;
     let other = generate(&def).unwrap();
-    assert_eq!(other[0], w.study.models[0], "model 0 is always the baseline");
+    assert_eq!(
+        other[0], w.study.models[0],
+        "model 0 is always the baseline"
+    );
     assert_ne!(other[1..], w.study.models[1..]);
 }
 
@@ -206,7 +207,7 @@ fn model0_no_overrides(w: &mut HarnessWorld) {
     let def = w.study.def.clone().unwrap();
     let m = model(w, 0).clone();
     assert_eq!(m.values, None);
-    assert!(overrides_for(&def, &base(w), &m).unwrap().is_empty());
+    assert_eq!(overrides_for(&def, &base(w), &m).unwrap(), Vec::new());
 }
 
 #[then("model 0's config equals the shipped config")]
@@ -233,13 +234,20 @@ fn model_overrides(w: &mut HarnessWorld, id: u32, key: String) {
     let m = model(w, id).clone();
     let ovs = overrides_for(&def, &base(w), &m).unwrap();
     assert_eq!(ovs.len(), 1, "{ovs:?}");
-    assert!(ovs[0].to_string().starts_with(&format!("{key}=")), "{ovs:?}");
+    assert!(
+        ovs[0].to_string().starts_with(&format!("{key}=")),
+        "{ovs:?}"
+    );
     let config = model_config(&def, &base(w), &m, "v1").unwrap();
     let value = m.values.as_ref().unwrap()[0];
     assert!((f64::from(config.game.leases.term_years) - value).abs() < 1e-9);
 }
 
 #[then(expr = "model {int} overrides every year under {string} by its {string} factor")]
+#[allow(
+    clippy::many_single_char_names,
+    reason = "short-lived locals in a test step"
+)]
 fn model_scales(w: &mut HarnessWorld, id: u32, key: String, name: String) {
     let def = w.study.def.clone().unwrap();
     let i = param_index(w, &name);
@@ -259,7 +267,7 @@ fn model_scales(w: &mut HarnessWorld, id: u32, key: String, name: String) {
             .customers
             .births_per_woman
             .iter()
-            .find(|(y, _)| y.to_string() == year)
+            .find(|(y, _)| *y == year)
             .map(|(_, b)| serde_json::to_value(b).unwrap().as_f64().unwrap())
             .unwrap();
         let after: f64 = v.parse().unwrap();
@@ -275,7 +283,10 @@ fn model_scales(w: &mut HarnessWorld, id: u32, key: String, name: String) {
 
 #[given(expr = "the roster {string}")]
 fn a_roster(w: &mut HarnessWorld, names: String) {
-    let entries = names.split(',').map(|n| Entry::from_name(n.trim())).collect();
+    let entries = names
+        .split(',')
+        .map(|n| Entry::from_name(n.trim()))
+        .collect();
     w.study.roster = Some(Roster::new(entries));
 }
 
@@ -349,7 +360,10 @@ fn interval_is(w: &mut HarnessWorld, low: f64, high: f64) {
 
 #[when(expr = "the win counts are {string}")]
 fn win_counts(w: &mut HarnessWorld, counts: String) {
-    w.study.counts = counts.split(',').map(|c| c.trim().parse().unwrap()).collect();
+    w.study.counts = counts
+        .split(',')
+        .map(|c| c.trim().parse().unwrap())
+        .collect();
 }
 
 #[then(expr = "the normalised entropy is {float} and the Gini index is {float}")]
@@ -363,14 +377,7 @@ fn evenness(w: &mut HarnessWorld, entropy: f64, g: f64) {
 #[given(
     expr = "{int} synthetic games where grocer wins {int}, landlord {int}, toff {int}, idle {int}"
 )]
-fn synthetic(
-    w: &mut HarnessWorld,
-    games: u64,
-    grocer: u64,
-    landlord: u64,
-    toff: u64,
-    idle: u64,
-) {
+fn synthetic(w: &mut HarnessWorld, games: u64, grocer: u64, landlord: u64, toff: u64, idle: u64) {
     let roster = w.study.roster.as_ref().unwrap();
     let mut t = Tally::new(roster.len());
     t.games = games;
@@ -488,7 +495,10 @@ fn finishes_with(w: &mut HarnessWorld, n: usize) {
 #[then(expr = "model {int} is {string}")]
 fn model_status(w: &mut HarnessWorld, id: u32, status: String) {
     let rows = rows(w);
-    let row = rows.iter().find(|r| r["model_id"] == id.to_string()).unwrap();
+    let row = rows
+        .iter()
+        .find(|r| r["model_id"] == id.to_string())
+        .unwrap();
     assert_eq!(row["status"], status, "{row:?}");
 }
 
@@ -496,7 +506,10 @@ fn model_status(w: &mut HarnessWorld, id: u32, status: String) {
 fn models_invalid(w: &mut HarnessWorld, a: u32, b: u32, status: String, key: String) {
     let rows = rows(w);
     for id in [a, b] {
-        let row = rows.iter().find(|r| r["model_id"] == id.to_string()).unwrap();
+        let row = rows
+            .iter()
+            .find(|r| r["model_id"] == id.to_string())
+            .unwrap();
         assert_eq!(row["status"], status, "{row:?}");
         assert!(row["error"].contains(&key), "{row:?}");
     }
@@ -530,12 +543,12 @@ fn equals_one_go(w: &mut HarnessWorld) {
 
 #[then("the two runs wrote identical models.csv and games.csv")]
 fn identical_runs(w: &mut HarnessWorld) {
-    let [a, b] = &w.study.outs[..] else {
+    let [first, second] = &w.study.outs[..] else {
         panic!("expected two runs")
     };
     for file in ["models.csv", "games.csv"] {
-        let x = std::fs::read_to_string(a.join(file)).unwrap();
-        let y = std::fs::read_to_string(b.join(file)).unwrap();
+        let x = std::fs::read_to_string(first.join(file)).unwrap();
+        let y = std::fs::read_to_string(second.join(file)).unwrap();
         assert!(x.lines().count() > 1, "{file} is empty");
         assert_eq!(x, y, "{file} differs");
     }
@@ -548,7 +561,10 @@ fn summary_ranked(w: &mut HarnessWorld, file: String, n: usize) {
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     let ranking = v["ranking"].as_array().unwrap();
     assert_eq!(ranking.len(), n, "{v}");
-    let ranks: Vec<u64> = ranking.iter().map(|r| r["rank"].as_u64().unwrap()).collect();
+    let ranks: Vec<u64> = ranking
+        .iter()
+        .map(|r| r["rank"].as_u64().unwrap())
+        .collect();
     assert_eq!(ranks, (1..=n as u64).collect::<Vec<_>>());
 }
 
@@ -556,8 +572,7 @@ fn summary_ranked(w: &mut HarnessWorld, file: String, n: usize) {
 fn overlay_loads(w: &mut HarnessWorld) {
     let out = w.cli.tmp_dir().join("out");
     let v: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(out.join("summary.json")).unwrap())
-            .unwrap();
+        serde_json::from_str(&std::fs::read_to_string(out.join("summary.json")).unwrap()).unwrap();
     let top = v["top"][0].as_u64().expect("a top model");
     let overlay = out.join("models").join(top.to_string());
     let overrides = std::fs::read_to_string(overlay.join("overrides.txt")).unwrap();
@@ -572,23 +587,22 @@ fn overlay_loads(w: &mut HarnessWorld) {
     }
     for entry in std::fs::read_dir(&overlay).unwrap().flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
-        if name.ends_with(".yaml") {
+        if std::path::Path::new(&name)
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("yaml"))
+        {
             std::fs::copy(entry.path(), target.join(&name)).unwrap();
         }
     }
-    let adopted =
-        sim_core::Config::load(&ConfigSources::read_dir(&target).unwrap()).unwrap();
+    let adopted = sim_core::Config::load(&ConfigSources::read_dir(&target).unwrap()).unwrap();
     // The same config as the shipped one with the model's overrides.
     let parsed: Vec<sim_cli::overrides::Override> = overrides
         .lines()
         .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
         .map(|l| l.trim().trim_start_matches("--set ").parse().unwrap())
         .collect();
-    let expected = sim_cli::overrides::load(
-        &ConfigSources::read_dir(&shipped).unwrap(),
-        None,
-        &parsed,
-    )
-    .unwrap();
+    let expected =
+        sim_cli::overrides::load(&ConfigSources::read_dir(&shipped).unwrap(), None, &parsed)
+            .unwrap();
     assert_eq!(adopted, expected);
 }

@@ -318,13 +318,19 @@ impl StudyDef {
                 ));
             }
             if self.parameters[..i].iter().any(|q| q.name == p.name) {
-                return Err(StudyError::def(at("name"), format!("{:?} is used twice", p.name)));
+                return Err(StudyError::def(
+                    at("name"),
+                    format!("{:?} is used twice", p.name),
+                ));
             }
             if p.all_keys().is_empty() {
                 return Err(StudyError::def(at("key"), "give `key` or `keys`"));
             }
             for k in p.all_keys() {
-                if format!("{k}=0").parse::<crate::overrides::Override>().is_err() {
+                if format!("{k}=0")
+                    .parse::<crate::overrides::Override>()
+                    .is_err()
+                {
                     return Err(StudyError::def(
                         at("key"),
                         format!("{k:?} is not `file.key.path`"),
@@ -389,7 +395,7 @@ mod tests {
     #[test]
     fn rejects_bad_definitions_naming_the_key() {
         for (yaml, path) in [
-            ("modles: 3", "(root)"),
+            ("modles: 3", "unknown field `modles`"),
             ("models: -1", "models"),
             ("models: 0", "models"),
             ("roster: [grocer, grocer]", "roster[1]"),
@@ -406,7 +412,10 @@ mod tests {
                 "parameters: [{ name: x, key: game.a, min: 0.5, max: 1, kind: integer }]",
                 "parameters[0].min",
             ),
-            ("parameters: [{ name: x, min: 0, max: 1 }]", "parameters[0].key"),
+            (
+                "parameters: [{ name: x, min: 0, max: 1 }]",
+                "parameters[0].key",
+            ),
             (
                 "parameters: [{ name: x, key: nofile.a, min: 0, max: 1 }]",
                 "parameters[0].key",

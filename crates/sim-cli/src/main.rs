@@ -10,6 +10,8 @@
 //! - `sim-cli bench <dir>`: ticks/sec and real-time factor as JSON.
 //! - `sim-cli perf-budget <dir>`: measure and compare against `perf/budgets.yaml`; exit 1 if
 //!   over budget.
+//! - `sim-cli study <dir>`: the balance study (R64, R65): sampled models × rotated games →
+//!   `models.csv`, `summary.json`, overlays of the best balanced models (docs/study.md).
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -26,6 +28,7 @@ use sim_cli::budget::{
 };
 use sim_cli::game::GameSpec;
 use sim_cli::overrides::{self, LoadError, Override};
+use sim_cli::study::{RunOptions, StudyDef, run_study};
 use sim_core::clock::ClockRules;
 use sim_core::config::ConfigFile;
 use sim_core::{Config, ConfigSources, World};
@@ -105,6 +108,61 @@ enum Command {
     /// Measure the sim and compare against the perf budgets; exit 1 if any is over budget.
     /// Not part of `cargo test`: run it on a quiet machine (`cargo perf`).
     PerfBudget(PerfArgs),
+    /// Balance study (R64, R65): sample economic models, play each over many games with the
+    /// seats rotated, and rank the balanced ones. Resumes an interrupted study in `--out`.
+    Study(StudyArgs),
+}
+
+#[derive(Args, Debug)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "independent command-line switches, not a state machine"
+)]
+struct StudyArgs {
+    #[command(flatten)]
+    config: ConfigArgs,
+    /// Study definition file (docs/study.md).
+    #[arg(long = "def", default_value = "study/study.yaml")]
+    def: PathBuf,
+    /// Output directory: models.csv, games.csv, summary.json, models/<id>/.
+    #[arg(long, default_value = "study-out")]
+    out: PathBuf,
+    /// Override the definition's model count.
+    #[arg(long)]
+    models: Option<u32>,
+    /// Override the definition's games per model.
+    #[arg(long)]
+    games: Option<u32>,
+    /// Override the definition's preset.
+    #[arg(long)]
+    preset: Option<String>,
+    /// Override the definition's base seed.
+    #[arg(long)]
+    seed: Option<u64>,
+    /// Override the definition's roster: comma-separated personality ids and `idle`.
+    #[arg(long, value_delimiter = ',')]
+    roster: Option<Vec<String>>,
+    /// Override how many balanced models get an overlay.
+    #[arg(long)]
+    top: Option<u32>,
+    /// Worker threads (default: every core). Outputs are identical for any value.
+    #[arg(long)]
+    threads: Option<usize>,
+    /// Also write games.csv (one row per game).
+    #[arg(long)]
+    games_csv: bool,
+    /// Leave out wall-time columns so two runs diff byte for byte.
+    #[arg(long)]
+    no_wall_time: bool,
+    /// Discard any study already in --out and start over.
+    #[arg(long)]
+    fresh: bool,
+    /// Stop after running this many models (resume later with the same command).
+    #[arg(long)]
+    stop_after: Option<u32>,
+    /// No progress lines on stderr.
+    #[arg(long)]
+    quiet: bool,
 }
 
 #[derive(Args, Debug)]
@@ -288,7 +346,86 @@ fn run(cli: Cli) -> Result<ExitCode> {
         Command::Batch(args) => batch_cmd(args),
         Command::Bench(args) => bench_cmd(args),
         Command::PerfBudget(args) => perf_budget_cmd(args),
+        Command::Study(args) => study_cmd(args),
     }
+}
+
+fn study_cmd(args: StudyArgs) -> Result<ExitCode> {
+    let text = std::fs::read_to_string(&args.def)
+        .with_context(|| format!("reading {}", args.def.display()))?;
+    let mut def = match StudyDef::from_yaml(&text) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("error: {}: {e}", args.def.display());
+            return Ok(ExitCode::FAILURE);
+        }
+    };
+    if let Some(v) = args.models {
+        def.models = v;
+    }
+    if let Some(v) = args.games {
+        def.games_per_model = v;
+    }
+    if let Some(v) = args.preset {
+        def.preset = v;
+    }
+    if let Some(v) = args.seed {
+        def.seed = v;
+    }
+    if let Some(v) = args.roster {
+        def.roster = Some(v.into_iter().map(|s| s.trim().to_owned()).collect());
+    }
+    if let Some(v) = args.top {
+        def.top_n = v;
+    }
+    let Some(mut base) = read_sources(&args.config.dir) else {
+        return Ok(ExitCode::FAILURE);
+    };
+    for ov in &args.config.overrides {
+        if let Err(e) = overrides::apply(&mut base, ov) {
+            eprintln!("error: {e}");
+            return Ok(ExitCode::FAILURE);
+        }
+    }
+    let opts = RunOptions {
+        out: args.out.clone(),
+        threads: args.threads,
+        games_csv: args.games_csv,
+        wall_time: !args.no_wall_time,
+        fresh: args.fresh,
+        stop_after: args.stop_after,
+        progress: !args.quiet,
+    };
+    let report = match run_study(&def, &base, &opts) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return Ok(ExitCode::FAILURE);
+        }
+    };
+    println!(
+        "study: {} models ({} run now, {} resumed), {} invalid, {} balanced; preset {}, {} games \
+         per model; {} games in {:.1}s{}",
+        report.ran + report.skipped,
+        report.ran,
+        report.skipped,
+        report.invalid,
+        report.balanced.len(),
+        report.preset,
+        report.games_per_model,
+        report.games,
+        report.wall.as_secs_f64(),
+        if report.complete {
+            String::new()
+        } else {
+            format!(
+                "; incomplete, {} models left: rerun to resume",
+                def.models.saturating_sub(report.ran + report.skipped)
+            )
+        }
+    );
+    println!("wrote {}", args.out.display());
+    Ok(ExitCode::SUCCESS)
 }
 
 fn batch_cmd(args: BatchArgs) -> Result<ExitCode> {

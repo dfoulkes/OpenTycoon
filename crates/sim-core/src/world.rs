@@ -226,6 +226,22 @@ impl World {
     /// A new game from validated config: `players` seats, the last `ai` of them played by the
     /// AI opponents listed in `ai.yaml`, all randomness from `seed`.
     pub fn new(config: Config, seed: u64, players: u8) -> Self {
+        let ai: Vec<(PlayerId, String)> = config
+            .ai
+            .opponents
+            .iter()
+            .zip((0..players).rev())
+            .map(|(personality, p)| (PlayerId(p), personality.clone()))
+            .collect();
+        Self::seated(config, seed, players, &ai)
+    }
+
+    /// A new game whose AI seats are chosen by the caller: `players` seats, `ai` lists which
+    /// seat plays which personality (in the order the AI phase runs them); the other seats are
+    /// humans or harness brains. Personalities must exist in `ai.yaml`. Balance studies use it
+    /// to rotate personalities through the seats (R65). [`World::new`] is this with the
+    /// `ai.yaml` opponents in the last seats.
+    pub fn seated(config: Config, seed: u64, players: u8, ai: &[(PlayerId, String)]) -> Self {
         let clock = Clock::new(ClockRules::from_config(&config.game.clock));
         let map = Map::from_config(&config.map);
         let auctions =
@@ -242,12 +258,9 @@ impl World {
                 config.game.players.starting_cash.money(),
             );
         }
-        let ai = config
-            .ai
-            .opponents
+        let ai = ai
             .iter()
-            .zip((0..players).rev())
-            .map(|(personality, p)| AiSeat::new(PlayerId(p), personality.clone(), seed))
+            .map(|(p, personality)| AiSeat::new(*p, personality.clone(), seed))
             .collect();
         World {
             seed,
@@ -947,16 +960,6 @@ impl World {
     #[doc(hidden)]
     pub fn businesses_mut(&mut self) -> &mut Businesses {
         &mut self.businesses
-    }
-
-    /// A new game whose AI seats are chosen by the caller: `players` seats, `ai` lists which
-    /// seat plays which personality (in the order the AI phase runs them); the other seats are
-    /// humans or harness brains. Personalities must exist in `ai.yaml`. Balance studies use it
-    /// to rotate personalities through the seats (R65). [`World::new`] is this with the
-    /// `ai.yaml` opponents in the last seats.
-    pub fn seated(config: Config, seed: u64, players: u8, ai: &[(PlayerId, String)]) -> Self {
-        let _ = (config, seed, players, ai);
-        todo!("seated")
     }
 
     /// The seats played by the AI opponents from `ai.yaml` (the rest are humans, or harness

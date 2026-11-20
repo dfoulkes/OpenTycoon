@@ -1,5 +1,8 @@
 # Rust
 /target/
+
+# sim-cli study output (docs/study.md)
+/study-out/
 **/*.rs.bk
 
 # Godot
