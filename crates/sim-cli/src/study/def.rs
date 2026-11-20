@@ -387,38 +387,44 @@ impl StudyDef {
             }
             if p.is_categorical() {
                 check_categorical(p, &at)?;
-                continue;
-            }
-            let (Some(min), Some(max)) = (p.min, p.max) else {
-                return Err(StudyError::def(
-                    at("min"),
-                    "give min and max (or `values` for a categorical parameter)",
-                ));
-            };
-            if !min.is_finite() || !max.is_finite() {
-                return Err(StudyError::def(at("min"), "min and max must be numbers"));
-            }
-            if min > max {
-                return Err(StudyError::def(at("min"), "must not exceed max"));
-            }
-            if p.distribution == Distribution::LogUniform && min <= 0.0 {
-                return Err(StudyError::def(at("min"), "log_uniform needs min > 0"));
-            }
-            if p.kind == Kind::Integer && (min.fract() != 0.0 || max.fract() != 0.0) {
-                return Err(StudyError::def(
-                    at("min"),
-                    "integer parameters need whole min and max",
-                ));
-            }
-            if p.mode == Mode::Scale && p.kind == Kind::Integer {
-                return Err(StudyError::def(at("kind"), "a scale factor is a decimal"));
-            }
-            if p.places() > 6 {
-                return Err(StudyError::def(at("decimals"), "at most 6"));
+            } else {
+                check_numeric(p, &at)?;
             }
         }
         Ok(())
     }
+}
+
+/// A numeric parameter: a finite range that its distribution and kind can sample.
+fn check_numeric(p: &Parameter, at: &dyn Fn(&str) -> String) -> Result<(), StudyError> {
+    let (Some(min), Some(max)) = (p.min, p.max) else {
+        return Err(StudyError::def(
+            at("min"),
+            "give min and max (or `values` for a categorical parameter)",
+        ));
+    };
+    if !min.is_finite() || !max.is_finite() {
+        return Err(StudyError::def(at("min"), "min and max must be numbers"));
+    }
+    if min > max {
+        return Err(StudyError::def(at("min"), "must not exceed max"));
+    }
+    if p.distribution == Distribution::LogUniform && min <= 0.0 {
+        return Err(StudyError::def(at("min"), "log_uniform needs min > 0"));
+    }
+    if p.kind == Kind::Integer && (min.fract() != 0.0 || max.fract() != 0.0) {
+        return Err(StudyError::def(
+            at("min"),
+            "integer parameters need whole min and max",
+        ));
+    }
+    if p.mode == Mode::Scale && p.kind == Kind::Integer {
+        return Err(StudyError::def(at("kind"), "a scale factor is a decimal"));
+    }
+    if p.places() > 6 {
+        return Err(StudyError::def(at("decimals"), "at most 6"));
+    }
+    Ok(())
 }
 
 /// A categorical parameter: plain distinct values, no range, set mode, nothing numeric.

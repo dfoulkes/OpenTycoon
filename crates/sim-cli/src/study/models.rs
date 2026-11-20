@@ -204,6 +204,24 @@ pub fn baseline_values(def: &StudyDef, base: &ConfigSources) -> Vec<Option<f64>>
         .collect()
 }
 
+/// Each parameter's base-config value as `models.csv` shows it for model 0: the base value of
+/// a categorical parameter's key as written (listed among its `values` or not), otherwise
+/// [`baseline_values`] to the parameter's places.
+pub fn baseline_labels(def: &StudyDef, base: &ConfigSources) -> Vec<Option<String>> {
+    def.parameters
+        .iter()
+        .zip(baseline_values(def, base))
+        .map(|(p, v)| {
+            if p.is_categorical() {
+                let node = p.all_keys().first().and_then(|k| node_at(base, k))?;
+                node.as_str().map(str::to_owned)
+            } else {
+                v.map(|v| p.label(v))
+            }
+        })
+        .collect()
+}
+
 /// The validated config a model's games run with: the base config, the preset, then the
 /// model's overrides (the same order and checks as `sim-cli batch --preset P --set ...`).
 pub fn model_config(

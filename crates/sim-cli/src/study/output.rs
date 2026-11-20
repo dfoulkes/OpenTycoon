@@ -121,7 +121,7 @@ pub fn model_row(
     def: &StudyDef,
     roster: &Roster,
     model: &ModelSpec,
-    baseline: &[Option<f64>],
+    baseline: &[Option<String>],
     outcome: &Outcome,
     wall: bool,
 ) -> Vec<String> {
@@ -132,10 +132,10 @@ pub fn model_row(
     }
     for (i, p) in def.parameters.iter().enumerate() {
         let v = match &model.values {
-            Some(v) => Some(v[i]),
-            None => baseline.get(i).copied().flatten(),
+            Some(v) => Some(p.label(v[i])),
+            None => baseline.get(i).cloned().flatten(),
         };
-        row.push(v.map(|v| p.label(v)).unwrap_or_default());
+        row.push(v.unwrap_or_default());
     }
     let metric_cols = MODEL_METRICS.len() - usize::from(!wall);
     let entry_cols = ENTRY_METRICS.len() * roster.len();
