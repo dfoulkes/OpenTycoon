@@ -140,8 +140,16 @@
           "description": "Spread of its keenness: each auction it scales its maximum bid by a factor drawn from\nits own RNG stream in `[1 − bid_jitter, 1]`. Between 0 and 1.",
           "type": "number"
         },
+        "buy_city_blocks": {
+          "description": "Buys the city's apartment blocks at auction (R28), up to their build cost, in\ncompetition with Sir Penny Sugar (R67).",
+          "type": "boolean"
+        },
         "cash_buffer": {
           "description": "Cash it never spends below (R3).",
+          "type": "number"
+        },
+        "cut_at": {
+          "description": "Occupancy at or below which it cuts the rent. Below `raise_at`.",
           "type": "number"
         },
         "max_leases": {
@@ -151,12 +159,24 @@
           "minimum": 1,
           "type": "integer"
         },
+        "max_rent": {
+          "description": "The highest rent it sets, as a share of `reference_rent`.",
+          "type": "number"
+        },
+        "min_rent": {
+          "description": "The lowest rent it sets, as a share of `reference_rent`. At most `max_rent`.",
+          "type": "number"
+        },
         "min_tier_weight": {
           "description": "Tiers whose personality weight is at least this are worth a lease. Between 0 and 1.",
           "type": "number"
         },
-        "rent": {
-          "description": "Its rent per flat, as a share of `customers.yaml` `residential.reference_rent` (R51).",
+        "raise_at": {
+          "description": "Occupancy (flats let ÷ flats) at or above which it raises the rent. At most 1.",
+          "type": "number"
+        },
+        "rent_step": {
+          "description": "How far it moves the rent each morning, as a share of `reference_rent`. Above 0.",
           "type": "number"
         },
         "rescue_after": {
@@ -170,6 +190,10 @@
           "maximum": 1000,
           "minimum": 0,
           "type": "integer"
+        },
+        "start_rent": {
+          "description": "A new block's rent, as a share of `residential.reference_rent` (R51).",
+          "type": "number"
         }
       },
       "required": [
@@ -181,7 +205,13 @@
         "apartment_footprint",
         "apartment_height",
         "apartments_per_lot",
-        "rent",
+        "start_rent",
+        "rent_step",
+        "raise_at",
+        "cut_at",
+        "min_rent",
+        "max_rent",
+        "buy_city_blocks",
         "sell_within_years",
         "rescue_after"
       ],

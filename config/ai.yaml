@@ -54,11 +54,17 @@ landlord:                       # §10: how the Landlord plays (placeholders; tu
   cash_buffer: 500              # £ it never spends below (R3)
   bid_jitter: 0.2               # each auction its maximum bid is scaled by a draw in [0.8, 1] from its own stream
   min_tier_weight: 0.5          # bids on tiers its personality weighs at least this (all three)
-  max_leases: 4                 # hoards up to this many leases
+  max_leases: 8                 # hoards up to this many leases (R67: a larger book)
   apartment_footprint: [3, 3]   # lot units (R22); it never builds retail
   apartment_height: 25          # capped at the type's max_height (R58)
-  apartments_per_lot: 2         # flats as a sideline: rent from residents (R51) and land rent (§5.2)
-  rent: 1.0                     # × residential.reference_rent, fixed
+  apartments_per_lot: 4         # R67: a real residential rival, on top of land rent (§5.2)
+  start_rent: 1.0               # × residential.reference_rent for a new block (R51)
+  rent_step: 0.3                # then by vacancy each morning (R67): up when ≥ raise_at let, down when ≤ cut_at
+  raise_at: 0.95
+  cut_at: 0.6
+  min_rent: 0.5
+  max_rent: 3.0
+  buy_city_blocks: true         # R67: bids for the city's apartment blocks (R28) against Sir Penny Sugar
   sell_within_years: 5          # offers a lease at auction (R33) this late in its term if that beats holding
   rescue_after: "22:00"         # a negative balance from here to midnight sells or offers something (R5)
 toff:                           # §10: how the Toff plays (placeholders; tune with sim-cli batch)

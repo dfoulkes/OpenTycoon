@@ -123,7 +123,7 @@ impl Landlord {
         let rent = config
             .ai
             .landlord
-            .rent
+            .start_rent
             .rate()
             .apply(rules.reference_rent.money());
         let mut out = Vec::new();

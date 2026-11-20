@@ -807,7 +807,7 @@ fn toff_buffer(w: &mut SimWorld) {
     assert!(balance >= buffer, "{balance} under {buffer}");
 }
 
-#[then(regex = r"^the rent on his first block is (above|below) £(\d+)\.(\d\d)$")]
+#[then(regex = r"^the rent on (?:his|its) first block is (above|below) £(\d+)\.(\d\d)$")]
 fn first_rent(w: &mut SimWorld, how: String, pounds: i64, pence: i64) {
     let world = game(w);
     let rules = &world.config().customers.residential;
@@ -1121,7 +1121,7 @@ fn never_flats(w: &mut SimWorld, who: String) {
     assert!(tried.is_empty(), "{tried:?}");
 }
 
-#[then(regex = r"^the Speculator (bought|never bid on) an apartment block$")]
+#[then(regex = r"^(?:the Speculator|the Landlord) (bought|never bid on) an apartment block$")]
 fn speculator_flats(w: &mut SimWorld, how: String) {
     let st = &w.roster;
     let apartments = apartment_type(st);

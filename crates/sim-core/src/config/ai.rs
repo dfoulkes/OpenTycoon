@@ -95,8 +95,21 @@ pub struct LandlordConfig {
     /// Apartment blocks it puts up per lease at most (0: pure land, no building at all).
     #[schemars(range(max = 81))]
     pub apartments_per_lot: u32,
-    /// Its rent per flat, as a share of `customers.yaml` `residential.reference_rent` (R51).
-    pub rent: Ratio,
+    /// A new block's rent, as a share of `residential.reference_rent` (R51).
+    pub start_rent: Ratio,
+    /// How far it moves the rent each morning, as a share of `reference_rent`. Above 0.
+    pub rent_step: Ratio,
+    /// Occupancy (flats let ÷ flats) at or above which it raises the rent. At most 1.
+    pub raise_at: Ratio,
+    /// Occupancy at or below which it cuts the rent. Below `raise_at`.
+    pub cut_at: Ratio,
+    /// The lowest rent it sets, as a share of `reference_rent`. At most `max_rent`.
+    pub min_rent: Ratio,
+    /// The highest rent it sets, as a share of `reference_rent`.
+    pub max_rent: Ratio,
+    /// Buys the city's apartment blocks at auction (R28), up to their build cost, in
+    /// competition with Sir Penny Sugar (R67).
+    pub buy_city_blocks: bool,
     /// Late in a lease (this many years or fewer left) it offers the lease at auction (R33)
     /// when the reserve beats what holding to expiry is worth. 0 never sells.
     #[schemars(range(max = 1000))]
