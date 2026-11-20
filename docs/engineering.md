@@ -151,6 +151,8 @@ so the server can run 4× speed votes, serve clients and run 1,000-game balance 
 | one tick, 9×9 map, 20,000 customers | < 10 ms | *post-v1: fill in* |
 | 1,000 games 1930–1950 headless (`sim-cli`) | < 10 min on one machine | *M1: fill in* |
 | config load + validate | < 20 ms | 1.37 ms |
+| 06:00 settlement, 6 players × 1,000 buildings (`benches/economy.rs`) | < 1 ms | 110 µs (M1) |
+| midnight net worth, 6 players × 1,000 buildings | < 1 ms | 74 µs (M1) |
 
 Update the baseline column when a feature lands, and flag any regression over 20% in the PR.
 

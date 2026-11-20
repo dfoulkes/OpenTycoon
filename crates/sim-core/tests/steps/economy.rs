@@ -4,6 +4,8 @@
 //!
 //! "Player N" in the features is seat `N − 1`. Money is written as in the spec: `"-£1,234.56"`.
 
+use std::collections::BTreeMap;
+
 use cucumber::{given, then, when};
 use sim_core::World;
 use sim_core::businesses::{Business, BusinessId, FitOutLevel, build_cost};
@@ -89,8 +91,7 @@ fn business_id(w: &mut SimWorld, type_id: &str, block: &str) -> BusinessId {
         .by_id
         .iter()
         .find(|(_, b)| b.type_id == type_id && b.block == block)
-        .map(|(id, _)| *id)
-        .unwrap_or_else(|| panic!("no {type_id} on that block"))
+        .map_or_else(|| panic!("no {type_id} on that block"), |(id, _)| *id)
 }
 
 fn business<'a>(w: &'a mut SimWorld, type_id: &str, block: &str) -> &'a mut Business {
@@ -203,9 +204,9 @@ fn owns_building(
             owner: account(&who),
             fit_out: FitOutLevel::Medium,
             build_cost: cost,
-            prices: Default::default(),
-            stock: Default::default(),
-            tomorrow_order: Default::default(),
+            prices: BTreeMap::default(),
+            stock: BTreeMap::default(),
+            tomorrow_order: BTreeMap::default(),
             open: true,
         },
     );

@@ -40,5 +40,9 @@ harness = false
 name = "tick"
 harness = false
 
+[[bench]]
+name = "economy"
+harness = false
+
 [lints]
 workspace = true
