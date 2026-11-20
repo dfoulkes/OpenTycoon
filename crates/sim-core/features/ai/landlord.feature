@@ -1,7 +1,9 @@
-# Spec §10: "The Landlord hoards leases and never builds retail." It plays seat 1 through public
-# commands only (R40); seat 0 is a scripted rival. Tunables are ai.yaml `landlord` (shipped:
-# pays at most 31% of its bid ceiling for a lease, keeps £500, puts up at most two 3×3×25
-# apartment blocks per lease at the reference rent, offers a lease with 5 or fewer years left).
+# Spec §10: "The Landlord hoards leases and never builds retail." R67 makes it a real residential
+# rival. It plays seat 1 through public commands only (R40); seat 0 is a scripted rival.
+# Tunables are ai.yaml `landlord` (shipped: up to 8 leases, pays at most 31% of its bid ceiling
+# for one, keeps £500, puts up at most four 3×3×25 apartment blocks per lease, lets them from the
+# reference rent by vacancy, bids for the city's blocks, offers a lease with 5 or fewer years
+# left).
 Feature: The Landlord
   The Landlord collects leases across every tier its weights allow, earns land rent and, as a
   sideline, residents' rent from apartment blocks, and sells a lease at auction late in its term
@@ -58,3 +60,31 @@ Feature: The Landlord
     Given the Landlord holds the lease on "Old Kent Road"
     When the Landlord plays for 6 game hours
     Then the Landlord never tried to build a Hotel
+
+  # R67: its rent follows vacancy by the same rule as Sir Penny Sugar's (up 30% of reference when
+  # 95% let, down when 60% or less let), and it competes with him for the city's blocks.
+  @spec-10 @R67 @R51 @R52
+  Scenario Outline: Its rent goes up when a block is full and down when it stands empty
+    Given <people> people live in the city
+    And the Landlord holds the lease on "Old Kent Road"
+    When the Landlord plays until 07:00 on day 2
+    Then the Landlord owns at least 1 apartment block on "Old Kent Road"
+    And the rent on its first block is <direction> £3.00
+
+    Examples:
+      | people | direction |
+      | 2000   | above     |
+      | 0      | below     |
+
+  @spec-10 @R67 @R28
+  Scenario: It bids for the city's apartment blocks
+    Given the rival holds every lease
+    When the Landlord plays for 6 game hours
+    Then the Landlord bought an apartment block
+
+  @spec-10 @R67
+  Scenario: Given the means, it puts up more than one block on a lease
+    Given every player starts with £60,000
+    And the Landlord holds the lease on "Old Kent Road"
+    When the Landlord plays for 1 game day
+    Then the Landlord owns at least 3 apartment blocks on "Old Kent Road"

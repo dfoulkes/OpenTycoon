@@ -1151,7 +1151,17 @@ fn check_landlord(config: &Config, errors: &mut Vec<ConfigError>) {
     block.common(cfg.aggression, cfg.cash_buffer);
     block.share("bid_jitter", cfg.bid_jitter, 0, one, UNIT);
     block.share("min_tier_weight", cfg.min_tier_weight, 0, one, UNIT);
-    block.share("rent", cfg.rent, 0, 10 * one, "between 0 and 10");
+    block.vacancy_rent(
+        "",
+        [
+            cfg.start_rent,
+            cfg.rent_step,
+            cfg.raise_at,
+            cfg.cut_at,
+            cfg.min_rent,
+            cfg.max_rent,
+        ],
+    );
     block.building(
         config,
         "apartment",

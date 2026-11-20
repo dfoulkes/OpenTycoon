@@ -433,7 +433,8 @@ fn roster_tunables_out_of_range_are_rejected() {
             "2",
             "/landlord/min_tier_weight",
         ),
-        ("/landlord/rent", "-0.5", "/landlord/rent"),
+        ("/landlord/start_rent", "-0.5", "/landlord/start_rent"),
+        ("/landlord/cut_at", "0.96", "/landlord/cut_at"),
         ("/landlord/max_leases", "0", "/landlord/max_leases"),
         (
             "/landlord/apartment_height",
