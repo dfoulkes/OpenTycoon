@@ -261,7 +261,22 @@ fn has_gained(w: &mut SimWorld, player: u8, amount: String) {
 
 #[then(regex = r"^the city has received £([\d,]+) from auctions$")]
 fn city_received(w: &mut SimWorld, amount: String) {
-    assert_eq!(change(w, AccountId::City), pounds(&amount));
+    // From the auction history: over several game days the city's balance also moves with
+    // its tenants' rent and the 06:00 bills, so the balance alone can't isolate auctions.
+    let received: Money = game(w)
+        .auctions()
+        .history()
+        .iter()
+        .filter_map(|o| match o {
+            sim_core::auctions::AuctionOutcome::Sold {
+                seller: AccountId::City,
+                price,
+                ..
+            } => Some(*price),
+            _ => None,
+        })
+        .sum();
+    assert_eq!(received, pounds(&amount));
 }
 
 #[then(regex = r"^player (\d+) is overdrawn$")]

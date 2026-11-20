@@ -164,6 +164,7 @@ so the server can run 4× speed votes, serve clients and run 1,000-game balance 
 | config load + validate | < 20 ms | 1.6 ms | `perf-budget` `config_load_ms` |
 | 06:00 settlement, 6 players × 1,000 buildings (`benches/economy.rs`) | < 1 ms | 110 µs (M1) | `cargo bench` |
 | midnight net worth, 6 players × 1,000 buildings | < 1 ms | 74 µs (M1) | `cargo bench` |
+| 06:00 residents' rent, 20,000 residents in 100 blocks (`benches/economy.rs`) | < 1 ms | 0.74 ms (M1 wave 3) | `cargo bench` |
 
 Update the baseline column (and `perf/budgets.yaml`) when a feature lands, and flag any
 regression over 20% in the PR. The day, tick and 1,000-game budgets are not yet consistent with

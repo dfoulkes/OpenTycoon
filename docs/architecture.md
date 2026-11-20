@@ -88,7 +88,7 @@ approximate). `World::tick()` runs these phases **in this order, always**:
 | 2 | Commands | every tick | world → each module | apply queued player and AI commands in submission order |
 | 3 | Midnight reckoning | 00:00 | economy (+ land, businesses, events, population) | net worth (R31, before write-off) → stock write-off (R1) → solvency/bankruptcy (R3, R4) → lease expiry (R9) → credit-limit step (R7) → events and front page (§9) → population year step (R61) |
 | 4 | Arrivals | 05:30 | population | new population arrives and house-hunts (R53) |
-| 5 | Settlement | 06:00 | economy (bills from land, utilities, businesses) | rent, utilities, stock paid, may pass the limit (R32); tomorrow's order delivered (R2); population joins the map |
+| 5 | Settlement | 06:00 | economy (bills from land, utilities, businesses, population) | residents' rent from the shoppers' purse to each block's owner (R51, R63); land rent, utilities, stock paid, may pass the limit (R32, R56); tomorrow's order delivered (R2); population joins the map |
 | 6 | Auctions | every tick | auctions | countdowns, turn timers, closing |
 | 7 | AI | every tick | ai | read the world, queue commands for the next tick |
 | 8 | Customers | every tick | customers | spawn, choose shops, walk, buy |

@@ -484,22 +484,37 @@ pub struct RentDue {
     pub amount: Money,
 }
 
-/// What residents owe at 06:00, per building in id order (R51; economy debits it, §7.2).
-/// The payers are the residents themselves: their rent comes out of their allowance first.
-pub fn rent_due(residential: &Residential, listings: &[FlatListing]) -> Vec<RentDue> {
-    let occupancy = residential.occupancy();
-    listings
-        .iter()
-        .filter_map(|l| {
-            let flats_let = occupancy.get(&l.building).copied().unwrap_or(0);
-            (flats_let > 0).then(|| RentDue {
-                building: l.building,
-                landlord: l.owner,
-                flats_let,
-                amount: l.rent.saturating_mul(i64::from(flats_let)),
-            })
-        })
-        .collect()
+/// What residents owe at 06:00, per building in id order (R51; economy debits it from the
+/// shoppers' purse, §7.2). The payers are the residents themselves: their rent comes out of
+/// their allowance first (§8.2). Residents have no savings (R63), so each pays
+/// `min(rent, allowance)`: an owner who puts the rent past someone's allowance collects the
+/// allowance and no more.
+pub fn rent_due(
+    residential: &Residential,
+    listings: &[FlatListing],
+    rules: &CustomersConfig,
+) -> Vec<RentDue> {
+    let by_building: BTreeMap<BusinessId, &FlatListing> =
+        listings.iter().map(|l| (l.building, l)).collect();
+    let mut allowances: BTreeMap<Cohort, Money> = BTreeMap::new();
+    let mut due: BTreeMap<BusinessId, RentDue> = BTreeMap::new();
+    for r in residential.residents.values() {
+        let Some(l) = by_building.get(&r.home) else {
+            continue;
+        };
+        let entry = due.entry(l.building).or_insert(RentDue {
+            building: l.building,
+            landlord: l.owner,
+            flats_let: 0,
+            amount: Money::ZERO,
+        });
+        entry.flats_let += 1;
+        let budget = *allowances
+            .entry(r.cohort)
+            .or_insert_with(|| allowance(rules, r.cohort));
+        entry.amount += l.rent.min(budget).max(Money::ZERO);
+    }
+    due.into_values().collect()
 }
 
 /// An apartment block's daily running costs (R56).
@@ -556,6 +571,47 @@ pub fn apartment_daily_costs(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        /// Residents never owe more than the allowances minted for them (R63), whatever rents
+        /// owners set, so the shoppers' purse can always pay the 06:00 rent.
+        #[test]
+        fn rent_due_never_exceeds_residents_allowances(
+            people in prop::collection::vec((0u8..4, 0u8..2, 0u8..3, 0u32..4), 0..60),
+            rents in prop::collection::vec(0i64..50_000, 4),
+        ) {
+            let config = crate::economy::test_support::shipped_config();
+            let rules = &config.customers;
+            let listings: Vec<FlatListing> = rents
+                .iter()
+                .enumerate()
+                .map(|(i, pence)| FlatListing {
+                    building: BusinessId(u32::try_from(i).unwrap_or(0)),
+                    block: BlockId(0),
+                    owner: AccountId::City,
+                    tier: Tier::Low,
+                    appeal: Rate::ONE,
+                    flats: 100,
+                    rent: Money::from_pence(*pence),
+                })
+                .collect();
+            let mut r = Residential::default();
+            for (band, sex, class, home) in people {
+                let cohort = Cohort {
+                    band: super::super::AgeBand(band),
+                    sex: super::super::Sex::ALL[usize::from(sex)],
+                    class: super::super::Class::ALL[usize::from(class)],
+                };
+                r.house(cohort, BusinessId(home), 1930);
+            }
+            let owed: Money = rent_due(&r, &listings, rules).iter().map(|d| d.amount).sum();
+            let allowances: Money =
+                r.residents.values().map(|p| allowance(rules, p.cohort)).sum();
+            prop_assert!(owed >= Money::ZERO);
+            prop_assert!(owed <= allowances, "{owed} > {allowances}");
+        }
+    }
 
     #[test]
     fn flats_round_down_and_never_divide_by_zero() {
@@ -563,6 +619,40 @@ mod tests {
         assert_eq!(flats(3, 4), 0);
         assert_eq!(flats(108, 0), 0);
         assert_eq!(flats(-8, 4), 0);
+    }
+
+    #[test]
+    fn nobody_pays_more_rent_than_their_allowance() {
+        let config = crate::economy::test_support::shipped_config();
+        let rules = &config.customers;
+        let cohort = Cohort {
+            band: super::super::AgeBand(1),
+            sex: super::super::Sex::Male,
+            class: super::super::Class::Working,
+        };
+        let listing = |rent| FlatListing {
+            building: BusinessId(7),
+            block: BlockId(0),
+            owner: AccountId::Player(PlayerId(0)),
+            tier: Tier::Low,
+            appeal: Rate::ONE,
+            flats: 10,
+            rent,
+        };
+        let mut r = Residential::default();
+        r.house(cohort, BusinessId(7), 1930);
+        r.house(cohort, BusinessId(7), 1930);
+        r.house(cohort, BusinessId(8), 1930); // not on the listings: owes nobody
+        let due = |rent| rent_due(&r, &[listing(rent)], rules);
+        // £22.00 allowance: £3 each is paid in full, £30 each is capped at £22.
+        assert_eq!(due(Money::from_pounds(3))[0].amount, Money::from_pounds(6));
+        assert_eq!(
+            due(Money::from_pounds(30))[0].amount,
+            Money::from_pounds(44)
+        );
+        assert_eq!(due(Money::from_pounds(30))[0].flats_let, 2);
+        assert_eq!(due(Money::ZERO)[0].amount, Money::ZERO);
+        assert_eq!(due(Money::ZERO).len(), 1);
     }
 
     #[test]

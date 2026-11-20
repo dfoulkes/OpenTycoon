@@ -1,6 +1,11 @@
-//! The 06:00 settlement (§2.2, §5.2, §5.3, §6; R10, R32).
+//! The 06:00 settlement (§2.2, §5.2, §5.3, §6, §7.2, §8.2; R10, R32, R51, R56, R63).
 //!
-//! Every building pays, in this order, as [`Bill`]s:
+//! First, every resident's rent leaves the shoppers' purse ([`AccountId::Shoppers`], where
+//! the 05:30 allowances were minted, R63) for the owner of their apartment block
+//! ([`resident_rent_bills`]): rent comes out of the allowance before anyone shops (§8.2).
+//! The amounts are population's ([`crate::population::residential::rent_due`]).
+//!
+//! Then every building, apartment blocks included (R56), pays, in this order, as [`Bill`]s:
 //!
 //! 1. **land rent** to the lot's leaseholder, or to the city if the lot is unleased (§5.2):
 //!    `volume × land_base_rate × desirability_mult(tier)`;
@@ -23,6 +28,7 @@ use crate::config::Config;
 use crate::config::businesses::BusinessType;
 use crate::land::{Map, land_rent_per_day, volume};
 use crate::money::{Money, Rate};
+use crate::population::RentDue;
 use crate::utilities::{Utilities, UtilityKind, utility_bill};
 
 /// Utility base rate for `kind` in `year`: the telephone exchange's rate switches to the
@@ -130,6 +136,16 @@ pub fn settlement_bills(
     }
     bills.retain(|b| b.from != b.to && b.amount != Money::ZERO);
     bills
+}
+
+/// Residents' rent (R51, §7.2): one bill per apartment block, from the shoppers' purse to the
+/// block's owner (player or city). Zero bills are dropped.
+pub fn resident_rent_bills(due: &[RentDue]) -> impl Iterator<Item = Bill> + '_ {
+    due.iter().filter(|d| d.amount > Money::ZERO).map(|d| Bill {
+        from: AccountId::Shoppers,
+        to: d.landlord,
+        amount: d.amount,
+    })
 }
 
 /// Daily overdraft interest for each overdrawn player, paid to the city. The shipped rate is
@@ -274,6 +290,35 @@ mod tests {
     }
 
     proptest! {
+        /// Residents' rent moves money from the shoppers' purse to landlords: the purse pays
+        /// exactly what is due, landlords get it, and the total is unchanged.
+        #[test]
+        fn resident_rent_conserves_money(
+            due in prop::collection::vec((0u8..3, 0u32..500, 0i64..100_000), 0..30),
+            purse in 0i64..10_000_000,
+        ) {
+            let acct = |i: u8| match i { 0 => AccountId::City, 1 => P0, _ => P1 };
+            let due: Vec<RentDue> = due
+                .into_iter()
+                .enumerate()
+                .map(|(i, (who, flats, pence))| RentDue {
+                    building: crate::businesses::BusinessId(u32::try_from(i).unwrap()),
+                    landlord: acct(who),
+                    flats_let: flats,
+                    amount: Money::from_pence(pence),
+                })
+                .collect();
+            let mut ledger = Ledger::new();
+            ledger.open(AccountId::Shoppers, Money::from_pence(purse));
+            let before = ledger.total();
+            let bills: Vec<Bill> = resident_rent_bills(&due).collect();
+            prop_assert!(bills.iter().all(|b| b.from == AccountId::Shoppers && b.amount > Money::ZERO));
+            ledger.settle(&bills);
+            let owed: Money = due.iter().map(|d| d.amount).sum();
+            prop_assert_eq!(ledger.balance(AccountId::Shoppers), Money::from_pence(purse) - owed);
+            prop_assert_eq!(ledger.total(), before);
+        }
+
         /// Money conservation (docs/engineering.md): settlement never creates or destroys money.
         #[test]
         fn settlement_conserves_money(
