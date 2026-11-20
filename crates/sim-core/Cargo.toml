@@ -48,6 +48,10 @@ harness = false
 name = "auctions"
 harness = false
 
+[[bench]]
+name = "customers"
+harness = false
+
 [lints]
 workspace = true
 

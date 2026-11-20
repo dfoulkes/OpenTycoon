@@ -31,7 +31,7 @@ use crate::auctions::{
 use crate::businesses::{BuildRequest, Business, BusinessId, Businesses, FitOutLevel, LeverError};
 use crate::clock::{Clock, ClockEvents, ClockRules};
 use crate::config::Config;
-use crate::customers::Customers;
+use crate::customers::{Customers, PhaseInputs};
 use crate::economy::{
     self, AccountId, Ledger, NetWorthBoard, PlayerId, Solvency, SolvencyTracker,
     credit_limit_on_day, spendable,
@@ -41,6 +41,7 @@ use crate::hash::StableHasher;
 use crate::land::{BlockId, Footprint, Lease, Map};
 use crate::money::{Money, Rate};
 use crate::population::Population;
+use crate::population::residential::{self, RentDue};
 use crate::rng::{SimRng, seeded};
 use crate::utilities::Utilities;
 
@@ -119,6 +120,13 @@ pub enum Command {
         height: u32,
         /// Fit-out.
         fit_out: FitOutLevel,
+    },
+    /// Set the rent per flat per day of an apartment block you own (R51).
+    SetRent {
+        /// The apartment block.
+        building: BusinessId,
+        /// Rent per flat per day.
+        rent: Money,
     },
 }
 
@@ -215,7 +223,7 @@ impl World {
             auctions,
             businesses,
             utilities: Utilities::default(),
-            population: Population::default(),
+            population: Population::new(&config.customers, config.game.clock.start_year),
             customers: Customers::default(),
             events: Events::default(),
             ai,
@@ -236,6 +244,7 @@ impl World {
         self.apply_commands();
         if fired.midnight {
             self.midnight_reckoning();
+            self.population_year_step();
         }
         if fired.arrivals {
             self.arrivals();
@@ -281,8 +290,36 @@ impl World {
                 | Command::OfferForAuction { .. }
                 | Command::Raise { .. }
                 | Command::Pass => self.apply_auction_command(player, &command),
+                Command::SetRent { .. } => self.apply_population_command(player, &command),
             }
         }
+    }
+
+    /// Phase 2, population's commands: owner-set rent (R51). Refused changes are dropped.
+    fn apply_population_command(&mut self, player: PlayerId, command: &Command) {
+        if let Command::SetRent { building, rent } = command {
+            let _refused = residential::set_rent(
+                &mut self.population.residential,
+                &self.businesses,
+                &self.config.customers.residential.building_type,
+                player,
+                *building,
+                *rent,
+            );
+        }
+    }
+
+    /// End of phase 3 (owner: population): the cohort model's year step (R61). The clock has
+    /// already stepped, so `clock.year()` is the new year.
+    fn population_year_step(&mut self) {
+        let years = self.clock.rules().years_per_day;
+        crate::population::year_step(
+            &mut self.population,
+            &self.config.customers,
+            self.clock.year(),
+            years,
+            &mut self.rng,
+        );
     }
 
     /// Phase 3, economy's part, in the spec's order: net worth (R31, scored for the day that
@@ -348,12 +385,23 @@ impl World {
         }
     }
 
-    /// Phase 4. Owner: population.
-    #[allow(
-        clippy::unused_self,
-        reason = "M0 phase stub; the module owner fills it in"
-    )]
-    fn arrivals(&mut self) {}
+    /// Phase 4. Owner: population. The train's arrivals house-hunt, then the unhoused re-hunt
+    /// and residents whose window is open may move (R53, R54).
+    fn arrivals(&mut self) {
+        let listings = residential::listings(
+            &self.businesses,
+            &self.map,
+            &self.config,
+            &self.population.residential,
+        );
+        crate::population::arrivals(
+            &mut self.population,
+            &listings,
+            &self.config.customers,
+            self.clock.year(),
+            &mut self.rng,
+        );
+    }
 
     /// Phase 5, economy's part: overdraft interest (0 by default, R32), then every building's
     /// rent, utilities and stock order, paid with no limit check (R32). Delivery of the order
@@ -599,12 +647,40 @@ impl World {
         self.queued.extend(out);
     }
 
-    /// Phase 8. Owner: customers.
-    #[allow(
-        clippy::unused_self,
-        reason = "M0 phase stub; the module owner fills it in"
-    )]
-    fn customers_phase(&mut self) {}
+    /// Phase 8. Owner: customers. Shoppers spawn, choose, walk and buy (§8). Until economy
+    /// models households, a shopper's spending money comes from the city (the world outside
+    /// the players' businesses) and goes to the shop's owner through the ledger.
+    fn customers_phase(&mut self) {
+        let report = crate::customers::run_phase(
+            &mut self.customers,
+            PhaseInputs {
+                config: &self.config,
+                map: &self.map,
+                clock: &self.clock,
+                population: &self.population,
+            },
+            &mut self.businesses,
+            &mut self.rng,
+        );
+        for sale in &report.sales {
+            if let Some(shop) = self.businesses.by_id.get(&sale.shop) {
+                self.ledger
+                    .transfer(AccountId::City, shop.owner, sale.amount);
+            }
+        }
+    }
+
+    /// Rent residents owe at the 06:00 settlement, per apartment block (R51, §7.2). Economy
+    /// settles it: the payers are the residents, whose rent comes out of their allowance.
+    pub fn rent_due(&self) -> Vec<RentDue> {
+        let listings = residential::listings(
+            &self.businesses,
+            &self.map,
+            &self.config,
+            &self.population.residential,
+        );
+        residential::rent_due(&self.population.residential, &listings)
+    }
 
     /// Phase 9. Owner: businesses.
     #[allow(

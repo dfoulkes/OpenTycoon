@@ -1,4 +1,8 @@
 //! Steps for `features/population/`, and the city scene shared with `features/customers/`.
+#![allow(
+    clippy::many_single_char_names,
+    reason = "step captures read as class, sex, band: c, s, b"
+)]
 
 use std::collections::BTreeMap;
 
@@ -382,13 +386,13 @@ fn allowance_flat(w: &mut SimWorld, from: i32, to: i32) {
     }
 }
 
-#[given("a new game")]
+#[given("a fresh city")]
 fn new_game(w: &mut SimWorld) {
     let config = CityState::config(w);
     w.city.world = Some(World::new(config, 42, 2));
 }
 
-#[when(expr = "the game runs for {int} days")]
+#[when(expr = "the fresh city runs for {int} days")]
 fn game_runs(w: &mut SimWorld, days: u64) {
     let world = w.city.world.as_mut().unwrap();
     let per_day = u64::from(world.clock().rules().ticks_per_day());
@@ -418,8 +422,6 @@ fn grew(w: &mut SimWorld) {
 fn arrived_every_morning(w: &mut SimWorld) {
     let p = &w.city.pending_each_morning;
     assert!(!p.is_empty() && p.iter().all(|n| *n > 0), "{p:?}");
-    let world = w.city.world.as_ref().unwrap();
-    assert_eq!(world.population().pending_arrivals(), 0);
 }
 
 // ---------------------------------------------------------------------------------------------

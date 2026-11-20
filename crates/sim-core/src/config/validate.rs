@@ -444,6 +444,14 @@ fn check_customers_m1(config: &Config, bands: &BTreeSet<&str>, errors: &mut Vec<
             );
         }
     }
+    check_desires(config, bands, errors);
+}
+
+/// Shopping-list rules: known bands and goods, day or night, `0 ≤ P ≤ 1` (§8.2, R55).
+fn check_desires(config: &Config, bands: &BTreeSet<&str>, errors: &mut Vec<ConfigError>) {
+    use crate::businesses::Hours;
+    let c = &config.customers;
+    let file = ConfigFile::Customers;
     for (i, rule) in c.desires.iter().enumerate() {
         let at = format!("/desires/{i}");
         if let Some(age) = &rule.matcher.age {

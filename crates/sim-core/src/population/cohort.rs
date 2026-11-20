@@ -136,8 +136,10 @@ pub fn births(
     childbearing_years: u32,
     rng: &mut SimRng,
 ) -> u64 {
-    let _ = (women, births_per_woman, years, childbearing_years, rng);
-    0
+    let numer =
+        u128::from(women) * u128::from(births_per_woman.bp().unsigned_abs()) * u128::from(years);
+    let denom = u128::from(BASIS_POINTS_PER_UNIT.unsigned_abs()) * u128::from(childbearing_years);
+    stochastic_round(numer, denom, rng)
 }
 
 /// Splits `n` newcomers into cohorts by the era's demographics (class × age × sex). With
@@ -200,8 +202,129 @@ pub fn year_step(
     years: u32,
     rng: &mut SimRng,
 ) -> YearStep {
-    let _ = (pop, rules, new_year, years, rng);
-    YearStep::default()
+    let mut report = YearStep::default();
+    let old_year = new_year - i32::try_from(years).unwrap_or(0);
+    let bpw = era_value(&rules.births_per_woman, old_year).map_or(Rate::ZERO, |r| r.rate());
+    let women = women_of_childbearing_age(pop, rules);
+    report.births = births(women, bpw, years, rules.childbearing_years, rng);
+    report.deaths = deaths(pop, rules, rng);
+    report.aged_up = ageing(pop, rules, years, rng);
+    if report.births > 0 {
+        *pop.children.entry(new_year).or_insert(0) += report.births;
+    }
+    report.came_of_age = coming_of_age(pop, rules, new_year);
+    report.migrants = rules.migration_per_day;
+    for (cohort, k) in split_newcomers(rules.migration_per_day, rules, new_year, None) {
+        *pop.pending.entry(cohort).or_insert(0) += k;
+    }
+    report
+}
+
+/// Mortality per band, as basis points per step, in band order.
+fn mortality_bp(rules: &CustomersConfig) -> Vec<u64> {
+    rules
+        .age_bands
+        .iter()
+        .map(|b| {
+            rules
+                .mortality_per_step
+                .get(&b.id)
+                .map_or(0, |r| r.rate().bp().unsigned_abs())
+        })
+        .collect()
+}
+
+/// Deaths per band at `mortality_per_step`: the pool by count, residents one by one (a
+/// resident who dies frees their flat). Returns the number who died.
+fn deaths(pop: &mut Population, rules: &CustomersConfig, rng: &mut SimRng) -> u64 {
+    let mortality = mortality_bp(rules);
+    let rate_of = |band: AgeBand| mortality.get(usize::from(band.0)).copied().unwrap_or(0);
+    let unit = BASIS_POINTS_PER_UNIT.unsigned_abs();
+    let mut dead_total = 0;
+    for (cohort, n) in &mut pop.pool {
+        let rate = rate_of(cohort.band);
+        let dead = stochastic_round(u128::from(*n) * u128::from(rate), u128::from(unit), rng);
+        let dead = dead.min(*n);
+        *n -= dead;
+        dead_total += dead;
+    }
+    pop.pool.retain(|_, n| *n > 0);
+    let mut died = Vec::new();
+    for (id, r) in &pop.residential.residents {
+        let rate = rate_of(r.cohort.band);
+        if rate > 0 && below(rng, unit) < rate {
+            died.push(*id);
+        }
+    }
+    dead_total += died.len() as u64;
+    for id in died {
+        pop.residential.residents.remove(&id);
+    }
+    dead_total
+}
+
+/// Ageing: each band but the open-ended top one sends `years / span` of its people up a band
+/// (the pool by count, residents one by one). Every move is worked out before any is applied,
+/// so nobody ages twice. Returns the number who moved up.
+fn ageing(pop: &mut Population, rules: &CustomersConfig, years: u32, rng: &mut SimRng) -> u64 {
+    let span = |band: AgeBand| -> Option<u32> {
+        let b = rules.age_bands.get(usize::from(band.0))?;
+        let next = rules.age_bands.get(usize::from(band.0) + 1);
+        next.and(b.max_age.map(|m| m.saturating_sub(b.min_age) + 1))
+    };
+    let mut aged = 0;
+    let moves: Vec<(Cohort, u64)> = pop
+        .pool
+        .iter()
+        .filter_map(|(cohort, n)| {
+            let s = span(cohort.band)?;
+            let up = stochastic_round(u128::from(*n) * u128::from(years), u128::from(s), rng);
+            Some((*cohort, up.min(*n)))
+        })
+        .collect();
+    for (cohort, up) in moves.into_iter().filter(|(_, up)| *up > 0) {
+        if let Some(n) = pop.pool.get_mut(&cohort) {
+            *n -= up;
+        }
+        let older = Cohort {
+            band: AgeBand(cohort.band.0 + 1),
+            ..cohort
+        };
+        *pop.pool.entry(older).or_insert(0) += up;
+        aged += up;
+    }
+    pop.pool.retain(|_, n| *n > 0);
+    for r in pop.residential.residents.values_mut() {
+        let Some(s) = span(r.cohort.band) else {
+            continue;
+        };
+        if below(rng, u64::from(s)) < u64::from(years) {
+            r.cohort.band = AgeBand(r.cohort.band.0 + 1);
+            aged += 1;
+        }
+    }
+    aged
+}
+
+/// Children aged `adult_age` or more join the next 05:30 arrivals as 18–29s, split by the
+/// era's class and sex mix. Returns how many came of age.
+fn coming_of_age(pop: &mut Population, rules: &CustomersConfig, new_year: i32) -> u64 {
+    let adult = i64::from(adult_age(rules));
+    let grown: Vec<i32> = pop
+        .children
+        .keys()
+        .copied()
+        .filter(|born| i64::from(new_year) - i64::from(*born) >= adult)
+        .collect();
+    let mut total = 0;
+    for born in grown {
+        let n = pop.children.remove(&born).unwrap_or(0);
+        total += n;
+        for (cohort, k) in split_newcomers(n, rules, new_year, Some(AgeBand(0))) {
+            *pop.pending.entry(cohort).or_insert(0) += k;
+        }
+    }
+    total
 }
 
 #[cfg(test)]
