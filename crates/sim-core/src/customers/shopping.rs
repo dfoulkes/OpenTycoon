@@ -16,7 +16,9 @@ use super::shops::{GoodId, GoodsIndex};
 use crate::businesses::Hours;
 use crate::config::CustomersConfig;
 use crate::config::customers::DesireMatch;
-use crate::population::{Cohort, band_id};
+use crate::events::Modifiers;
+use crate::money::BASIS_POINTS_PER_UNIT;
+use crate::population::{Class, Cohort, band_id};
 use crate::rng::{SimRng, unit_f64};
 
 /// True if a desire rule's match covers this shopper, window and year.
@@ -80,6 +82,27 @@ pub fn candidates(
         out.push((id, p));
     }
     Candidates(out)
+}
+
+impl Candidates {
+    /// The candidates with each `P(good)` scaled by the event modifiers' demand factor for the
+    /// shopper's class (§9), capped at 1. A no-op with no modifiers in force.
+    #[must_use]
+    pub fn scaled_by(mut self, modifiers: &Modifiers, goods: &GoodsIndex, class: Class) -> Self {
+        if modifiers.is_empty() {
+            return self;
+        }
+        for (id, p) in &mut self.0 {
+            let factor = modifiers.demand_factor(goods.name(*id), class);
+            #[allow(
+                clippy::cast_precision_loss,
+                reason = "basis points are small integers"
+            )]
+            let f = factor.bp() as f64 / BASIS_POINTS_PER_UNIT as f64;
+            *p = (*p * f).clamp(0.0, 1.0);
+        }
+        self
+    }
 }
 
 /// Rolls a shopping list from [`candidates`]: each good is on it with probability `P`, one

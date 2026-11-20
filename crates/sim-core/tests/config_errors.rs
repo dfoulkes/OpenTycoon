@@ -256,3 +256,84 @@ fn grocer_at_its_limits_is_accepted() {
     }
     Config::load(&sources).unwrap();
 }
+
+#[test]
+fn event_effects_must_name_known_targets_blocks_and_types() {
+    for (pointer, value, names) in [
+        (
+            "/historical/0/effects/0/target",
+            "caviar",
+            "/historical/0/effects/0/target",
+        ),
+        (
+            "/historical/1/effects/0/blocks",
+            "[atlantis]",
+            "/historical/1/effects/0/blocks",
+        ),
+        (
+            "/historical/8/effects/0/types",
+            "[airship_dock]",
+            "/historical/8/effects/0/types/0",
+        ),
+        ("/groups/luxury", "[caviar]", "/groups/luxury/0"),
+    ] {
+        assert_names(
+            load_with("events.yaml", pointer, value),
+            "events.yaml",
+            names,
+        );
+    }
+}
+
+#[test]
+fn event_shares_and_open_days_out_of_range_are_rejected() {
+    for (pointer, value, names) in [
+        (
+            "/historical/0/effects/1/share",
+            "1.5",
+            "/historical/0/effects/1/share",
+        ),
+        (
+            "/historical/1/effects/0/chance",
+            "-0.1",
+            "/historical/1/effects/0/chance",
+        ),
+        (
+            "/historical/5/effects/0/open",
+            "8",
+            "/historical/5/effects/0/open",
+        ),
+        ("/random/0/daily_chance", "2", "/random/0/daily_chance"),
+        ("/insurance/premium_rate", "-1", "/insurance/premium_rate"),
+        (
+            "/historical/10/effects/0/factor",
+            "-0.7",
+            "/historical/10/effects/0/factor",
+        ),
+        (
+            "/elections/weights/1945/labour",
+            "-0.5",
+            "/elections/weights/1945",
+        ),
+    ] {
+        assert_names(
+            load_with("events.yaml", pointer, value),
+            "events.yaml",
+            names,
+        );
+    }
+}
+
+#[test]
+fn utility_reserve_prices_must_be_positive() {
+    assert_names(
+        load_with("utilities.yaml", "/reserve_prices/gas", "0"),
+        "utilities.yaml",
+        "/reserve_prices/gas",
+    );
+    assert_names(
+        load_with("utilities.yaml", "/nationalisation/buyout_ratio", "-1"),
+        "utilities.yaml",
+        "/nationalisation/buyout_ratio",
+    );
+}

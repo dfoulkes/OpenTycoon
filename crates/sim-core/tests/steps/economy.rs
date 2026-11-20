@@ -23,25 +23,25 @@ pub struct EconomyState {
     baseline: Money,
 }
 
-fn world(w: &mut SimWorld) -> &mut World {
+pub(crate) fn world(w: &mut SimWorld) -> &mut World {
     w.economy
         .world
         .as_mut()
         .expect("no game: add 'Given a new game with N players'")
 }
 
-fn rebaseline(w: &mut SimWorld) {
+pub(crate) fn rebaseline(w: &mut SimWorld) {
     // Net of minted allowances (R63), so the baseline only moves with created/destroyed money.
     let ledger = world(w).ledger();
     w.economy.baseline = ledger.total() - ledger.minted();
 }
 
-fn player(n: u8) -> PlayerId {
+pub(crate) fn player(n: u8) -> PlayerId {
     assert!(n >= 1, "players are numbered from 1");
     PlayerId(n - 1)
 }
 
-fn account(who: &str) -> AccountId {
+pub(crate) fn account(who: &str) -> AccountId {
     if who == "the city" {
         AccountId::City
     } else {
@@ -54,7 +54,7 @@ fn account(who: &str) -> AccountId {
 }
 
 /// Parses `"£1,234.56"` or `"-£0.01"` into pence.
-fn money(text: &str) -> Money {
+pub(crate) fn money(text: &str) -> Money {
     let (negative, rest) = match text.strip_prefix('-') {
         Some(rest) => (true, rest),
         None => (false, text),
@@ -71,12 +71,12 @@ fn money(text: &str) -> Money {
     Money::from_pence(if negative { -total } else { total })
 }
 
-fn parse_hm(text: &str) -> u32 {
+pub(crate) fn parse_hm(text: &str) -> u32 {
     let (h, m) = text.split_once(':').unwrap();
     h.parse::<u32>().unwrap() * 3600 + m.parse::<u32>().unwrap() * 60
 }
 
-fn block_id(w: &mut SimWorld, name: &str) -> BlockId {
+pub(crate) fn block_id(w: &mut SimWorld, name: &str) -> BlockId {
     let index = world(w)
         .map()
         .blocks
@@ -86,7 +86,7 @@ fn block_id(w: &mut SimWorld, name: &str) -> BlockId {
     BlockId(u32::try_from(index).unwrap())
 }
 
-fn business_id(w: &mut SimWorld, type_id: &str, block: &str) -> BusinessId {
+pub(crate) fn business_id(w: &mut SimWorld, type_id: &str, block: &str) -> BusinessId {
     let block = block_id(w, block);
     world(w)
         .businesses()
@@ -96,7 +96,7 @@ fn business_id(w: &mut SimWorld, type_id: &str, block: &str) -> BusinessId {
         .map_or_else(|| panic!("no {type_id} on that block"), |(id, _)| *id)
 }
 
-fn business<'a>(w: &'a mut SimWorld, type_id: &str, block: &str) -> &'a mut Business {
+pub(crate) fn business<'a>(w: &'a mut SimWorld, type_id: &str, block: &str) -> &'a mut Business {
     let id = business_id(w, type_id, block);
     world(w).businesses_mut().by_id.get_mut(&id).unwrap()
 }
@@ -156,7 +156,7 @@ fn holds_lease(w: &mut SimWorld, n: u8, block: String, price: String, year: i32)
 #[given(
     regex = r#"^(player \d+|the city) owns a (\d+)-high (\d+)x(\d+) "([a-z_]+)" on "([^"]+)"$"#
 )]
-fn owns_building(
+pub(crate) fn owns_building(
     w: &mut SimWorld,
     who: String,
     height: u32,

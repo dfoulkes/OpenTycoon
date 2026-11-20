@@ -34,6 +34,8 @@ pub struct SimWorld {
     pub city: steps::population::CityState,
     /// A game with the Grocer in seat 1 (`steps::ai`).
     pub ai: steps::ai::AiState,
+    /// Two games for determinism checks (`steps::events`).
+    pub events: steps::events::EventsState,
 }
 
 fn main() {

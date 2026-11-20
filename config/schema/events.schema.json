@@ -1,12 +1,44 @@
 {
   "$defs": {
+    "Class": {
+      "description": "Social class (§8.1).",
+      "oneOf": [
+        {
+          "const": "working",
+          "description": "Working class.",
+          "type": "string"
+        },
+        {
+          "const": "middle",
+          "description": "Middle class.",
+          "type": "string"
+        },
+        {
+          "const": "upper",
+          "description": "Upper class.",
+          "type": "string"
+        }
+      ]
+    },
     "Effect": {
       "description": "An event effect. Tagged by `kind`.",
       "oneOf": [
         {
           "additionalProperties": false,
-          "description": "Scale demand for a target (a good id, a tag such as `luxury`, `physical_retail`, `online`).",
+          "description": "Scale shoppers' demand (the chance a good is on their list) for `days` days. `target`\nis a good id or a group in `groups`; `class` limits it to one class. With no target it\napplies to every good.",
           "properties": {
+            "class": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Class"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Only shoppers of this class."
+            },
             "days": {
               "description": "How many in-game days it lasts.",
               "format": "uint32",
@@ -14,7 +46,7 @@
               "type": "integer"
             },
             "factor": {
-              "description": "Multiplier.",
+              "description": "Multiplier on demand.",
               "type": "number"
             },
             "kind": {
@@ -22,13 +54,16 @@
               "type": "string"
             },
             "target": {
-              "description": "What demand is scaled.",
-              "type": "string"
+              "default": null,
+              "description": "Good id or group name.",
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           "required": [
             "kind",
-            "target",
             "factor",
             "days"
           ],
@@ -36,7 +71,133 @@
         },
         {
           "additionalProperties": false,
-          "description": "Move blocks to a new desirability tier.",
+          "description": "Cap tomorrow's order of the target goods at `share` of each shop's capacity (rationing).",
+          "properties": {
+            "days": {
+              "description": "How many in-game days it lasts.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "supply_cap",
+              "type": "string"
+            },
+            "share": {
+              "description": "Share of `capacity_per_good` a shop may stock.",
+              "type": "number"
+            },
+            "target": {
+              "description": "Good id or group name.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "target",
+            "share",
+            "days"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Shops may open only `open` days in `of` (the three-day week). Shops rotate: on game\nday `d`, shop `id` trades iff `(id + d) mod of < open`.",
+          "properties": {
+            "days": {
+              "description": "How many in-game days it lasts.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "open_days",
+              "type": "string"
+            },
+            "of": {
+              "description": "Out of.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "open": {
+              "description": "Days open.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "open",
+            "of",
+            "days"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Every shop's price of every good is off by a random amount within `±spread` (Decimal\nDay's price confusion), drawn once when the event fires.",
+          "properties": {
+            "days": {
+              "description": "How many in-game days it lasts.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "price_noise",
+              "type": "string"
+            },
+            "spread": {
+              "description": "Largest deviation, as a share of the price.",
+              "type": "number"
+            }
+          },
+          "required": [
+            "kind",
+            "spread",
+            "days"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Shops on these blocks draw `factor` × the footfall (their pull on shoppers) for `days`\ndays.",
+          "properties": {
+            "blocks": {
+              "description": "Block ids.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "days": {
+              "description": "How many in-game days it lasts.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "factor": {
+              "description": "Multiplier on the shop's pull.",
+              "type": "number"
+            },
+            "kind": {
+              "const": "footfall",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "blocks",
+            "factor",
+            "days"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Move blocks to a new desirability tier (permanent).",
           "properties": {
             "blocks": {
               "description": "Block ids.",
@@ -63,7 +224,7 @@
         },
         {
           "additionalProperties": false,
-          "description": "Destroy buildings at random, with compensation.",
+          "description": "Destroy buildings at random, with compensation paid by the city.",
           "properties": {
             "blocks": {
               "description": "Block ids at risk.",
@@ -95,7 +256,82 @@
         },
         {
           "additionalProperties": false,
-          "description": "Switch the currency display to decimal.",
+          "description": "Scale every lease's land value (its last auction price) once.",
+          "properties": {
+            "factor": {
+              "description": "Multiplier.",
+              "type": "number"
+            },
+            "kind": {
+              "const": "land_value",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "factor"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Scale the property value (build cost) of every building of these types once.",
+          "properties": {
+            "factor": {
+              "description": "Multiplier.",
+              "type": "number"
+            },
+            "kind": {
+              "const": "property_value",
+              "type": "string"
+            },
+            "types": {
+              "description": "Business type ids.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "types",
+            "factor"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Move `share` of the unhoused adults of class `from` to class `to` (permanent).",
+          "properties": {
+            "from": {
+              "$ref": "#/$defs/Class",
+              "description": "From."
+            },
+            "kind": {
+              "const": "class_shift",
+              "type": "string"
+            },
+            "share": {
+              "description": "Share moved.",
+              "type": "number"
+            },
+            "to": {
+              "$ref": "#/$defs/Class",
+              "description": "To."
+            }
+          },
+          "required": [
+            "kind",
+            "from",
+            "to",
+            "share"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Switch the currency display to decimal (a display flag only).",
           "properties": {
             "kind": {
               "const": "decimal_currency",
@@ -109,7 +345,7 @@
         },
         {
           "additionalProperties": false,
-          "description": "Headline only; no mechanical effect yet.",
+          "description": "Headline only; no mechanical effect.",
           "properties": {
             "kind": {
               "const": "flavour",
@@ -123,6 +359,25 @@
         }
       ]
     },
+    "ElectionHeadlines": {
+      "additionalProperties": false,
+      "description": "Election headlines.",
+      "properties": {
+        "conservative": {
+          "description": "Conservative win.",
+          "type": "string"
+        },
+        "labour": {
+          "description": "Labour win.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "labour",
+        "conservative"
+      ],
+      "type": "object"
+    },
     "ElectionSettings": {
       "additionalProperties": false,
       "description": "Elections (R12, §9.1).",
@@ -130,6 +385,14 @@
         "enabled": {
           "description": "Whether every year step holds a general election.",
           "type": "boolean"
+        },
+        "headlines": {
+          "$ref": "#/$defs/ElectionHeadlines",
+          "default": {
+            "conservative": "Conservatives Win the General Election",
+            "labour": "Labour Win the General Election"
+          },
+          "description": "Front-page headlines per result."
         },
         "weights": {
           "additionalProperties": {
@@ -142,6 +405,40 @@
       "required": [
         "enabled",
         "weights"
+      ],
+      "type": "object"
+    },
+    "EraEvent": {
+      "additionalProperties": false,
+      "description": "One event in the random pool.",
+      "properties": {
+        "effects": {
+          "default": [],
+          "description": "What it does.",
+          "items": {
+            "$ref": "#/$defs/Effect"
+          },
+          "type": "array"
+        },
+        "headline": {
+          "description": "Newspaper headline.",
+          "type": "string"
+        },
+        "id": {
+          "description": "Stable id.",
+          "type": "string"
+        },
+        "weight": {
+          "description": "Relative weight.",
+          "format": "uint32",
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "headline",
+        "weight"
       ],
       "type": "object"
     },
@@ -180,6 +477,77 @@
       ],
       "type": "object"
     },
+    "IncidentEffect": {
+      "description": "What a random per-building event does.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "The building is destroyed.",
+          "properties": {
+            "kind": {
+              "const": "destroy",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "`share` of every good on the shelf is lost.",
+          "properties": {
+            "kind": {
+              "const": "stock_loss",
+              "type": "string"
+            },
+            "share": {
+              "description": "Share lost.",
+              "type": "number"
+            }
+          },
+          "required": [
+            "kind",
+            "share"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "The owner pays the city a fine.",
+          "properties": {
+            "amount": {
+              "description": "Amount.",
+              "type": "number"
+            },
+            "kind": {
+              "const": "fine",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "amount"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "InsuranceSettings": {
+      "additionalProperties": false,
+      "description": "Insurance (§9: an optional product).",
+      "properties": {
+        "premium_rate": {
+          "description": "Daily premium as a share of each insured building's property value, paid to the city at\n06:00.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "premium_rate"
+      ],
+      "type": "object"
+    },
     "PartyWeights": {
       "additionalProperties": false,
       "description": "Election weights.",
@@ -199,6 +567,34 @@
       ],
       "type": "object"
     },
+    "RandomEra": {
+      "additionalProperties": false,
+      "description": "Random front-page events (§9: 2030+).",
+      "properties": {
+        "chance_per_step": {
+          "description": "Chance per year step that one fires.",
+          "type": "number"
+        },
+        "events": {
+          "description": "The pool; one is picked by weight.",
+          "items": {
+            "$ref": "#/$defs/EraEvent"
+          },
+          "type": "array"
+        },
+        "from_year": {
+          "description": "First step year that can roll one.",
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "from_year",
+        "chance_per_step",
+        "events"
+      ],
+      "type": "object"
+    },
     "RandomEvent": {
       "additionalProperties": false,
       "description": "A random per-building event.",
@@ -207,14 +603,24 @@
           "description": "Chance per building per day.",
           "type": "number"
         },
+        "effect": {
+          "$ref": "#/$defs/IncidentEffect",
+          "description": "What happens."
+        },
         "id": {
           "description": "Stable id.",
           "type": "string"
+        },
+        "insured_payout": {
+          "default": 0.0,
+          "description": "Share of the loss an insured owner is paid back by the city (0: not insurable).",
+          "type": "number"
         }
       },
       "required": [
         "id",
-        "daily_chance"
+        "daily_chance",
+        "effect"
       ],
       "type": "object"
     },
@@ -247,6 +653,17 @@
       "$ref": "#/$defs/ElectionSettings",
       "description": "General elections (§9.1)."
     },
+    "groups": {
+      "additionalProperties": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "default": {},
+      "description": "Named groups of goods that effects target (`luxury`, `staples`, ...). An effect's\n`target` is a group name or a single good id from `businesses.yaml`.",
+      "type": "object"
+    },
     "historical": {
       "description": "Fixed history. Each fires on the year step covering its year (§9).",
       "items": {
@@ -254,12 +671,28 @@
       },
       "type": "array"
     },
+    "insurance": {
+      "$ref": "#/$defs/InsuranceSettings",
+      "default": {
+        "premium_rate": 0.0
+      },
+      "description": "Optional insurance against random events (§9)."
+    },
     "random": {
-      "description": "Per-building daily random events.",
+      "description": "Per-building daily random events (§9: fire, burglary, inspection).",
       "items": {
         "$ref": "#/$defs/RandomEvent"
       },
       "type": "array"
+    },
+    "random_era": {
+      "$ref": "#/$defs/RandomEra",
+      "default": {
+        "chance_per_step": 0.0,
+        "events": [],
+        "from_year": 0
+      },
+      "description": "Random front-page events from a year onwards (§9: 2030+)."
     }
   },
   "required": [

@@ -10,3 +10,5 @@ pub mod businesses;
 pub mod customers;
 pub mod land;
 pub mod population;
+// events and utilities
+pub mod events;

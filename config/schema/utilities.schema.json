@@ -27,7 +27,7 @@
       "description": "Nationalisation and privatisation (R12, §9.1).",
       "properties": {
         "buyout_ratio": {
-          "description": "Buy-out price on nationalisation, as a share of book value (default 1.0).",
+          "description": "Buy-out price on nationalisation, as a share of book value (default 1.0). Book value is\nwhat the holder paid for the utility at auction: utilities don't wear, like buildings\n(R41).",
           "type": "number"
         }
       },
@@ -81,12 +81,17 @@
     "nationalisation": {
       "$ref": "#/$defs/NationalisationSettings",
       "description": "Elections and ownership (R12)."
+    },
+    "reserve_prices": {
+      "$ref": "#/$defs/UtilityRates",
+      "description": "Minimum opening bid for each utility at auction, like a block's land base price (R12,\nR23)."
     }
   },
   "required": [
     "base_rates",
     "internet",
-    "nationalisation"
+    "nationalisation",
+    "reserve_prices"
   ],
   "title": "UtilitiesConfig",
   "type": "object"

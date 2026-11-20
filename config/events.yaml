@@ -1,72 +1,112 @@
 # yaml-language-server: $schema=schema/events.schema.json
-# events.yaml: §9. Each event fires on the year step covering its year. Effects reference
-# block ids in map.yaml; on the v1 3×3 map several are flavour only (marked).
+# events.yaml: §9. Each event fires on the year step covering its year (1939 on the 1935 step,
+# the Blitz on 1940, Decimal Day on 1970, the crash on 2005). Effects are typed modifiers: some
+# change the world once, the rest sit on the modifier stack for `days` game days (one day is a
+# 5-year step). Block ids are map.yaml's; on the v1 3×3 map the East End row stands in for the
+# East End and City, Holborn for the City. Durations and sizes are placeholders.
+groups:                         # goods that effects target, by name (businesses.yaml ids)
+  luxury: [clothes, meals]
+  staples: [groceries]          # §9 "meat, dairy and sugar"; bread was not rationed in the war
+  bar_trade: [drinks]
+  physical_retail: [bread, groceries, clothes, drinks, meals]
+  online: []                    # e-commerce goods, once online businesses exist (R15)
 historical:
   - id: ww2_rationing
     year: 1939
     headline: "War Declared: Rationing Begins"
     effects:
-      - { kind: demand_multiplier, target: luxury, factor: 0.4, days: 2 }     # −60%; days placeholder
+      - { kind: demand_multiplier, target: luxury, factor: 0.4, days: 2 }   # −60%
+      - { kind: supply_cap, target: staples, share: 0.5, days: 2 }          # placeholder share
   - id: blitz
     year: 1940
     headline: "The Blitz: East End Ablaze"
     effects:
-      - { kind: destroy_buildings, blocks: [whitechapel, bethnal_green, old_kent_road], chance: 0.1, compensation: 0.5 }  # chance placeholder
+      - { kind: destroy_buildings, blocks: [whitechapel, bethnal_green, old_kent_road, holborn], chance: 0.1, compensation: 0.5 }  # chance placeholder
   - id: coronation
     year: 1953
     headline: "Long Live the Queen"
     effects:
-      - { kind: demand_multiplier, target: drinks, factor: 2.0, days: 1 }
+      - { kind: demand_multiplier, target: bar_trade, factor: 2.0, days: 1 }
   - id: world_cup
     year: 1966
     headline: "England Win the World Cup"
     effects:
-      - { kind: demand_multiplier, target: drinks, factor: 2.0, days: 1 }
+      - { kind: demand_multiplier, target: bar_trade, factor: 2.0, days: 1 }
   - id: decimal_day
     year: 1971
     headline: "Decimal Day: Goodbye to the Shilling"
     effects:
       - { kind: decimal_currency }
+      - { kind: price_noise, spread: 0.1, days: 1 }
   - id: three_day_week
     year: 1973
     headline: "Three-Day Week as Miners Strike"
     effects:
-      - { kind: flavour }       # placeholder: electricity rationing mechanic not yet designed
+      - { kind: open_days, open: 3, of: 7, days: 1 }
   - id: big_bang
     year: 1986
     headline: "Big Bang in the City"
     effects:
-      - { kind: flavour }       # placeholder: no City block on the v1 map
+      - { kind: desirability_change, blocks: [holborn], tier: high }
+      - { kind: class_shift, from: middle, to: upper, share: 0.1 }        # placeholder share
   - id: canary_wharf
     year: 1987
     headline: "Canary Wharf Rises"
     effects:
-      - { kind: flavour }       # placeholder: no Docklands block on the v1 map
+      - { kind: flavour }       # no Docklands block on the v1 map
   - id: dotcom
     year: 2000
     headline: "Dot-com Fever"
     effects:
-      - { kind: flavour }
+      - { kind: property_value, types: [], factor: 2.0 }    # online business types (R15)
+  - id: dotcom_bust
+    year: 2001
+    headline: "Dot-com Bubble Bursts"
+    effects:
+      - { kind: property_value, types: [], factor: 0.4 }
   - id: crash
     year: 2008
     headline: "Banks Collapse"
     effects:
-      - { kind: demand_multiplier, target: upper_class, factor: 0.8, days: 1 }
+      - { kind: land_value, factor: 0.7 }                                  # land values −30%
+      - { kind: demand_multiplier, class: upper, factor: 0.8, days: 1 }    # Upper-class spend −20%
   - id: olympics
     year: 2012
     headline: "London Olympics Open"
     effects:
-      - { kind: flavour }
+      - { kind: footfall, blocks: [old_kent_road, whitechapel, bethnal_green], factor: 1.5, days: 1 }
   - id: pandemic
     year: 2020
     headline: "Lockdown"
     effects:
       - { kind: demand_multiplier, target: physical_retail, factor: 0.3, days: 1 }
       - { kind: demand_multiplier, target: online, factor: 2.0, days: 1 }
-random:                         # placeholders
-  - { id: fire, daily_chance: 0.0005 }
-  - { id: burglary, daily_chance: 0.001 }
-  - { id: health_inspection, daily_chance: 0.002 }
+random:                         # per building per day, rolled at 06:00 after delivery
+  - { id: fire, daily_chance: 0.0005, effect: { kind: destroy }, insured_payout: 1.0 }                 # placeholder
+  - { id: burglary, daily_chance: 0.001, effect: { kind: stock_loss, share: 0.5 }, insured_payout: 1.0 }  # placeholder
+  - { id: health_inspection, daily_chance: 0.002, effect: { kind: fine, amount: 25 } }                # placeholder; fines aren't insurable
+insurance:
+  premium_rate: 0.0005          # placeholder: share of property value per day
+random_era:                     # §9: 2030+
+  from_year: 2030
+  chance_per_step: 0.5          # placeholder
+  events:
+    - id: heatwave
+      headline: "Heatwave Grips the Capital"
+      weight: 2
+      effects:
+        - { kind: demand_multiplier, target: bar_trade, factor: 1.5, days: 1 }
+        - { kind: demand_multiplier, target: clothes, factor: 0.7, days: 1 }
+    - id: ai_boom
+      headline: "AI Boom Mints New Millionaires"
+      weight: 1
+      effects:
+        - { kind: class_shift, from: middle, to: upper, share: 0.05 }
+    - id: thames_flood
+      headline: "Thames Barrier Fails"
+      weight: 1
+      effects:
+        - { kind: destroy_buildings, blocks: [old_kent_road, bethnal_green], chance: 0.05, compensation: 0.5 }
 elections:                      # §9.1: every year step is a general election
   enabled: true
   weights:                      # placeholder weights following history
@@ -78,3 +118,6 @@ elections:                      # §9.1: every year step is a general election
     1995: { labour: 0.8, conservative: 0.2 }
     2010: { labour: 0.4, conservative: 0.6 }
     2025: { labour: 0.5, conservative: 0.5 }
+  headlines:
+    labour: "Labour Landslide: Utilities Nationalised"
+    conservative: "Conservatives Back in Number Ten: Utilities for Sale"

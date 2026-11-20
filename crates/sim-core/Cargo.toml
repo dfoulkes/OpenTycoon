@@ -58,3 +58,7 @@ workspace = true
 [[bench]]
 name = "businesses"
 harness = false
+
+[[bench]]
+name = "events"
+harness = false
