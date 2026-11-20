@@ -7,7 +7,8 @@ Feature: The Speculator
   discount to book value, and puts them straight back up for auction.
 
   Background:
-    Given the shipped config
+    # These scenarios name the 3×3 map's districts, sets and prices.
+    Given the shipped config on the v1 map
     And the Speculator plays seat 1 against a scripted rival in seat 0
 
   @spec-10 @R33

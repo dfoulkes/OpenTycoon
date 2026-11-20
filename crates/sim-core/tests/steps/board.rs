@@ -23,8 +23,9 @@ use crate::steps::land::block_named;
 /// A map outside any game, brought to a year.
 #[derive(Debug, Default)]
 pub struct BoardState {
-    map: Option<Map>,
-    config: Option<Config>,
+    // Boxed: the scenario world lives on the harness's stack.
+    map: Option<Box<Map>>,
+    config: Option<Box<Config>>,
     arrivals: Vec<u64>,
     year: i32,
     weights: Vec<u32>,
@@ -429,8 +430,8 @@ fn board_at(w: &mut SimWorld, year: i32) {
     let span = i32::try_from(config.game.clock.years_per_day).unwrap();
     map.apply_desirability(&config.map, i32::MIN..year + span);
     w.board.year = year;
-    w.board.map = Some(map);
-    w.board.config = Some(config);
+    w.board.map = Some(Box::new(map));
+    w.board.config = Some(Box::new(config));
 }
 
 #[given("the full board")]
