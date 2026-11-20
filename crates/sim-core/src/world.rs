@@ -321,7 +321,7 @@ impl World {
         after(Phase::Commands);
         if fired.midnight {
             self.midnight_reckoning();
-            // red: events_step not wired yet
+            self.events_step();
             self.population_year_step();
             after(Phase::Midnight);
         }
@@ -331,7 +331,7 @@ impl World {
         }
         if fired.settlement {
             self.settlement();
-            // red: random_incidents not wired yet
+            self.random_incidents();
             after(Phase::Settlement);
         }
         self.auctions_phase();
@@ -516,7 +516,7 @@ impl World {
             self.config.game.overdraft.interest_rate.rate(),
         );
         bills.extend(economy::settlement::resident_rent_bills(&rent_due));
-        // red: insurance premiums not billed yet
+        bills.extend(self.insurance_bills());
         bills.extend(economy::settlement::settlement_bills(
             &self.map,
             &self.businesses,
@@ -711,7 +711,7 @@ impl World {
                     b.owner = buyer;
                 }
             }
-            AuctionItem::Utility(_) => {} // red: utility sale not applied yet
+            AuctionItem::Utility(kind) => self.utilities.grant(kind, buyer, price),
         }
     }
 
