@@ -193,8 +193,50 @@ fn fmt_duration(d: Duration) -> String {
 /// Checks every parameter's `expect` guards against the base config, so a key path that now
 /// points at different content stops the study before any game.
 pub fn check_expectations(def: &StudyDef, base: &ConfigSources) -> Result<(), StudyError> {
-    let _ = (def, base);
+    for (i, p) in def.parameters.iter().enumerate() {
+        for (j, e) in p.expect.iter().enumerate() {
+            let found = node_at(base, &e.key);
+            // An optional parameter whose content has not landed is skipped (check_keys warns).
+            if found.is_none() && p.optional {
+                continue;
+            }
+            if found.as_ref().is_some_and(|f| yaml_eq(f, &e.equals)) {
+                continue;
+            }
+            let show = |v: &serde_yaml_ng::Value| {
+                serde_json::to_string(v).unwrap_or_else(|_| format!("{v:?}"))
+            };
+            return Err(StudyError::def(
+                format!("parameters[{i}].expect[{j}]"),
+                format!(
+                    "parameter {}: {} is {}, expected {}; the content it varies has moved, so \
+                     update the parameter's keys and guard",
+                    p.name,
+                    e.key,
+                    found.as_ref().map_or_else(|| "missing".to_owned(), show),
+                    show(&e.equals)
+                ),
+            ));
+        }
+    }
     Ok(())
+}
+
+/// YAML equality with mappings compared regardless of key order.
+fn yaml_eq(a: &serde_yaml_ng::Value, b: &serde_yaml_ng::Value) -> bool {
+    use serde_yaml_ng::Value;
+    match (a, b) {
+        (Value::Mapping(x), Value::Mapping(y)) => {
+            x.len() == y.len()
+                && x.iter()
+                    .all(|(k, v)| y.get(k).is_some_and(|w| yaml_eq(v, w)))
+        }
+        (Value::Sequence(x), Value::Sequence(y)) => {
+            x.len() == y.len() && x.iter().zip(y).all(|(v, w)| yaml_eq(v, w))
+        }
+        (Value::Tagged(x), Value::Tagged(y)) => x.tag == y.tag && yaml_eq(&x.value, &y.value),
+        _ => a == b,
+    }
 }
 
 /// Checks every non-optional parameter key exists in the base config, so a typo fails before

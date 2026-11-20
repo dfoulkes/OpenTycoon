@@ -616,7 +616,7 @@ fn refuses(w: &mut HarnessWorld, path: String, name: String) {
 
 #[then("no games were played")]
 fn no_games(w: &mut HarnessWorld) {
-    assert!(w.study.reports.is_empty());
+    assert_eq!(w.study.reports.len(), 0, "{:?}", w.study.reports);
     assert!(!w.study.outs.last().unwrap().join("models.csv").exists());
 }
 

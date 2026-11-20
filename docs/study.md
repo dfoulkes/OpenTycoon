@@ -60,6 +60,7 @@ parameters:
 | `decimals` | 2 | places a decimal is rounded to. Money in the config is pence and ratios are basis points, so a value with more places than the key allows makes that model invalid |
 | `mode` | `set` | `set` replaces the value; `scale` multiplies **every number under the key** by the sampled factor (a scalar, or a whole map such as every decade of `customers.births_per_woman`). A whole-number leaf stays whole |
 | `optional` | false | if the key does not exist in the base config, skip the parameter with a warning instead of failing the study: for keys that only exist once some content lands |
+| `expect` | none | guards on the base config, `{ key, equals }` or a list of them: the node at `key` must equal `equals` (mappings in any key order), or the study refuses to start, naming the parameter, the key, what it found and what it expected. For keys addressed by position, such as `customers.desires.6.goods`, so a reordered rule is never varied in its place. Skipped for an `optional` parameter whose key is missing |
 
 A non-optional key that does not exist fails the study before any game. A sampled value the
 config rejects (out of the key's range, or breaking a cross-file rule) makes that model
