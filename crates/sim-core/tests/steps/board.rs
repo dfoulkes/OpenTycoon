@@ -572,3 +572,54 @@ fn arrivals_split(w: &mut SimWorld, first: u64, second: u64, pct: u64) {
 fn none_at_zero(w: &mut SimWorld) {
     assert_eq!(w.board.arrivals[1], 0);
 }
+
+// ---- the full board as the real game ------------------------------------------------------
+
+#[then(expr = "the game's board is {int} blocks wide and {int} blocks deep")]
+fn game_board_size(w: &mut SimWorld, width: u32, height: u32) {
+    let map = game(w).map();
+    assert_eq!((map.width, map.height), (width, height));
+    assert_eq!(map.blocks.len(), (width * height) as usize);
+}
+
+#[then(expr = "{string} is on the game's board")]
+fn on_game_board(w: &mut SimWorld, name: String) {
+    block_named(game(w), &name);
+}
+
+#[then(regex = r"^these blocks were damaged in (\d+):$")]
+fn damaged_in(w: &mut SimWorld, year: i32, step: &Step) {
+    let world = game(w);
+    for row in step.table.as_ref().unwrap().rows.iter().skip(1) {
+        let block = world.map().block(block_named(world, &row[0])).unwrap();
+        assert_eq!(block.damaged_in, Some(year), "{}", row[0]);
+    }
+}
+
+#[then(expr = "{string} was not damaged")]
+fn not_damaged(w: &mut SimWorld, name: String) {
+    let world = game(w);
+    let block = world.map().block(block_named(world, &name)).unwrap();
+    assert_eq!(block.damaged_in, None);
+}
+
+#[then(expr = "the {string} event acts on {string}")]
+fn event_acts_on(w: &mut SimWorld, event: String, name: String) {
+    use sim_core::config::events::Effect;
+    let config = w.config.load_ok();
+    let map = Map::from_config(&config.map);
+    let key = &map.block(block_by_name(&map, &name)).unwrap().key;
+    let event = config
+        .events
+        .historical
+        .iter()
+        .find(|e| e.id == event)
+        .unwrap_or_else(|| panic!("no event {event}"));
+    let named = event.effects.iter().any(|e| match e {
+        Effect::DestroyBuildings { blocks, .. }
+        | Effect::DesirabilityChange { blocks, .. }
+        | Effect::Footfall { blocks, .. } => blocks.contains(key),
+        _ => false,
+    });
+    assert!(named, "{} does not act on {name}", event.id);
+}
