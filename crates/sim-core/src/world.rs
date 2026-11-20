@@ -454,6 +454,12 @@ impl World {
         &mut self.businesses
     }
 
+    /// The seats played by the AI opponents from `ai.yaml` (the rest are humans, or harness
+    /// brains in `sim-cli batch`).
+    pub fn ai_seats(&self) -> &[AiSeat] {
+        &self.ai
+    }
+
     /// A portable hash of all mutable state, for determinism checks. Equal seeds, config and
     /// commands give equal hashes on every OS and CPU.
     pub fn state_hash(&self) -> u64 {

@@ -1,12 +1,16 @@
 [package]
 name = "sim-cli"
-description = "OpenTycoon headless harness: config validation now, balance runs from M1."
+description = "OpenTycoon headless harness: config validation, headless runs, balance batches, benches and perf budgets."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 publish.workspace = true
+
+[lib]
+name = "sim_cli"
+path = "src/lib.rs"
 
 [[bin]]
 name = "sim-cli"
@@ -16,7 +20,20 @@ path = "src/main.rs"
 sim-core = { workspace = true, features = ["fs"] }
 anyhow.workspace = true
 clap.workspace = true
+rayon.workspace = true
+serde.workspace = true
 serde_json.workspace = true
+serde_yaml_ng.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+cucumber.workspace = true
+futures.workspace = true
+proptest.workspace = true
+
+[[test]]
+name = "bdd"
+harness = false
 
 [lints]
 workspace = true

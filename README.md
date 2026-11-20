@@ -61,6 +61,7 @@ cargo fmtc                       # format check
 cargo validate                   # validate config/
 cargo schema                     # regenerate config/schema/*.schema.json after changing config types
 cargo bench -p sim-core          # criterion benches (cargo bench-build to compile only)
+cargo perf                       # perf budgets, release build (docs/perf.md)
 ```
 
 The aliases live in `.cargo/config.toml`.
@@ -72,6 +73,31 @@ cargo run -p sim-cli -- validate-config config            # names every bad key 
 cargo run -p sim-cli -- run config --seed 42 --ticks 8640  # one headless day, prints the state hash
 cargo run -p server -- --config config                     # placeholder server: "ok"
 ```
+
+## Running the harness
+
+`sim-cli` is the headless balance harness (spec §11). Use release builds for anything timed.
+Details, CSV columns and budgets: [`docs/perf.md`](docs/perf.md).
+
+```sh
+# 1,000 games of the v1 preset (1930–1950), every core, CSV + summary (median/p10/p90 net
+# worth, bankruptcy rate, games/sec). Same CSV on any thread count.
+cargo run --release -p sim-cli -- batch config --games 1000 --out runs/v1.csv
+
+# Parameter sweep: override any config value; it is validated like a hand-edited file (R45).
+cargo run --release -p sim-cli -- batch config --brain scripted \
+    --set game.overdraft.start_limit=20000 --out runs/od20k.csv
+
+# Throughput as JSON: ticks/sec, ms per game day, real-time factor, tick p99.
+cargo simbench --days 4
+cargo simbench --days 1 --agents 10000     # synthetic large scenario
+
+# Perf budgets (perf/budgets.yaml): exits non-zero if over budget. Not part of `cargo t`.
+cargo perf
+```
+
+Brains for the seats `ai.yaml` does not fill: `idle` (does nothing) and `scripted` (bids on the
+cheapest lot at day-trade open). The real AI opponents play their own seats inside the sim.
 
 Godot client and its tests:
 

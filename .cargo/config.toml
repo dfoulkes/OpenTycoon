@@ -14,5 +14,9 @@ trace = "test -p sim-core --test traceability -- --nocapture"
 validate = "run -q -p sim-cli -- validate-config config"
 # Regenerate config/schema/*.schema.json from the Rust config types.
 schema = "run -q -p sim-cli -- write-schemas config/schema"
+# Perf budgets (docs/perf.md): release build, exits non-zero if over budget. Not part of `cargo t`.
+perf = "run -q --release -p sim-cli -- perf-budget config"
+# Headless throughput as JSON (docs/perf.md).
+simbench = "run -q --release -p sim-cli -- bench config"
 # Compile benches without running them.
 bench-build = "bench --workspace --no-run"
