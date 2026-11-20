@@ -10,7 +10,7 @@ criteria:
   min_win_share: 0.0
   max_win_share: 1.0
   max_bankruptcy_rate: 1.0
-  min_idle_last_rate: 0.0
+  min_idle_below_solvent_rate: 0.0
 parameters:
   - name: overdraft
     key: game.overdraft.start_limit

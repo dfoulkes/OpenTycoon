@@ -32,7 +32,7 @@ key, a wrong type or a bad range fails before any game, naming the key path
 | `seed` | 0 | drives the hypercube and the game seeds |
 | `roster` | every personality in `ai.yaml` (id order), then `idle` | the seats: personality ids and at most one `idle`; 2–6 seats (`game.players`) |
 | `top_n` | 10 | balanced models that get an overlay |
-| `criteria` | R65 | `min_win_share` 0.10, `max_win_share` 0.40, `max_bankruptcy_rate` 0.15, `min_idle_last_rate` 1.0 |
+| `criteria` | R65 | `min_win_share` 0.10, `max_win_share` 0.40, `max_bankruptcy_rate` 0.15, `min_idle_below_solvent_rate` 1.0 |
 | `parameters` | none | the varied values (below) |
 
 `--models`, `--games`, `--preset`, `--seed`, `--roster a,b` and `--top` override the file.
@@ -112,7 +112,8 @@ Per model, from integer counts (so exact and platform-independent up to float fo
 | `ai_bankruptcy_rate` | bankrupt AI player-games / AI player-games: the R65 criterion |
 | rank in a game | 1 + the number of players strictly ahead; solvent players are ahead of bankrupt ones, then higher net worth (the final midnight board, as in `batch`) |
 | `idle_mean_rank` | the idle seat's mean rank (1 = first) |
-| `idle_last_rate` | share of games the idle seat finished **strictly** last (a tie at the bottom does not count) |
+| `idle_last_rate` | share of games the idle seat finished **strictly** last, bankrupt AIs included (a tie at the bottom does not count). Reported only; it does not decide `balanced` |
+| `idle_below_solvent_rate` | share of games the idle seat finished **strictly** below every AI that is still solvent: the R65 criterion. Bankrupt AIs are ignored (the bankruptcy limit covers them); a game where no AI is solvent counts as a miss, since the idle seat beat everyone |
 | net worth | per entry, p10 / median / p90 of final net worth in pence (nearest rank, as `batch`) |
 | `games_per_sec` | games / wall time of that model (only with wall time) |
 
@@ -122,8 +123,11 @@ Per model, from integer counts (so exact and platform-independent up to float fo
    inclusive);
 2. `ai_bankruptcy_rate` is **below** `max_bankruptcy_rate` (15%); the idle seat is not counted,
    since it never trades and would dilute the rate;
-3. the roster has an idle seat and `idle_last_rate ≥ min_idle_last_rate` (1.0: always strictly
-   last). A roster without an idle seat can never be balanced.
+3. the roster has an idle seat and `idle_below_solvent_rate ≥ min_idle_below_solvent_rate`
+   (1.0: below every solvent AI in every game). A roster without an idle seat can never be
+   balanced. An AI bankruptcy only counts against criterion 2, so one bankrupt AI no longer
+   fails a model on its own (until 2026-11-20 the rule was "idle strictly last", bankrupt AIs
+   included, reported as `idle_last_rate`).
 
 **Score and ranking.** `score` = `evenness_entropy` ("ranked by how even the win shares are").
 Models are ranked: balanced first; then higher score; then lower `max_win_share`; then lower
@@ -145,7 +149,7 @@ so a crash loses at most the model in progress). Columns, in order:
 3. `games`, `no_winner`, `max_win_share`, `min_win_share`, `evenness_entropy`,
    `evenness_gini`, `bankruptcy_rate`, `ai_bankruptcy_rate`, `idle_mean_rank`,
    `idle_last_rate`, `balanced` (`true`/`false`), `score`, `rank`, then `games_per_sec` (left
-   out with `--no-wall-time`);
+   out with `--no-wall-time`), then `idle_below_solvent_rate`;
 4. per roster entry, in roster order: `<entry>_wins`, `<entry>_win_share`, `<entry>_win_low`,
    `<entry>_win_high`, `<entry>_bankrupt_rate`, `<entry>_nw_p10`, `<entry>_nw_median`,
    `<entry>_nw_p90` (net worth in pence).
@@ -165,7 +169,7 @@ state_hash`, then per seat `seat<i>_entry, seat<i>_net_worth_pence, seat<i>_bank
   `games_per_model` (after rounding), `seeds` (`first..end`);
 - `models`: `total`, `finished`, `complete`, `ok`, `invalid`, `balanced`;
 - `ranking`: every ok model in rank order: `rank`, `model_id`, `balanced`, `score`,
-  `max_win_share`, `ai_bankruptcy_rate`, `idle_last_rate`;
+  `max_win_share`, `ai_bankruptcy_rate`, `idle_last_rate`, `idle_below_solvent_rate`;
 - `top`: the ids that got an overlay (the best `top_n` balanced models);
 - `invalid`: `model_id` and `error` per invalid model;
 - `baseline`: model 0's row as an object (column → value);

@@ -194,8 +194,9 @@ pub struct Criteria {
     pub max_win_share: f64,
     /// AI bankruptcies per AI player-game must be *below* this (R65: 15%).
     pub max_bankruptcy_rate: f64,
-    /// The idle seat finishes strictly last in at least this share of games (R65: always, 1.0).
-    pub min_idle_last_rate: f64,
+    /// The idle seat finishes below every AI still solvent in at least this share of games
+    /// (R65: every game, 1.0). Bankrupt AIs are left to `max_bankruptcy_rate`.
+    pub min_idle_below_solvent_rate: f64,
 }
 
 impl Default for Criteria {
@@ -204,7 +205,7 @@ impl Default for Criteria {
             min_win_share: 0.10,
             max_win_share: 0.40,
             max_bankruptcy_rate: 0.15,
-            min_idle_last_rate: 1.0,
+            min_idle_below_solvent_rate: 1.0,
         }
     }
 }
@@ -292,7 +293,10 @@ impl StudyDef {
             ("criteria.min_win_share", c.min_win_share),
             ("criteria.max_win_share", c.max_win_share),
             ("criteria.max_bankruptcy_rate", c.max_bankruptcy_rate),
-            ("criteria.min_idle_last_rate", c.min_idle_last_rate),
+            (
+                "criteria.min_idle_below_solvent_rate",
+                c.min_idle_below_solvent_rate,
+            ),
         ] {
             if !(0.0..=1.0).contains(&v) {
                 return Err(StudyError::def(name, "must be between 0 and 1"));

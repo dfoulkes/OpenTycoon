@@ -57,7 +57,7 @@ fn opt6(v: Option<f64>) -> String {
 
 /// The fixed metric columns of `models.csv`, after `model_id, status, error` and the
 /// `param_<name>` columns.
-pub const MODEL_METRICS: [&str; 14] = [
+pub const MODEL_METRICS: [&str; 15] = [
     "games",
     "no_winner",
     "max_win_share",
@@ -72,6 +72,7 @@ pub const MODEL_METRICS: [&str; 14] = [
     "score",
     "rank",
     "games_per_sec",
+    "idle_below_solvent_rate",
 ];
 
 /// Per roster entry `<name>_<suffix>` columns of `models.csv`.
@@ -161,6 +162,7 @@ pub fn model_row(
             if wall {
                 row.push(format!("{gps:.1}"));
             }
+            row.push(opt6(m.idle_below_solvent_rate));
             for e in &m.entries {
                 let nw = |f: fn(&crate::stats::Distribution) -> i64| {
                     e.net_worth
