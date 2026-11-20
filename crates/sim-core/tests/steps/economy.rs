@@ -208,6 +208,12 @@ fn owns_building(
             stock: BTreeMap::default(),
             tomorrow_order: BTreeMap::default(),
             open: true,
+            hours: sim_core::businesses::Hours::Day,
+            capacity_per_good: i64::MAX,
+            standing_order: BTreeMap::default(),
+            takings_today: Money::ZERO,
+            sold_today: BTreeMap::default(),
+            lost_sales_today: 0,
         },
     );
 }

@@ -46,3 +46,7 @@ harness = false
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "businesses"
+harness = false

@@ -70,6 +70,12 @@ fn setup(config: &Config, players: u8, buildings: u32) -> (Ledger, Map, Business
                 stock: [("bread".to_owned(), 50)].into(),
                 tomorrow_order: [("bread".to_owned(), 100)].into(),
                 open: true,
+                hours: sim_core::businesses::Hours::Day,
+                capacity_per_good: 100,
+                standing_order: [("bread".to_owned(), 100)].into(),
+                takings_today: Money::ZERO,
+                sold_today: [("bread".to_owned(), 0)].into(),
+                lost_sales_today: 0,
             },
         );
     }

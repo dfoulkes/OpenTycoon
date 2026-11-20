@@ -24,6 +24,8 @@ pub struct SimWorld {
     pub clock: steps::clock::ClockState,
     /// Game under test (`steps::economy`).
     pub economy: steps::economy::EconomyState,
+    /// Businesses under test (`steps::businesses`).
+    pub businesses: steps::businesses::BusinessesState,
 }
 
 fn main() {

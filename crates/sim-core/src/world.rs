@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ai::{AiSeat, Brain};
 use crate::auctions::AuctionHouse;
-use crate::businesses::{BusinessId, Businesses};
+use crate::businesses::{BuildRequest, BusinessId, Businesses, FitOutLevel, LeverError};
 use crate::clock::{Clock, ClockEvents, ClockRules};
 use crate::config::Config;
 use crate::customers::Customers;
@@ -36,7 +36,7 @@ use crate::economy::{
 };
 use crate::events::Events;
 use crate::hash::StableHasher;
-use crate::land::{BlockId, Map};
+use crate::land::{BlockId, Footprint, Map};
 use crate::money::{Money, Rate};
 use crate::population::Population;
 use crate::rng::{SimRng, seeded};
@@ -83,6 +83,48 @@ pub enum Command {
         /// The business; the seller must own it.
         business: BusinessId,
     },
+    /// Open or shut a shop (§7.1).
+    SetOpen {
+        /// Business.
+        business: BusinessId,
+        /// Open?
+        open: bool,
+    },
+    /// Put up a building on a lot you lease (§7.1; R13, R22, R58). Build cost is paid at once
+    /// and must fit within `balance + credit limit` (R7).
+    Build {
+        /// Block.
+        block: BlockId,
+        /// Business type id.
+        type_id: String,
+        /// Footprint in the lot.
+        footprint: Footprint,
+        /// Height in units.
+        height: u32,
+        /// Fit-out.
+        fit_out: FitOutLevel,
+    },
+}
+
+/// Why a businesses command was refused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BusinessCommandError {
+    /// The player doesn't own that business.
+    NotOwner,
+    /// The player doesn't hold the lease on that block.
+    NotLeaseholder,
+    /// The build cost is more than `balance + credit limit` (R7).
+    CannotAfford,
+    /// A building rule refused it.
+    Build(crate::businesses::BuildError),
+    /// A lever refused it.
+    Lever(LeverError),
+}
+
+impl From<LeverError> for BusinessCommandError {
+    fn from(e: LeverError) -> Self {
+        BusinessCommandError::Lever(e)
+    }
 }
 
 /// A player's status.
@@ -196,6 +238,18 @@ impl World {
             if !self.is_active(player) {
                 continue;
             }
+            if matches!(
+                command,
+                Command::SetPrice { .. }
+                    | Command::SetOrder { .. }
+                    | Command::SetOpen { .. }
+                    | Command::Build { .. }
+            ) {
+                // A refused lever or build changes nothing. Reporting rejections to the client
+                // is the protocol's job (M2).
+                let _ = self.apply_business_command(player, command);
+                continue;
+            }
             if let Command::SellToCity { business } = command {
                 // A refused sale (not the seller's, no such business) changes nothing.
                 let _ = economy::bankruptcy::sell_to_city(
@@ -216,6 +270,7 @@ impl World {
     fn midnight_reckoning(&mut self) {
         self.score_net_worth();
         crate::businesses::write_off_stock(&mut self.businesses);
+        self.businesses.lock_orders(); // R2: tomorrow's order locks at midnight
         self.check_solvency();
     }
 
@@ -299,6 +354,8 @@ impl World {
             self.clock.year(),
         ));
         self.ledger.settle(&bills);
+        // R2: exactly the order just billed arrives now.
+        self.businesses.deliver_orders();
     }
 
     /// Phase 6. Owner: auctions.
@@ -335,6 +392,77 @@ impl World {
         reason = "M0 phase stub; the module owner fills it in"
     )]
     fn businesses_phase(&mut self) {}
+
+    // --- businesses ---------------------------------------------------------------------------
+
+    /// Applies one businesses command for `player`. Levers need the player to own the
+    /// business; building needs them to hold the lease and afford the cost (R7).
+    fn apply_business_command(
+        &mut self,
+        player: PlayerId,
+        command: Command,
+    ) -> Result<(), BusinessCommandError> {
+        let me = AccountId::Player(player);
+        let owns = |b: &Businesses, id: BusinessId| b.get(id).is_some_and(|x| x.owner == me);
+        match command {
+            Command::SetPrice {
+                business,
+                good,
+                price,
+            } if owns(&self.businesses, business) => {
+                self.businesses.set_price(business, &good, price)?;
+            }
+            Command::SetOrder {
+                business,
+                good,
+                quantity,
+            } if owns(&self.businesses, business) => {
+                self.businesses.set_order(business, &good, quantity)?;
+            }
+            Command::SetOpen { business, open } if owns(&self.businesses, business) => {
+                self.businesses.set_open(business, open)?;
+            }
+            Command::Build {
+                block,
+                type_id,
+                footprint,
+                height,
+                fit_out,
+            } => {
+                let holds = self
+                    .map
+                    .block(block)
+                    .and_then(|b| b.lease.as_ref())
+                    .is_some_and(|l| l.holder == me);
+                if !holds {
+                    return Err(BusinessCommandError::NotLeaseholder);
+                }
+                let request = BuildRequest {
+                    type_id,
+                    block,
+                    footprint,
+                    height,
+                    owner: me,
+                    fit_out,
+                };
+                let year = self.clock.year();
+                let cost = self
+                    .businesses
+                    .quote_build(&request, &self.config, &self.map, year)
+                    .map_err(BusinessCommandError::Build)?;
+                if spendable(self.ledger.balance(me), self.credit_limit()) < cost {
+                    return Err(BusinessCommandError::CannotAfford);
+                }
+                let (_, cost) = self
+                    .businesses
+                    .build(request, &self.config, &self.map, year)
+                    .map_err(BusinessCommandError::Build)?;
+                self.ledger.transfer(me, AccountId::City, cost);
+            }
+            _ => return Err(BusinessCommandError::NotOwner),
+        }
+        Ok(())
+    }
 
     /// The config this game started with (§10b: never changes mid-game).
     pub fn config(&self) -> &Config {
@@ -481,5 +609,134 @@ impl World {
         self.queued.hash(&mut h);
         self.net_worth.hash(&mut h);
         h.finish()
+    }
+}
+
+#[cfg(test)]
+mod businesses_tests {
+    //! The businesses commands and hooks wired through the real tick.
+    use super::*;
+    use crate::config::{ConfigFile, ConfigSources};
+    use crate::land::Lease;
+
+    fn shipped() -> Config {
+        let text = |f: ConfigFile| match f {
+            ConfigFile::Game => include_str!("../../../config/game.yaml"),
+            ConfigFile::Map => include_str!("../../../config/map.yaml"),
+            ConfigFile::Auctions => include_str!("../../../config/auctions.yaml"),
+            ConfigFile::Utilities => include_str!("../../../config/utilities.yaml"),
+            ConfigFile::Businesses => include_str!("../../../config/businesses.yaml"),
+            ConfigFile::Customers => include_str!("../../../config/customers.yaml"),
+            ConfigFile::Events => include_str!("../../../config/events.yaml"),
+            ConfigFile::Ai => include_str!("../../../config/ai.yaml"),
+        };
+        let mut sources = ConfigSources::new();
+        for f in ConfigFile::ALL {
+            sources.insert(f.file_name(), text(f));
+        }
+        Config::load(&sources).unwrap_or_else(|e| panic!("{e}"))
+    }
+
+    const P0: PlayerId = PlayerId(0);
+    const ME: AccountId = AccountId::Player(P0);
+
+    fn world_with_lease() -> World {
+        let mut w = World::new(shipped(), 7, 2);
+        w.ai.clear();
+        w.map.blocks[0].lease = Some(Lease {
+            holder: ME,
+            start_year: 1930,
+            term_years: 30,
+            last_price: Money::ZERO,
+        });
+        w
+    }
+
+    fn bakery() -> Command {
+        Command::Build {
+            block: BlockId(0),
+            type_id: "bakery".into(),
+            footprint: Footprint {
+                x: 0,
+                y: 0,
+                w: 3,
+                d: 3,
+            },
+            height: 10,
+            fit_out: FitOutLevel::Medium,
+        }
+    }
+
+    fn run_to(w: &mut World, second: u32) {
+        loop {
+            w.tick();
+            if w.clock.second_of_day() == second {
+                break;
+            }
+        }
+    }
+
+    #[test]
+    fn a_leaseholder_builds_orders_receives_and_bins_stock() {
+        let mut w = world_with_lease();
+        let start = w.ledger.balance(ME);
+        w.submit(P0, bakery());
+        w.tick();
+        let id = BusinessId(0);
+        let cost = w.businesses.get(id).map(|b| b.build_cost).unwrap();
+        // Old Kent Road is Low (×0.6): 90 × £10 × 0.6 = £540.
+        assert_eq!(cost, Money::from_pounds(540));
+        assert_eq!(w.ledger.balance(ME), start - cost);
+        let total = w.ledger.total();
+
+        w.submit(
+            P0,
+            Command::SetOrder {
+                business: id,
+                good: "bread".into(),
+                quantity: 40,
+            },
+        );
+        run_to(&mut w, 6 * 3600); // day 0, 06:00: nothing locked yet (R2)
+        assert_eq!(w.businesses.get(id).unwrap().stock_of("bread"), 0);
+        run_to(&mut w, 6 * 3600); // day 1, 06:00
+        assert_eq!(w.businesses.get(id).unwrap().stock_of("bread"), 40);
+        // Two mornings of utilities at £4.50 (costs.feature), one delivery of 40 × 4p = £1.60.
+        assert_eq!(
+            w.ledger.balance(ME),
+            start - cost - Money::from_pence(450 + 450 + 160)
+        );
+        assert_eq!(w.ledger.total(), total, "settlement conserves money");
+        run_to(&mut w, 0);
+        assert_eq!(w.businesses.get(id).unwrap().stock_of("bread"), 0);
+    }
+
+    #[test]
+    fn building_needs_the_lease_and_levers_need_ownership() {
+        let mut w = world_with_lease();
+        w.submit(PlayerId(1), bakery());
+        w.tick();
+        assert!(w.businesses.by_id.is_empty(), "player 1 holds no lease");
+        w.submit(P0, bakery());
+        w.tick();
+        w.submit(
+            PlayerId(1),
+            Command::SetOpen {
+                business: BusinessId(0),
+                open: false,
+            },
+        );
+        w.tick();
+        assert!(w.businesses.get(BusinessId(0)).unwrap().open);
+    }
+
+    #[test]
+    fn building_is_refused_beyond_the_credit_limit() {
+        let mut w = world_with_lease();
+        let poor = -(w.ledger.balance(ME) + Money::from_pounds(10_000));
+        w.ledger.transfer(ME, AccountId::City, -poor);
+        w.submit(P0, bakery());
+        w.tick();
+        assert!(w.businesses.by_id.is_empty());
     }
 }

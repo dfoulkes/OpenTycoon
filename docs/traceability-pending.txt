@@ -2,23 +2,15 @@
 # The traceability test fails if an in-scope ruling is neither tagged nor listed here.
 # Shrink this file: when you tag a scenario that fully proves a ruling, delete its line.
 # Mark partly-proven rulings with 'partial:' so the report shows them.
-R1   # partial: trading hours proven (clock.feature); midnight stock write-off not yet
-R2   # businesses: no mid-day restock; order arrives 06:00
 R4   # partial: hand-over, defaults and city-never-bust proven (economy); city-run businesses actually trading needs businesses/customers trading
 R5   # partial: sell-back to the city proven (economy, sell_back.feature); business auctions pending (auctions)
 R6   # population: no inflation; daily growth drives the economy
 R8   # auctions: pass counts for one round
 R9   # land/auctions: lease expiry re-auction
-R10  # partial: rent and utility bills by building volume proven (economy, settlement.feature); stock capacity pending (businesses)
-R13  # businesses: one building, one type
-R22  # land: 9×9 lot, edge frontage
 R23  # auctions: minimum opening bid
 R25  # customers: spawn at residences and tube stations
 R28  # land/businesses: city apartment block per Low set
 R33  # auctions/land: leases auctioned, not sold
-R35  # businesses: no staff costs
-R41  # businesses: no wear; property value = build cost
 R55  # customers: allowance and desires by age, class, sex
-R57  # businesses: no height cap by era
 R60  # population: age bands
 R61  # population: cohort model
