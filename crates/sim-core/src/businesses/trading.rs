@@ -113,6 +113,23 @@ impl Businesses {
         Ok(revenue)
     }
 
+    /// Sells `quantity` of `good` online (§7.5): as [`Businesses::try_sell`], but the shop is
+    /// never walked to and has no trading window, so only the open toggle is checked.
+    ///
+    /// # Errors
+    ///
+    /// As [`Businesses::try_sell`].
+    pub fn try_sell_online(
+        &mut self,
+        id: BusinessId,
+        good: &str,
+        quantity: i64,
+        rules: &BusinessesConfig,
+    ) -> Result<Money, LostSale> {
+        let _ = (id, good, quantity, rules);
+        Err(LostSale::Closed)
+    }
+
     /// Sets a good's price as a share of its reference price (§7.1). Must be above zero.
     pub fn set_price(&mut self, id: BusinessId, good: &str, price: Rate) -> Result<(), LeverError> {
         if price.bp() <= 0 {

@@ -17,7 +17,8 @@
 //! | [`businesses`] | buildings, types, prices, orders, stock |
 //! | [`utilities`] | utility bills and holders |
 //! | [`population`] | cohort model and arrivals |
-//! | [`customers`] | shoppers, scoring, shop choice |
+//! | [`customers`] | shoppers, scoring, shop choice, online demand |
+//! | [`hotels`] | the Hotel unlock, one per set, rooms |
 //! | [`ai`] | AI opponents |
 //! | [`events`] | history, random events, elections |
 //! | [`world`] | owns all state; the fixed tick order |
@@ -37,6 +38,7 @@ pub mod customers;
 pub mod economy;
 pub mod events;
 pub mod hash;
+pub mod hotels;
 pub mod land;
 pub mod money;
 pub mod population;

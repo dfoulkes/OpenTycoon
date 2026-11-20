@@ -191,6 +191,28 @@
       ],
       "type": "object"
     },
+    "HotelSettings": {
+      "additionalProperties": false,
+      "description": "The Hotel (§7.3): which type it is and how its rooms are counted (R14, R29, R30).",
+      "properties": {
+        "building_type": {
+          "description": "The business type id that is a Hotel. It trades in the hotel window (`hours: hotel`),\nholds no stock (`stock_density: 0`) and sells one good, the room night, whose\n`ref_price` is the reference room price (R30).",
+          "type": "string"
+        },
+        "room_size": {
+          "description": "Units of building volume per room: `rooms = volume ÷ room_size` (R30, like flats, R50).",
+          "format": "uint32",
+          "maximum": 10000,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "building_type",
+        "room_size"
+      ],
+      "type": "object"
+    },
     "Hours": {
       "description": "When a business trades (§2.2, §7.1).",
       "oneOf": [
@@ -295,6 +317,10 @@
       "description": "Goods catalogue, keyed by good id.",
       "type": "object"
     },
+    "hotel": {
+      "$ref": "#/$defs/HotelSettings",
+      "description": "The Hotel (§7.3; R14, R29, R30)."
+    },
     "reference": {
       "$ref": "#/$defs/ReferenceShop",
       "description": "The reference shop the stats formula is built around (docs/economy.md)."
@@ -312,7 +338,8 @@
     "fit_out",
     "reference",
     "goods",
-    "types"
+    "types",
+    "hotel"
   ],
   "title": "BusinessesConfig",
   "type": "object"

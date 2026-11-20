@@ -136,3 +136,19 @@ residential:                    # §7.2
   reference_rent: 3.00          # placeholder: ref price for rent in price_factor (R51)
   stretch_min_desirability: 1.0 # placeholder: affinity × appeal needed to stretch to 50% (R52)
   rehunt_unhoused: true         # unhoused residents of the city look again while flats are empty
+tourists:                       # §7.3, R29
+  desire_boost: { souvenirs: 5.0 }   # placeholder: the Souvenir Shop's bonus from tourists
+online:                         # §7.5; R15, R36. online_share(year, good) = share_by_year × good_multiplier
+  share_by_year:                # placeholder: straight lines between years; 0 before 1995
+    1995: 0.02
+    2000: 0.05
+    2010: 0.15
+    2020: 0.30
+    2050: 0.45
+  good_multiplier:              # placeholder; goods not named are × 1
+    bread: 0.3
+    meals: 0.5
+  brand:                        # an online seller's pull, building over time (§7.5)
+    initial: 0.2                # placeholder
+    growth_per_day: 0.1         # placeholder
+    max: 1.0

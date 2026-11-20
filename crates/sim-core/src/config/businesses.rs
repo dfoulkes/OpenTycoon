@@ -22,6 +22,21 @@ pub struct BusinessesConfig {
     pub goods: BTreeMap<String, Good>,
     /// Business types, keyed by type id.
     pub types: BTreeMap<String, BusinessType>,
+    /// The Hotel (§7.3; R14, R29, R30).
+    pub hotel: HotelSettings,
+}
+
+/// The Hotel (§7.3): which type it is and how its rooms are counted (R14, R29, R30).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct HotelSettings {
+    /// The business type id that is a Hotel. It trades in the hotel window (`hours: hotel`),
+    /// holds no stock (`stock_density: 0`) and sells one good, the room night, whose
+    /// `ref_price` is the reference room price (R30).
+    pub building_type: String,
+    /// Units of building volume per room: `rooms = volume ÷ room_size` (R30, like flats, R50).
+    #[schemars(range(min = 1, max = 10000))]
+    pub room_size: u32,
 }
 
 /// Fit-out levels.

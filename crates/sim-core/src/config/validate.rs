@@ -23,6 +23,8 @@ pub fn check(config: &Config) -> Vec<ConfigError> {
     check_auctions(config, &mut errors);
     check_utilities(config, &mut errors);
     check_eras(config, &mut errors);
+    check_hotel(config, &mut errors);
+    check_tourists_and_online(config, &mut errors);
     errors
 }
 
@@ -1081,5 +1083,94 @@ fn check_eras(config: &Config, errors: &mut Vec<ConfigError>) {
                 );
             }
         }
+    }
+}
+
+/// `businesses.yaml` `hotel`: the Hotel type exists, trades in the hotel window, holds no stock
+/// and sells rooms, not goods (§7.3; R29, R30).
+fn check_hotel(config: &Config, errors: &mut Vec<ConfigError>) {
+    use crate::businesses::Hours;
+    let file = ConfigFile::Businesses;
+    let at = "/hotel/building_type";
+    let id = &config.businesses.hotel.building_type;
+    let Some(kind) = config.businesses.types.get(id) else {
+        err(
+            errors,
+            file,
+            at.into(),
+            format!("unknown business type {id:?}"),
+        );
+        return;
+    };
+    if kind.hours != Hours::Hotel {
+        err(
+            errors,
+            file,
+            at.into(),
+            "a Hotel type must have hours: hotel (R30)".into(),
+        );
+    }
+    if kind.stock_density.rate() != Rate::ZERO {
+        err(
+            errors,
+            file,
+            at.into(),
+            "a Hotel type must have stock_density: 0 (R30)".into(),
+        );
+    }
+    if !kind.goods.is_empty() {
+        err(
+            errors,
+            file,
+            at.into(),
+            "a Hotel type sells rooms, not goods: goods: []".into(),
+        );
+    }
+}
+
+/// `customers.yaml` `tourists` and `online`: known goods, shares between 0 and 1, year keys,
+/// non-negative multipliers, and a brand that starts at or below its cap (§7.3, §7.5).
+fn check_tourists_and_online(config: &Config, errors: &mut Vec<ConfigError>) {
+    let file = ConfigFile::Customers;
+    let goods = &config.businesses.goods;
+    let c = &config.customers;
+    for (section, map) in [
+        ("/tourists/desire_boost", &c.tourists.desire_boost),
+        ("/online/good_multiplier", &c.online.good_multiplier),
+    ] {
+        for (good, x) in map {
+            let at = format!("{section}/{good}");
+            if !goods.contains_key(good) {
+                err(
+                    errors,
+                    file,
+                    at.clone(),
+                    format!("unknown good {good:?} (not in businesses.yaml)"),
+                );
+            }
+            if !(x.is_finite() && *x >= 0.0) {
+                err(errors, file, at, "must be a number of at least 0".into());
+            }
+        }
+    }
+    for (year, share) in &c.online.share_by_year {
+        let at = format!("/online/share_by_year/{year}");
+        check_year_key(errors, file, at.clone(), year);
+        if !(0.0..=1.0).contains(share) {
+            err(
+                errors,
+                file,
+                at,
+                "an online share must be between 0 and 1".into(),
+            );
+        }
+    }
+    if c.online.brand.initial > c.online.brand.max {
+        err(
+            errors,
+            file,
+            "/online/brand/initial".into(),
+            "must be at most brand.max".into(),
+        );
     }
 }
