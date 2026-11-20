@@ -24,3 +24,10 @@ Feature: Performance budget check
     When I run sim-cli "perf-budget config --budget gaem_day_ms=1"
     Then sim-cli fails
     And its error output contains "game_day_ms"
+
+  @spec-11
+  Scenario: A budgets file whose limits contradict each other is refused before measuring
+    When I run sim-cli "perf-budget config --budgets crates/sim-cli/tests/fixtures/inconsistent-budgets.yaml"
+    Then sim-cli fails
+    And its error output contains "inconsistent budgets"
+    And its error output contains "tick_p99_us"

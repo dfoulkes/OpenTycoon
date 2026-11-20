@@ -29,11 +29,19 @@ use crate::timing::Stopwatch;
 pub enum Metric {
     /// Wall ms to simulate one game day, shipped config, v1 preset, 2 players.
     GameDayMs,
+    /// Mean tick time, µs, same scenario (`game_day_ms` per tick).
+    TickMeanUs,
     /// p99 tick time, µs, same scenario.
     TickP99Us,
+    /// Wall ms per game day with `customers.initial_population = 10000`.
+    #[serde(rename = "game_day_ms_10k_agents")]
+    GameDayMs10kAgents,
     /// p99 tick time, µs, with `customers.initial_population = 10000`.
     #[serde(rename = "tick_p99_us_10k_agents")]
     TickP99Us10kAgents,
+    /// Slowest tick, µs, with `customers.initial_population = 20000` (median over the runs).
+    #[serde(rename = "tick_max_us_20k_agents")]
+    TickMaxUs20kAgents,
     /// Seconds for 1,000 v1 games on every core, extrapolated from a sample batch.
     #[serde(rename = "batch_1000_games_s")]
     Batch1000GamesS,
@@ -43,10 +51,13 @@ pub enum Metric {
 
 impl Metric {
     /// Every metric.
-    pub const ALL: [Metric; 5] = [
+    pub const ALL: [Metric; 8] = [
         Metric::GameDayMs,
+        Metric::TickMeanUs,
         Metric::TickP99Us,
+        Metric::GameDayMs10kAgents,
         Metric::TickP99Us10kAgents,
+        Metric::TickMaxUs20kAgents,
         Metric::Batch1000GamesS,
         Metric::ConfigLoadMs,
     ];
@@ -55,8 +66,11 @@ impl Metric {
     pub const fn name(self) -> &'static str {
         match self {
             Metric::GameDayMs => "game_day_ms",
+            Metric::TickMeanUs => "tick_mean_us",
             Metric::TickP99Us => "tick_p99_us",
+            Metric::GameDayMs10kAgents => "game_day_ms_10k_agents",
             Metric::TickP99Us10kAgents => "tick_p99_us_10k_agents",
+            Metric::TickMaxUs20kAgents => "tick_max_us_20k_agents",
             Metric::Batch1000GamesS => "batch_1000_games_s",
             Metric::ConfigLoadMs => "config_load_ms",
         }
@@ -125,6 +139,62 @@ impl Budgets {
         }
         Ok(b)
     }
+}
+
+/// The fastest speed a multiplayer vote can set (spec: up to 4×).
+pub const MAX_SPEED: u32 = 4;
+
+/// Share of the ticks at or above the p99 (1%).
+const P99_TAIL: f64 = 0.01;
+
+/// Checks that the limits in `budgets` agree with each other (docs/perf.md "Deriving the
+/// budgets"), so that no limit is unreachable while another passes:
+///
+/// - `tick_mean_us` is `game_day_ms` per tick (within 1%);
+/// - the slowest 1% of ticks at the p99 limit fit inside the day limit, for the shipped and the
+///   10k scenarios (`p99 × 1% × ticks_per_day ≤ day`);
+/// - `tick_max_us_20k_agents` fits in one tick interval at [`MAX_SPEED`].
+///
+/// Returns one message per broken rule; empty means consistent. Rules whose metrics are
+/// missing are skipped.
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "ticks per day and ms per day are far below 2^52"
+)]
+pub fn consistency(budgets: &Budgets, ticks_per_day: u32, real_ms_per_day: u64) -> Vec<String> {
+    let limit = |m: Metric| budgets.budgets.get(&m).map(|b| b.limit);
+    let tpd = f64::from(ticks_per_day);
+    let mut issues = Vec::new();
+    if let (Some(day), Some(mean)) = (limit(Metric::GameDayMs), limit(Metric::TickMeanUs)) {
+        let implied = mean * tpd / 1_000.0;
+        if (implied - day).abs() > day * 0.01 {
+            issues.push(format!(
+                "tick_mean_us {mean} × {ticks_per_day} ticks = {implied:.3} ms, but game_day_ms is {day}"
+            ));
+        }
+    }
+    for (day_m, p99_m) in [
+        (Metric::GameDayMs, Metric::TickP99Us),
+        (Metric::GameDayMs10kAgents, Metric::TickP99Us10kAgents),
+    ] {
+        if let (Some(day), Some(p99)) = (limit(day_m), limit(p99_m)) {
+            let tail_ms = p99 * P99_TAIL * tpd / 1_000.0;
+            if tail_ms > day {
+                issues.push(format!(
+                    "{p99_m} {p99} µs: the slowest 1% of ticks alone would take {tail_ms:.3} ms, over {day_m} {day}"
+                ));
+            }
+        }
+    }
+    if let Some(max) = limit(Metric::TickMaxUs20kAgents) {
+        let interval_us = real_ms_per_day as f64 * 1_000.0 / tpd / f64::from(MAX_SPEED);
+        if max > interval_us {
+            issues.push(format!(
+                "tick_max_us_20k_agents {max} µs is longer than one tick at {MAX_SPEED}× ({interval_us:.0} µs)"
+            ));
+        }
+    }
+    issues
 }
 
 /// Pass or fail for one metric.
@@ -270,21 +340,33 @@ pub fn measure(
         repeats: spec.repeats,
         ..BenchSpec::default()
     };
-    if metrics.contains(&Metric::GameDayMs) || metrics.contains(&Metric::TickP99Us) {
+    let wants = |set: &[Metric]| set.iter().any(|m| metrics.contains(m));
+    if wants(&[Metric::GameDayMs, Metric::TickMeanUs, Metric::TickP99Us]) {
         let r = bench(&config, "shipped", &bench_spec);
         out.insert(Metric::GameDayMs, r.ms_per_game_day);
+        out.insert(Metric::TickMeanUs, r.tick_mean_us);
         out.insert(Metric::TickP99Us, r.tick_latency.p99_ns as f64 / 1_000.0);
     }
-    if metrics.contains(&Metric::TickP99Us10kAgents) {
-        let big = overrides::load(
+    let agents = |n: u64| -> Result<sim_core::Config, MeasureError> {
+        Ok(overrides::load(
             sources,
             Some(spec.preset),
-            &["customers.initial_population=10000".parse()?],
-        )?;
-        let r = bench(&big, "synthetic-10000-agents", &bench_spec);
+            &[format!("customers.initial_population={n}").parse()?],
+        )?)
+    };
+    if wants(&[Metric::GameDayMs10kAgents, Metric::TickP99Us10kAgents]) {
+        let r = bench(&agents(10_000)?, "synthetic-10000-agents", &bench_spec);
+        out.insert(Metric::GameDayMs10kAgents, r.ms_per_game_day);
         out.insert(
             Metric::TickP99Us10kAgents,
             r.tick_latency.p99_ns as f64 / 1_000.0,
+        );
+    }
+    if wants(&[Metric::TickMaxUs20kAgents]) {
+        let r = bench(&agents(20_000)?, "synthetic-20000-agents", &bench_spec);
+        out.insert(
+            Metric::TickMaxUs20kAgents,
+            r.tick_latency.max_ns as f64 / 1_000.0,
         );
     }
     if metrics.contains(&Metric::Batch1000GamesS) && spec.batch_sample > 0 {
@@ -398,5 +480,57 @@ mod tests {
         for m in Metric::ALL {
             assert!(b.budgets.contains_key(&m), "{m} has no budget");
         }
+    }
+
+    fn limits(pairs: &[(Metric, f64)]) -> Budgets {
+        Budgets {
+            tolerance: 0.2,
+            reference_machine: String::new(),
+            budgets: pairs
+                .iter()
+                .map(|(m, l)| {
+                    (
+                        *m,
+                        Budget {
+                            limit: *l,
+                            baseline: None,
+                            why: String::new(),
+                        },
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    const DAY_MS: u64 = 20 * 60 * 1_000;
+
+    #[test]
+    fn the_shipped_budgets_are_consistent() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../perf/budgets.yaml");
+        let b = Budgets::from_yaml(&std::fs::read_to_string(path).unwrap()).unwrap();
+        assert_eq!(consistency(&b, 8_640, DAY_MS), Vec::<String>::new());
+    }
+
+    #[test]
+    fn the_old_contradictory_budgets_are_rejected() {
+        // Before customers landed: p99 < 1 ms allowed 86 ms in the top 1% of ticks alone,
+        // against a 50 ms day.
+        let old = limits(&[(Metric::GameDayMs, 50.0), (Metric::TickP99Us, 1_000.0)]);
+        let issues = consistency(&old, 8_640, DAY_MS);
+        assert_eq!(issues.len(), 1, "{issues:?}");
+        assert!(issues[0].contains("tick_p99_us"), "{issues:?}");
+    }
+
+    #[test]
+    fn mean_must_match_the_day_and_max_must_fit_a_4x_tick() {
+        let b = limits(&[
+            (Metric::GameDayMs, 20.0),
+            (Metric::TickMeanUs, 5.0),
+            (Metric::TickMaxUs20kAgents, 40_000.0),
+        ]);
+        let issues = consistency(&b, 8_640, DAY_MS);
+        assert_eq!(issues.len(), 2, "{issues:?}");
+        assert!(issues[0].contains("tick_mean_us"));
+        assert!(issues[1].contains("tick_max_us_20k_agents"));
     }
 }

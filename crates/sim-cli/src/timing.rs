@@ -22,4 +22,9 @@ impl Stopwatch {
     pub fn elapsed(&self) -> Duration {
         self.0.elapsed()
     }
+
+    /// Time from `earlier` to this stopwatch's start (zero if `earlier` started later).
+    pub fn since(&self, earlier: &Stopwatch) -> Duration {
+        self.0.saturating_duration_since(earlier.0)
+    }
 }

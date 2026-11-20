@@ -449,6 +449,16 @@ pub fn spawn_wave(
     let default_rent = rules.residential.default_rent.money();
     let pop = inputs.population;
     let mut spawned = 0;
+    // At most everyone steps out: reserve once rather than regrow the vector mid-wave.
+    let visitors: u64 = if stations.is_empty() {
+        0
+    } else {
+        pop.pool.values().sum()
+    };
+    let most = u64::try_from(pop.residential.residents.len()).map_or(0, |r| r + visitors);
+    state.agents.reserve(usize::try_from(most).unwrap_or(0));
+    // Every member of a cohort rolls from the same candidates this wave; resolve them once.
+    let mut candidates: BTreeMap<Cohort, shopping::Candidates> = BTreeMap::new();
 
     let mut spawn = |state: &mut Customers,
                      cohort: Cohort,
@@ -459,7 +469,10 @@ pub fn spawn_wave(
         if budget <= Money::ZERO {
             return;
         }
-        let list = shopping::roll_list(rules, goods, cohort, window, year, rng);
+        let cohort_goods = candidates
+            .entry(cohort)
+            .or_insert_with(|| shopping::candidates(rules, goods, cohort, window, year));
+        let list = shopping::roll_from(cohort_goods, rng);
         if list.is_empty() {
             return;
         }

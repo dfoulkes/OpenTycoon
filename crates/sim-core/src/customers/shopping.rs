@@ -55,6 +55,46 @@ pub fn desire_weights(
     out
 }
 
+/// The goods a shopper might roll, with `P(good) > 0`, in catalogue (name) order: the
+/// [`desire_weights`] of one cohort, window and year resolved to ids once, so a wave rolls
+/// every member of a cohort from the same list ([`roll_from`]).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Candidates(Vec<(GoodId, f64)>);
+
+/// [`Candidates`] for a cohort, window and year.
+pub fn candidates(
+    rules: &CustomersConfig,
+    goods: &GoodsIndex,
+    cohort: Cohort,
+    window: Hours,
+    year: i32,
+) -> Candidates {
+    let mut out = Vec::new();
+    for (name, p) in desire_weights(rules, cohort, window, year) {
+        if p <= 0.0 {
+            continue;
+        }
+        let Some(id) = goods.id(name) else {
+            continue;
+        };
+        out.push((id, p));
+    }
+    Candidates(out)
+}
+
+/// Rolls a shopping list from [`candidates`]: each good is on it with probability `P`, one
+/// draw per candidate, in order.
+pub fn roll_from(candidates: &Candidates, rng: &mut SimRng) -> Vec<GoodId> {
+    let mut list: Vec<GoodId> = Vec::new();
+    for &(id, p) in &candidates.0 {
+        if unit_f64(rng) < p {
+            list.push(id);
+        }
+    }
+    list.sort();
+    list
+}
+
 /// Rolls a shopping list: each good with `P > 0` is on it with probability `P`, in catalogue
 /// order. One draw per candidate good.
 pub fn roll_list(
@@ -65,18 +105,5 @@ pub fn roll_list(
     year: i32,
     rng: &mut SimRng,
 ) -> Vec<GoodId> {
-    let mut list: Vec<GoodId> = Vec::new();
-    for (name, p) in desire_weights(rules, cohort, window, year) {
-        if p <= 0.0 {
-            continue;
-        }
-        let Some(id) = goods.id(name) else {
-            continue;
-        };
-        if unit_f64(rng) < p {
-            list.push(id);
-        }
-    }
-    list.sort();
-    list
+    roll_from(&candidates(rules, goods, cohort, window, year), rng)
 }

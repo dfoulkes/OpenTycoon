@@ -21,9 +21,12 @@ use clap::{Args, Parser, Subcommand};
 use sim_cli::batch::{BatchSpec, Timing, run_batch, summarise, write_csv};
 use sim_cli::bench::{BenchSpec, bench};
 use sim_cli::brains::BrainKind;
-use sim_cli::budget::{Budget, Budgets, MeasureSpec, Metric, all_pass, check, measure, table};
+use sim_cli::budget::{
+    Budget, Budgets, MeasureSpec, Metric, all_pass, check, consistency, measure, table,
+};
 use sim_cli::game::GameSpec;
 use sim_cli::overrides::{self, LoadError, Override};
+use sim_core::clock::ClockRules;
 use sim_core::config::ConfigFile;
 use sim_core::{Config, ConfigSources, World};
 
@@ -159,6 +162,9 @@ struct BenchArgs {
     /// Game length preset from game.yaml.
     #[arg(long, default_value = "v1")]
     preset: String,
+    /// Also time each tick phase (one extra run; adds a `phases` object to the JSON).
+    #[arg(long)]
+    phases: bool,
 }
 
 #[derive(Args, Debug)]
@@ -355,6 +361,7 @@ fn bench_cmd(args: BenchArgs) -> Result<ExitCode> {
         players,
         agents,
         preset,
+        phases,
     } = args;
     let scenario = match agents {
         Some(n) => {
@@ -373,6 +380,7 @@ fn bench_cmd(args: BenchArgs) -> Result<ExitCode> {
         repeats,
         seed,
         players,
+        phases,
     };
     let report = bench(&loaded, &scenario, &spec);
     println!("{}", serde_json::to_string_pretty(&report)?);
@@ -393,6 +401,22 @@ fn perf_budget_cmd(args: PerfArgs) -> Result<ExitCode> {
         .with_context(|| format!("reading {}", budgets.display()))?;
     let mut file =
         Budgets::from_yaml(&text).map_err(|e| anyhow::anyhow!("{}: {e}", budgets.display()))?;
+    let Some(sources) = read_sources(&dir) else {
+        return Ok(ExitCode::FAILURE);
+    };
+    // The file's own limits must agree with each other (docs/perf.md); command-line overrides
+    // are experiments and are not held to it.
+    let clock = ClockRules::from_config(&overrides::load(&sources, None, &[])?.game.clock);
+    let issues = consistency(&file, clock.ticks_per_day(), clock.real_millis_per_day());
+    if !issues.is_empty() {
+        for issue in &issues {
+            eprintln!(
+                "perf-budget: {}: inconsistent budgets: {issue}",
+                budgets.display()
+            );
+        }
+        return Ok(ExitCode::FAILURE);
+    }
     for (metric, limit) in limits {
         file.budgets
             .entry(metric)
@@ -406,9 +430,6 @@ fn perf_budget_cmd(args: PerfArgs) -> Result<ExitCode> {
     if !only.is_empty() {
         file.budgets.retain(|m, _| only.contains(m));
     }
-    let Some(sources) = read_sources(&dir) else {
-        return Ok(ExitCode::FAILURE);
-    };
     let metrics: Vec<Metric> = file.budgets.keys().copied().collect();
     let spec = MeasureSpec {
         batch_sample,
