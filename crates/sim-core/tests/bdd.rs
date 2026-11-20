@@ -40,6 +40,8 @@ pub struct SimWorld {
     pub hotels: steps::hotels::HotelsState,
     /// The AI roster, driven seat by seat (`steps::roster`).
     pub roster: steps::roster::RosterState,
+    /// The full board outside a game (`steps::board`).
+    pub board: steps::board::BoardState,
 }
 
 fn main() {

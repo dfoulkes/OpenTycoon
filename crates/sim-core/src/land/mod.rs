@@ -7,6 +7,7 @@
 //! lease to a player except [`Map::grant_lease`], which only the world calls when an auction
 //! closes. Buildings live in [`crate::businesses`].
 
+pub mod board;
 pub mod lot;
 
 use std::collections::BTreeMap;
@@ -17,7 +18,9 @@ use serde::{Deserialize, Serialize};
 use crate::config::map::MapConfig;
 use crate::economy::AccountId;
 use crate::money::{Money, Rate};
+use crate::utilities::UtilityKind;
 
+pub use board::{MapError, StationWeight, TierShift, stations_in};
 pub use lot::{Lot, PlacementError, Position, Size};
 
 /// Desirability tier (§4.1).
@@ -148,6 +151,10 @@ pub struct Block {
     pub land_base_price: Money,
     /// Current lease, if any. Unleased land pays rent to the city.
     pub lease: Option<Lease>,
+    /// The utility on a utility block (§6).
+    pub utility: Option<UtilityKind>,
+    /// Year the block was last damaged ([`Map::damage_block`]), if ever.
+    pub damaged_in: Option<i32>,
 }
 
 /// The map: every block, row-major.
@@ -159,6 +166,17 @@ pub struct Map {
     pub height: u32,
     /// Blocks, indexed by [`BlockId`].
     pub blocks: Vec<Block>,
+    /// Where the river cuts the road grid, if there is one (§4.1).
+    pub river: Option<RiverCrossing>,
+}
+
+/// A river between two rows: roads cross it only at bridges (§4.1).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub struct RiverCrossing {
+    /// The river runs along the south edge of this row.
+    pub south_of_row: u32,
+    /// Columns with a bridge, ascending.
+    pub bridges: Vec<u32>,
 }
 
 impl Map {
@@ -179,13 +197,25 @@ impl Map {
                     .land_base_price
                     .map_or(Money::ZERO, super::config::types::Pounds::money),
                 lease: None,
+                utility: b.utility.map(crate::config::map::UtilitySite::kind),
+                damaged_in: None,
             })
             .collect();
         blocks.sort_by_key(|b| (b.row, b.col));
+        let river = config.river.as_ref().map(|r| {
+            let mut bridges = r.bridges.clone();
+            bridges.sort_unstable();
+            bridges.dedup();
+            RiverCrossing {
+                south_of_row: r.south_of_row,
+                bridges,
+            }
+        });
         Map {
             width: config.grid.width,
             height: config.grid.height,
             blocks,
+            river,
         }
     }
 
@@ -203,18 +233,6 @@ impl Map {
             }
         }
         sets
-    }
-
-    /// True if `holder` holds the lease on every block of colour set `set` (R14: that unlocks
-    /// the set's Hotel). False for an unknown or empty set.
-    pub fn holds_full_set(&self, holder: AccountId, set: &str) -> bool {
-        let mut blocks = self
-            .blocks
-            .iter()
-            .filter(|b| b.set.as_deref() == Some(set))
-            .peekable();
-        blocks.peek().is_some()
-            && blocks.all(|b| b.lease.as_ref().is_some_and(|l| l.holder == holder))
     }
 
     /// The id of the block with config id `key` (e.g. `old_kent_road`).

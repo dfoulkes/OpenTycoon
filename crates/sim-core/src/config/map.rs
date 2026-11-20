@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use super::types::{Pounds, Ratio};
 use crate::land::{BlockKind, ColourBand, Tier};
+use crate::utilities::UtilityKind;
 
 /// Which board a game is played on (R26).
 #[derive(
@@ -56,6 +57,8 @@ pub struct MapFile {
     pub tiers: TierTable,
     /// Land rent per unit of building volume per day, before the tier multiplier (§5.3, R10).
     pub land_base_rate: Pounds,
+    /// Tube lines by id, shared by every board (§4.3).
+    pub tube_lines: BTreeMap<String, TubeLine>,
     /// Every board, keyed by name.
     pub boards: Boards,
 }
@@ -94,7 +97,10 @@ impl MapFile {
             board: choice,
             tiers: self.tiers.clone(),
             land_base_rate: self.land_base_rate,
+            tube_lines: self.tube_lines.clone(),
             grid: board.grid,
+            river: board.river,
+            desirability_shifts: board.desirability_shifts,
             sets: board.sets,
             blocks: board.blocks,
             tube_stations: board.tube_stations,
@@ -109,6 +115,13 @@ impl MapFile {
 pub struct Board {
     /// Grid size in blocks.
     pub grid: GridSettings,
+    /// The river running between two rows, crossed only at bridges (§4.1). None: no river.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "River")]
+    pub river: Option<River>,
+    /// Desirability shifts over the years (§4.2, R16), applied at the midnight year step.
+    #[serde(default)]
+    pub desirability_shifts: Vec<DesirabilityShift>,
     /// Colour sets (R14, R26), keyed by set id.
     pub sets: BTreeMap<String, SetSettings>,
     /// Every block on the grid, exactly one per cell.
@@ -131,6 +144,12 @@ pub struct MapConfig {
     pub tiers: TierTable,
     /// Land rent per unit of building volume per day, before the tier multiplier (§5.3, R10).
     pub land_base_rate: Pounds,
+    /// Tube lines by id (§4.3).
+    pub tube_lines: BTreeMap<String, TubeLine>,
+    /// The river, if any (§4.1).
+    pub river: Option<River>,
+    /// Desirability shifts over the years (§4.2, R16).
+    pub desirability_shifts: Vec<DesirabilityShift>,
     /// Colour sets (R14, R26), keyed by set id.
     pub sets: BTreeMap<String, SetSettings>,
     /// Every block on the grid, exactly one per cell.
@@ -246,6 +265,82 @@ pub struct BlockSettings {
     pub set: Option<String>,
     /// Minimum opening bid at auction (R23). Required for buildable blocks.
     pub land_base_price: Option<Pounds>,
+    /// Which utility stands here. Required on utility blocks, refused on any other.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "UtilitySite")]
+    pub utility: Option<UtilitySite>,
+}
+
+/// The utility a utility block holds (§6, R24). Not a set.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum UtilitySite {
+    /// Electricity.
+    Electricity,
+    /// Gas.
+    Gas,
+    /// Water.
+    Water,
+    /// Telephone exchange, the internet from 1995 (R11).
+    Telecoms,
+}
+
+impl UtilitySite {
+    /// The utility it holds.
+    pub const fn kind(self) -> UtilityKind {
+        match self {
+            UtilitySite::Electricity => UtilityKind::Electricity,
+            UtilitySite::Gas => UtilityKind::Gas,
+            UtilitySite::Water => UtilityKind::Water,
+            UtilitySite::Telecoms => UtilityKind::Telecoms,
+        }
+    }
+}
+
+/// A river between two rows of blocks, crossed by road only at bridges (§4.1: "the Thames runs
+/// between rows as a gap with bridges, not as a row of blocks").
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct River {
+    /// Display name.
+    pub name: String,
+    /// The river runs along the south edge of this row (0-based), so between it and the next.
+    pub south_of_row: u32,
+    /// Columns with a bridge over it. A board split by a river needs at least one.
+    pub bridges: Vec<u32>,
+}
+
+/// One tube line (§4.3).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TubeLine {
+    /// Display name.
+    pub name: String,
+    /// Footfall weight each of its open stations adds to the block it sits on: customers
+    /// arrive at a station block in proportion to the sum over its open lines.
+    #[schemars(range(min = 1, max = 1000))]
+    pub footfall_weight: u32,
+}
+
+/// A district's desirability shift (§4.2, R16): from `year` the block is `tier` and its
+/// minimum opening bid is `land_base_price` (R23: the price tracks desirability). Applied at
+/// the first midnight year step that reaches `year`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DesirabilityShift {
+    /// Block id.
+    pub block: String,
+    /// First year of the new tier.
+    #[schemars(range(min = 1800, max = 2500))]
+    pub year: i32,
+    /// The new tier.
+    pub tier: Tier,
+    /// The new minimum opening bid (R23).
+    pub land_base_price: Pounds,
+    /// Front-page headline announcing the shift on the year step (§4.2).
+    pub headline: String,
 }
 
 /// A tube station sitting on a block (§4.3).
@@ -254,7 +349,7 @@ pub struct BlockSettings {
 pub struct TubeStation {
     /// Block id the station sits on.
     pub block: String,
-    /// Line name.
+    /// Line id: a key of `tube_lines`.
     pub line: String,
     /// Year the line opens at this station.
     #[schemars(range(min = 1800, max = 2500))]

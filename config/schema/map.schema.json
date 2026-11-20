@@ -65,6 +65,10 @@
         "tier": {
           "$ref": "#/$defs/Tier",
           "description": "Desirability tier."
+        },
+        "utility": {
+          "$ref": "#/$defs/UtilitySite",
+          "description": "Which utility stands here. Required on utility blocks, refused on any other."
         }
       },
       "required": [
@@ -92,9 +96,21 @@
           "$ref": "#/$defs/CityApartments",
           "description": "The city's starting apartment blocks: one in each Low-tier set (R28)."
         },
+        "desirability_shifts": {
+          "default": [],
+          "description": "Desirability shifts over the years (§4.2, R16), applied at the midnight year step.",
+          "items": {
+            "$ref": "#/$defs/DesirabilityShift"
+          },
+          "type": "array"
+        },
         "grid": {
           "$ref": "#/$defs/GridSettings",
           "description": "Grid size in blocks."
+        },
+        "river": {
+          "$ref": "#/$defs/River",
+          "description": "The river running between two rows, crossed only at bridges (§4.1). None: no river."
         },
         "sets": {
           "additionalProperties": {
@@ -247,6 +263,43 @@
         }
       ]
     },
+    "DesirabilityShift": {
+      "additionalProperties": false,
+      "description": "A district's desirability shift (§4.2, R16): from `year` the block is `tier` and its\nminimum opening bid is `land_base_price` (R23: the price tracks desirability). Applied at\nthe first midnight year step that reaches `year`.",
+      "properties": {
+        "block": {
+          "description": "Block id.",
+          "type": "string"
+        },
+        "headline": {
+          "description": "Front-page headline announcing the shift on the year step (§4.2).",
+          "type": "string"
+        },
+        "land_base_price": {
+          "description": "The new minimum opening bid (R23).",
+          "type": "number"
+        },
+        "tier": {
+          "$ref": "#/$defs/Tier",
+          "description": "The new tier."
+        },
+        "year": {
+          "description": "First year of the new tier.",
+          "format": "int32",
+          "maximum": 2500,
+          "minimum": 1800,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "block",
+        "year",
+        "tier",
+        "land_base_price",
+        "headline"
+      ],
+      "type": "object"
+    },
     "GridSettings": {
       "additionalProperties": false,
       "description": "Grid size in blocks (§4.1: 9×9 for the full game).",
@@ -286,6 +339,37 @@
           "type": "string"
         }
       ]
+    },
+    "River": {
+      "additionalProperties": false,
+      "description": "A river between two rows of blocks, crossed by road only at bridges (§4.1: \"the Thames runs\nbetween rows as a gap with bridges, not as a row of blocks\").",
+      "properties": {
+        "bridges": {
+          "description": "Columns with a bridge over it. A board split by a river needs at least one.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "name": {
+          "description": "Display name.",
+          "type": "string"
+        },
+        "south_of_row": {
+          "description": "The river runs along the south edge of this row (0-based), so between it and the next.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "south_of_row",
+        "bridges"
+      ],
+      "type": "object"
     },
     "SetSettings": {
       "additionalProperties": false,
@@ -364,6 +448,28 @@
       ],
       "type": "object"
     },
+    "TubeLine": {
+      "additionalProperties": false,
+      "description": "One tube line (§4.3).",
+      "properties": {
+        "footfall_weight": {
+          "description": "Footfall weight each of its open stations adds to the block it sits on: customers\narrive at a station block in proportion to the sum over its open lines.",
+          "format": "uint32",
+          "maximum": 1000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Display name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "footfall_weight"
+      ],
+      "type": "object"
+    },
     "TubeStation": {
       "additionalProperties": false,
       "description": "A tube station sitting on a block (§4.3).",
@@ -373,7 +479,7 @@
           "type": "string"
         },
         "line": {
-          "description": "Line name.",
+          "description": "Line id: a key of `tube_lines`.",
           "type": "string"
         },
         "opens": {
@@ -390,6 +496,31 @@
         "opens"
       ],
       "type": "object"
+    },
+    "UtilitySite": {
+      "description": "The utility a utility block holds (§6, R24). Not a set.",
+      "oneOf": [
+        {
+          "const": "electricity",
+          "description": "Electricity.",
+          "type": "string"
+        },
+        {
+          "const": "gas",
+          "description": "Gas.",
+          "type": "string"
+        },
+        {
+          "const": "water",
+          "description": "Water.",
+          "type": "string"
+        },
+        {
+          "const": "telecoms",
+          "description": "Telephone exchange, the internet from 1995 (R11).",
+          "type": "string"
+        }
+      ]
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -411,12 +542,20 @@
     "tiers": {
       "$ref": "#/$defs/TierTable",
       "description": "Per-tier multipliers (§5.3), shared by every board."
+    },
+    "tube_lines": {
+      "additionalProperties": {
+        "$ref": "#/$defs/TubeLine"
+      },
+      "description": "Tube lines by id, shared by every board (§4.3).",
+      "type": "object"
     }
   },
   "required": [
     "map",
     "tiers",
     "land_base_rate",
+    "tube_lines",
     "boards"
   ],
   "title": "MapFile",
