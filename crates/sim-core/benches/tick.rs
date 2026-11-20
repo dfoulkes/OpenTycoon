@@ -42,6 +42,17 @@ fn bench_tick(c: &mut Criterion) {
         });
     });
     group.finish();
+
+    // Synthetic large scenario (docs/perf.md): the same map with 10,000 people. Costs the same
+    // as the shipped scenario until the population and customer phases land.
+    let mut big = config.clone();
+    big.customers.initial_population = 10_000;
+    let mut group = c.benchmark_group("tick_3x3_10k_agents");
+    group.bench_function("one_tick", |b| {
+        let mut world = World::new(big.clone(), 42, 2);
+        b.iter(|| black_box(world.tick()));
+    });
+    group.finish();
 }
 
 fn bench_config_load(c: &mut Criterion) {

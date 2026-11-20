@@ -44,6 +44,7 @@ libm = "0.2.16"
 # Binaries
 anyhow = "1.0.104"
 clap = { version = "4.6.8", features = ["derive"] }
+rayon = "1.12.0"
 
 # Godot
 godot = "0.5.5"

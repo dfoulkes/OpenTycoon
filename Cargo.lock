@@ -1746,8 +1746,15 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "cucumber",
+ "futures",
+ "proptest",
+ "rayon",
+ "serde",
  "serde_json",
+ "serde_yaml_ng",
  "sim-core",
+ "thiserror",
 ]
 
 [[package]]

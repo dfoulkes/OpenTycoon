@@ -1,0 +1,33 @@
+# Performance budgets checked by `sim-cli perf-budget config` (alias `cargo perf`).
+# See docs/perf.md for what each metric measures and how to update this file.
+#
+# A metric passes while measured <= limit * (1 + tolerance). `baseline` is what the reference
+# machine measured when the budget was last reviewed: drifting more than `tolerance` above it
+# prints a warning to flag in the PR (docs/engineering.md §4) but does not fail the run.
+#
+# Limits are the design budgets from docs/engineering.md §4, not "measured x 1.2": at M1 wave 2
+# most phases are stubs, so measured numbers are a floor, and a tight multiple would fail every
+# PR that adds real work. The baseline column tracks the drift instead.
+tolerance: 0.2
+reference_machine: "a 10-core arm64 laptop, release build (2026-11-20, M1 wave 2: phases stubbed)"
+budgets:
+  game_day_ms:
+    limit: 50
+    baseline: 0.147
+    why: "engineering.md §4: one game day (8,640 ticks) on the 3x3 map < 50 ms"
+  tick_p99_us:
+    limit: 1000
+    baseline: 0.042
+    why: "engineering.md §4: one tick, 3x3 map, 2,000 customers < 1 ms (shipped initial_population is 2,000)"
+  tick_p99_us_10k_agents:
+    limit: 5000
+    baseline: 0.042
+    why: "interpolated between engineering.md's 2,000 customers < 1 ms and 20,000 < 10 ms"
+  batch_1000_games_s:
+    limit: 600
+    baseline: 0.46
+    why: "engineering.md §4: 1,000 games 1930-1950 headless < 10 min on one machine (extrapolated from a 200-game sample)"
+  config_load_ms:
+    limit: 20
+    baseline: 1.6
+    why: "engineering.md §4: config load + validate < 20 ms"

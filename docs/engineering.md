@@ -13,6 +13,8 @@ rule is proven by a test written before the code.**
 
 - Behaviour lives in `.feature` files under `crates/sim-core/features/<module>/`, e.g.
   `features/clock/clock.feature`, `features/auctions/passing.feature`.
+- The harness's own behaviour (batch, bench, overrides, perf budget) lives in
+  `crates/sim-cli/features/`, run by `crates/sim-cli/tests/bdd.rs` (tags `@spec-11`, `@R45`).
 - They run with the [`cucumber`](https://docs.rs/cucumber) crate through one harness,
   `crates/sim-core/tests/bdd.rs` (`harness = false`, driven by `futures::executor::block_on`; no
   async runtime). Run them with `cargo bdd`.
@@ -130,31 +132,41 @@ x86_64 and macOS aarch64**. Balance runs, replays, saves and multiplayer all rel
   `usize` widened). `std`'s `DefaultHasher` is randomly keyed and must not be used for this.
 - **Tests**: `tests/determinism.rs` checks same seed ⇒ same hash (including a proptest over
   seeds). CI runs `sim-cli run --seed 42 --ticks 17280` on both OSes and compares the hashes.
+  `sim-cli batch` must give the same CSV on any thread count (`crates/sim-cli/tests/determinism.rs`
+  and `crates/sim-cli/features/determinism.feature`).
 
 ## 4. Performance
 
 - **criterion** benches live in `crates/sim-core/benches/` and are never part of `cargo test`
   (`cargo bench-build` compiles them; CI does too). Add a bench with every phase that does real
   work.
-- `sim-cli bench` (a fixed scenario printing ticks/sec) lands with M1.
+- **`sim-cli bench`** prints headless throughput as JSON (ticks/sec, ms per game day, real-time
+  factor, tick p50/p99), for the shipped config or a synthetic large scenario (`--agents N`).
+- **`sim-cli perf-budget`** (`cargo perf`) measures the metrics in `perf/budgets.yaml` and exits
+  non-zero if any is over `limit × (1 + tolerance)`. It is **not** part of `cargo test`: shared
+  CI runners are too noisy for timing checks. Run it on a quiet machine before and after
+  perf-sensitive work. Details and how to update budgets: [`perf.md`](perf.md).
 
 ### Budget
 
 Real time per tick at 1× is 1200 s / 8640 ≈ **139 ms**. The sim must use a small fraction of that
 so the server can run 4× speed votes, serve clients and run 1,000-game balance sweeps.
 
-| Measure | Budget | Baseline (M0, Apple M1 Pro, `cargo bench`) |
-|---|---|---|
-| one tick, 3×3 map, 2 players, no agents | < 1 µs | 15.5 ns |
-| one game day (8,640 ticks), 3×3 map | < 50 ms | 150 µs |
-| one tick, 3×3 map, 2,000 customers | < 1 ms | *M1: fill in* |
-| one tick, 9×9 map, 20,000 customers | < 10 ms | *post-v1: fill in* |
-| 1,000 games 1930–1950 headless (`sim-cli`) | < 10 min on one machine | *M1: fill in* |
-| config load + validate | < 20 ms | 1.37 ms |
-| 06:00 settlement, 6 players × 1,000 buildings (`benches/economy.rs`) | < 1 ms | 110 µs (M1) |
-| midnight net worth, 6 players × 1,000 buildings | < 1 ms | 74 µs (M1) |
+| Measure | Budget | Baseline (10-core arm64 laptop, release) | Checked by |
+|---|---|---|---|
+| one tick, 3×3 map, 2 players, no agents | < 1 µs | 15.5 ns (M0, criterion) | `cargo bench` |
+| one game day (8,640 ticks), 3×3 map | < 50 ms | 0.147 ms (M1 wave 2) | `perf-budget` `game_day_ms` |
+| one tick, 3×3 map, 2,000 customers (p99) | < 1 ms | ≤ 42 ns, timer floor (M1 wave 2: customers stubbed) | `perf-budget` `tick_p99_us` |
+| one tick, 3×3 map, 10,000 agents (p99) | < 5 ms | ≤ 42 ns, timer floor (M1 wave 2: customers stubbed) | `perf-budget` `tick_p99_us_10k_agents` |
+| one tick, 9×9 map, 20,000 customers | < 10 ms | *post-v1: fill in* | — |
+| 1,000 games 1930–1950 headless (`sim-cli batch`) | < 10 min on one machine | 0.23 s on 10 cores (M1 wave 2) | `perf-budget` `batch_1000_games_s` |
+| config load + validate | < 20 ms | 1.6 ms | `perf-budget` `config_load_ms` |
+| 06:00 settlement, 6 players × 1,000 buildings (`benches/economy.rs`) | < 1 ms | 110 µs (M1) | `cargo bench` |
+| midnight net worth, 6 players × 1,000 buildings | < 1 ms | 74 µs (M1) | `cargo bench` |
 
-Update the baseline column when a feature lands, and flag any regression over 20% in the PR.
+Update the baseline column (and `perf/budgets.yaml`) when a feature lands, and flag any
+regression over 20% in the PR. The day, tick and 1,000-game budgets are not yet consistent with
+each other (see [`perf.md`](perf.md)); revisit them with measurements once customers land.
 
 ## 5. Config
 
@@ -196,6 +208,8 @@ Update the baseline column when a feature lands, and flag any regression over 20
 | `cargo validate` | `sim-cli validate-config config` |
 | `cargo schema` | regenerate `config/schema/*.schema.json` |
 | `cargo bench-build` | compile benches without running |
+| `cargo perf` | perf budgets (`sim-cli perf-budget`, release); exit 1 if over budget |
+| `cargo simbench` | `sim-cli bench config` (release): throughput as JSON |
 
 Godot tests: `cargo build -p client-ext && godot --headless --path client --import && godot
 --headless --path client -s addons/gut/gut_cmdln.gd`.
