@@ -38,18 +38,19 @@ Feature: Power cuts darken the shops for a few hours of the day
     And the bakeries sold bread between "10:00" and "13:00"
     And every bakery sold bread today
 
-  # A cut that starts while shoppers are out: those walking to a shop find it dark and wait at
-  # the door; nobody buys, and nobody counts as turned away (the shop isn't out of stock).
+  # A cut that starts while the morning's shoppers are still stepping out: nobody buys in the
+  # dark, nobody counts as turned away (the shop isn't out of stock), and those who would have
+  # set out during the cut wait for the lights. A shopper who reaches a shop's door as the lights
+  # go out is customers/choice.feature.
   @R69 @R16
-  Scenario: Shoppers caught out by a cut don't buy in a dark shop, and buy once the lights are back
+  Scenario: Shoppers don't buy in a dark shop, and buy once the lights are back
     Given the shipped config with "events.yaml" key "/historical/5/effects/0/windows" set to "[{from: '07:20', to: '09:00'}]"
     And a new game with 2 players
     And the game has run to "07:00"
     And player 1 has a bakery selling bread on each of "Old Kent Road, Whitechapel, Bethnal Green, Soho, Holborn, Bloomsbury, Knightsbridge"
     When the game runs to midnight
     And the game runs to "17:00" keeping the bakeries' books
-    Then shoppers were out on the street at "07:20"
-    And the bakeries sold bread between "07:00" and "07:20"
+    Then the bakeries sold bread between "07:00" and "07:20"
     And no bakery sold bread or turned a shopper away between "07:20" and "09:00"
     And the bakeries sold bread between "09:00" and "09:30"
 

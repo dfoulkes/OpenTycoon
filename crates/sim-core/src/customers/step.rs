@@ -49,6 +49,7 @@ pub fn tick(
     let mut step = Step {
         inputs,
         now,
+        dark_until: inputs.modifiers.dark_until(now),
         beds_open,
         offers,
         beds,
@@ -167,6 +168,8 @@ fn after_night_trade(c: &Customer, beds_open: bool) -> Activity {
 struct Step<'a, 'i> {
     inputs: PhaseInputs<'i>,
     now: u32,
+    /// While a power cut has the shops dark, when the lights come back on (R69).
+    dark_until: Option<u32>,
     beds_open: bool,
     offers: &'a mut [ShopOffer],
     beds: Vec<HotelOffer>,
@@ -198,11 +201,29 @@ impl Step<'_, '_> {
             if self.now < from {
                 return true;
             }
+            if let Some(until) = self.dark_until {
+                // A power cut (R69): nothing to go out for until the lights come back on.
+                c.activity = Activity::Waiting { from: until };
+                return true;
+            }
             c.activity = Activity::Choosing;
             self.shop_online(c);
         }
+        if let Activity::WaitingForPower { until } = c.activity {
+            if self.now < until {
+                return true;
+            }
+            c.activity = Activity::Choosing;
+        }
+        if let (Activity::Choosing, Some(until)) = (c.activity, self.dark_until) {
+            // Every shop is dark: wait where they stand, then choose again (R69).
+            c.activity = Activity::WaitingForPower { until };
+            return true;
+        }
         match c.activity {
-            Activity::Waiting { .. } | Activity::Wandering => true,
+            Activity::Waiting { .. } | Activity::WaitingForPower { .. } | Activity::Wandering => {
+                true
+            }
             Activity::Choosing => {
                 let rules = &self.inputs.config.customers;
                 let geometry = self.geometry();
@@ -221,8 +242,14 @@ impl Step<'_, '_> {
             Activity::Walking { to, shop, good } => {
                 c.at = step_towards(c.at, to, self.cells());
                 if c.at == to {
-                    self.buy(c, shop, good);
-                    c.activity = Activity::Choosing;
+                    if let Some(until) = self.dark_until {
+                        // The shop is dark (R69): no sale and no lost sale; wait at the door
+                        // for the lights, then choose again.
+                        c.activity = Activity::WaitingForPower { until };
+                    } else {
+                        self.buy(c, shop, good);
+                        c.activity = Activity::Choosing;
+                    }
                 }
                 true
             }

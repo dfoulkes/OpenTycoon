@@ -94,6 +94,12 @@ pub enum Activity {
     },
     /// Picking a shop for the first good on their list.
     Choosing,
+    /// Out, but a power cut has every shop dark (R69): standing where they are until the
+    /// lights come back on, then choosing again.
+    WaitingForPower {
+        /// Second of day the lights come back on.
+        until: u32,
+    },
     /// Walking to a shop to buy a good.
     Walking {
         /// The shop's door.
@@ -244,7 +250,7 @@ pub struct PhaseInputs<'a> {
     pub clock: &'a Clock,
     /// Who lives here.
     pub population: &'a Population,
-    /// Event modifiers in force (§9): demand, open days, price noise, footfall.
+    /// Event modifiers in force (§9): demand, power cuts, price noise, footfall.
     pub modifiers: &'a Modifiers,
 }
 
@@ -289,7 +295,7 @@ pub fn run_phase(
         inputs.map,
         businesses,
         inputs.modifiers,
-        inputs.clock.day(),
+        now,
         &goods,
     );
     let doors = front_doors(businesses, inputs.map, geometry);
@@ -298,10 +304,11 @@ pub fn run_phase(
 
 /// True if no agent can act this tick: everyone is wandering or not out yet.
 fn idle(state: &Customers, now: u32) -> bool {
-    state
-        .agents
-        .iter()
-        .all(|c| matches!(c.activity, Activity::Waiting { from } if now < from))
+    state.agents.iter().all(|c| match c.activity {
+        Activity::Waiting { from } => now < from,
+        Activity::WaitingForPower { until } => now < until,
+        _ => false,
+    })
 }
 
 /// Every building's front door.

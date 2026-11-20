@@ -86,6 +86,25 @@ Feature: Choosing a shop
     Then "Far" sold 1 bread
     And "Far" has a reputation of 0.5025
 
+  # R69: a power cut darkens every walk-in shop for a few hours. A shopper who reaches the door
+  # while the lights are out doesn't buy, and the shop hasn't turned them away (it isn't sold
+  # out); they wait for the lights, then choose again.
+  @R69
+  Scenario: A shopper who reaches a shop in a power cut waits for the lights, then buys
+    Given the shipped config with "customers.yaml" key "/desires/0/goods" set to "{bread: 1.0}"
+    And the shipped config with "customers.yaml" key "/movement/spawn_spread_minutes" set to "0"
+    And an apartment block "Flats" on "soho" 3×3×12
+    And a working woman aged "30-49" has lived in "Flats" since 1930
+    And a bakery "Near" on "holborn" with 10 bread
+    When the city runs until a shopper is walking to "Near"
+    And the lights go out until "09:00:00"
+    And the city runs to "08:59:50"
+    Then "Near" sold 0 bread
+    And "Near" lost 0 sales
+    And a shopper is waiting for the lights to come back on
+    When the city runs to "12:00:00"
+    Then "Near" sold 1 bread
+
   # §8.3: reputation is a 0–1 rolling stat. A completed sale moves it a share of the way to 1
   # (sale_recovery) and a lost sale a share of the way to 0 (lost_sale_penalty), so a shop
   # that has turned shoppers away is dented, never shut out for good (R68).

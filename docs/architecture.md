@@ -109,7 +109,7 @@ Rules that keep the order meaningful:
 - **Money moves only through `economy::Ledger`.** Modules compute what is owed and hand
   `economy::Bill`s to settlement; nothing writes balances directly. The ledger's total is
   conserved (proptest).
-- **Event modifiers.** Lasting event effects (demand, supply caps, open days, price noise,
+- **Event modifiers.** Lasting event effects (demand, supply caps, power cuts, price noise,
   footfall) live on one stack, `events::Modifiers`; modules query it rather than special-case
   an event. Customers read it through `PhaseInputs::modifiers`.
 - **One RNG.** `World` owns the only `SimRng`; phases draw from it in phase order. AI seats

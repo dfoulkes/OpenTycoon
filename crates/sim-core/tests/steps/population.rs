@@ -45,6 +45,8 @@ pub struct CityState {
     year: Option<i32>,
     /// The city's clock (customers scenarios).
     pub clock: Option<Clock>,
+    /// Event modifiers in force on the city (customers scenarios; empty unless a step adds one).
+    pub modifiers: sim_core::events::Modifiers,
     last_step: YearStep,
     arrivals: ArrivalsReport,
     resident: Option<ResidentId>,

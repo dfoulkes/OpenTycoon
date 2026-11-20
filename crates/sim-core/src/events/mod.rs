@@ -30,7 +30,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::businesses::{BusinessId, Businesses};
 use crate::config::Config;
-use crate::config::events::{Effect, ElectionSettings, EventsConfig, HistoricalEvent};
+use crate::config::events::{
+    Effect, ElectionSettings, EventsConfig, HistoricalEvent, render_headline,
+};
 use crate::economy::{AccountId, PlayerId};
 use crate::land::Map;
 use crate::money::{BASIS_POINTS_PER_UNIT, Money, Rate};
@@ -299,7 +301,7 @@ impl Events {
             }
         }
         for (id, headline, effects) in fired {
-            headlines.push(headline.to_owned());
+            headlines.push(render_headline(headline, effects));
             self.fired.push(Fired {
                 year,
                 id: id.to_owned(),
@@ -343,11 +345,19 @@ impl Events {
                     share: share.rate(),
                 },
             ),
-            Effect::OpenDays { open, of, days } => (
-                *days,
-                Modifier::OpenDays {
-                    open: *open,
-                    of: *of,
+            // R69: a power cut acts within the day it fires, never across whole days.
+            Effect::PowerCut { windows } => (
+                1,
+                Modifier::PowerCut {
+                    windows: windows
+                        .iter()
+                        .map(|w| {
+                            (
+                                w.from.seconds_since_midnight(),
+                                w.to.seconds_since_midnight(),
+                            )
+                        })
+                        .collect(),
                 },
             ),
             Effect::PriceNoise { spread, days } => (
@@ -552,6 +562,36 @@ mod tests {
         assert_eq!(factors.len(), 50);
         assert!(factors.values().all(|r| (9_000..=11_000).contains(&r.bp())));
         assert!(factors.values().any(|r| *r != Rate::ONE));
+    }
+
+    #[test]
+    fn a_power_cut_headline_names_its_windows_in_time_order() {
+        use crate::config::events::{CutWindow, describe_cut_windows};
+        use crate::config::types::ClockTime;
+        let w = |a: &str, b: &str| CutWindow {
+            from: ClockTime::parse(a).unwrap(),
+            to: ClockTime::parse(b).unwrap(),
+        };
+        let cuts = Effect::PowerCut {
+            windows: vec![w("13:00", "15:30"), w("07:00", "10:00")],
+        };
+        assert_eq!(
+            render_headline("POWER CUTS: shops dark {cut_windows}", &[cuts]),
+            "POWER CUTS: shops dark from 07:00 to 10:00 and 13:00 to 15:30"
+        );
+        assert_eq!(
+            describe_cut_windows(&[w("08:00", "09:00")]),
+            "from 08:00 to 09:00"
+        );
+        assert_eq!(
+            describe_cut_windows(&[
+                w("12:00", "13:00"),
+                w("07:00", "08:00"),
+                w("15:00", "16:00")
+            ]),
+            "from 07:00 to 08:00, 12:00 to 13:00 and 15:00 to 16:00"
+        );
+        assert_eq!(render_headline("Lockdown", &[Effect::Flavour]), "Lockdown");
     }
 
     #[test]

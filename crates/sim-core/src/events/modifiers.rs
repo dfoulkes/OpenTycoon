@@ -1,7 +1,7 @@
 //! The modifier stack (§9): every lasting effect of an event, in one place, for other modules
 //! to query.
 //!
-//! An event that lasts (rationing, a boom, the three-day week, Decimal Day's price confusion,
+//! An event that lasts (rationing, a boom, the 1970s power cuts, Decimal Day's price confusion,
 //! the Olympics) pushes a typed [`Modifier`] here with the game day it ends. Other modules never
 //! special-case an event: they ask the stack.
 //!
@@ -9,12 +9,13 @@
 //! |---|---|---|
 //! | [`Modifiers::demand_factor`] | customers, when a shopper rolls their list | demand by good and class |
 //! | [`Modifiers::supply_cap`] | the world, after the midnight order lock | rationing caps |
-//! | [`Modifiers::may_trade`] | customers, when listing open shops | open days (three-day week) |
+//! | [`Modifiers::dark_until`] | customers, each tick | power cuts (R69) |
 //! | [`Modifiers::price_factor`] | customers, on the shelf price and at the till | price noise |
 //! | [`Modifiers::footfall`] | customers, on a shop's pull | footfall by block |
 //!
-//! Stacking: demand, price and footfall factors multiply; supply caps take the tightest; open
-//! days must all allow the shop. An empty stack answers ×1 / no cap / open everywhere, and
+//! Stacking: demand, price and footfall factors multiply; supply caps take the tightest; the
+//! shops are dark while any power cut's window covers the time. An empty stack answers ×1 / no
+//! cap / lights on, and
 //! [`Modifiers::is_empty`] lets hot paths skip the queries.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -46,13 +47,11 @@ pub enum Modifier {
         /// Share of capacity.
         share: Rate,
     },
-    /// Shops trade `open` days in `of`: on game day `d`, shop `id` trades iff
-    /// `(id + d) mod of < open`.
-    OpenDays {
-        /// Days open.
-        open: u32,
-        /// Out of.
-        of: u32,
+    /// Power cuts (R69): every walk-in shop is dark from `from` (inclusive) to `to`
+    /// (exclusive) in each window, as seconds of the day.
+    PowerCut {
+        /// `(from, to)` seconds of day.
+        windows: Vec<(u32, u32)>,
     },
     /// Per shop and good, the shelf price is multiplied by a factor drawn when the event fired.
     PriceNoise {
@@ -152,14 +151,20 @@ impl Modifiers {
             .min()
     }
 
-    /// True if shop `shop` may trade on game day `day` under every open-days rule in force.
-    pub fn may_trade(&self, shop: BusinessId, day: u32) -> bool {
-        self.active.iter().all(|m| match m.modifier {
-            Modifier::OpenDays { open, of } if of > 0 => {
-                (u64::from(shop.0) + u64::from(day)) % u64::from(of) < u64::from(open)
-            }
-            _ => true,
-        })
+    /// If a power cut has the shops dark at `second` of the day, the second the lights come
+    /// back on (windows that meet are one stretch of dark); `None` with the lights on.
+    pub fn dark_until(&self, second: u32) -> Option<u32> {
+        let windows = || {
+            self.active.iter().flat_map(|m| match &m.modifier {
+                Modifier::PowerCut { windows } => windows.as_slice(),
+                _ => &[],
+            })
+        };
+        let mut until = second;
+        while let Some((_, to)) = windows().find(|(from, to)| *from <= until && until < *to) {
+            until = *to;
+        }
+        (until > second).then_some(until)
     }
 
     /// Multiplier on `shop`'s shelf price of `good` (×1 with no price noise in force).
@@ -199,7 +204,7 @@ mod tests {
         assert!(m.is_empty());
         assert_eq!(m.demand_factor("bread", Class::Upper), Rate::ONE);
         assert_eq!(m.supply_cap("bread"), None);
-        assert!(m.may_trade(BusinessId(3), 9));
+        assert_eq!(m.dark_until(8 * 3600), None);
         assert_eq!(m.price_factor(BusinessId(3), "bread"), Rate::ONE);
         assert_eq!(m.footfall(BlockId(0)), Rate::ONE);
     }
@@ -255,15 +260,38 @@ mod tests {
     }
 
     #[test]
-    fn three_days_in_seven_rotates_shops() {
+    fn power_cuts_are_dark_inside_their_windows_only() {
+        let h = |hours: u32, minutes: u32| hours * 3600 + minutes * 60;
         let mut m = Modifiers::default();
-        m.push("week", 10, Modifier::OpenDays { open: 3, of: 7 });
-        for day in 0..7 {
-            let open = (0..7).filter(|s| m.may_trade(BusinessId(*s), day)).count();
-            assert_eq!(open, 3, "day {day}");
-        }
-        let days_open = (0..7).filter(|d| m.may_trade(BusinessId(4), *d)).count();
-        assert_eq!(days_open, 3);
+        m.push(
+            "cuts",
+            1,
+            Modifier::PowerCut {
+                windows: vec![(h(7, 0), h(10, 0)), (h(13, 0), h(15, 30))],
+            },
+        );
+        assert_eq!(m.dark_until(h(6, 59)), None);
+        assert_eq!(m.dark_until(h(7, 0)), Some(h(10, 0)));
+        assert_eq!(m.dark_until(h(9, 59)), Some(h(10, 0)));
+        assert_eq!(m.dark_until(h(10, 0)), None, "the lights are back at 10:00");
+        assert_eq!(m.dark_until(h(14, 0)), Some(h(15, 30)));
+        assert_eq!(m.dark_until(h(15, 30)), None);
+        assert_eq!(m.dark_until(h(20, 0)), None, "night trade is lit");
+        // A second cut that meets the first makes one longer stretch of dark.
+        m.push(
+            "more",
+            1,
+            Modifier::PowerCut {
+                windows: vec![(h(10, 0), h(11, 0))],
+            },
+        );
+        assert_eq!(m.dark_until(h(8, 0)), Some(h(11, 0)));
+        m.expire(1);
+        assert_eq!(
+            m.dark_until(h(8, 0)),
+            None,
+            "the year after, the lights stay on"
+        );
     }
 
     #[test]

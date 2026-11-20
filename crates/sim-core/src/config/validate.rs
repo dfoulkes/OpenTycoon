@@ -436,6 +436,12 @@ fn check_events(config: &Config, errors: &mut Vec<ConfigError>) {
         }
     }
     for (i, event) in rules.historical.iter().enumerate() {
+        check_cut_headline(
+            &event.headline,
+            &event.effects,
+            &format!("/historical/{i}"),
+            errors,
+        );
         for (j, effect) in event.effects.iter().enumerate() {
             check_effect(
                 config,
@@ -446,6 +452,12 @@ fn check_events(config: &Config, errors: &mut Vec<ConfigError>) {
         }
     }
     for (i, event) in rules.random_era.events.iter().enumerate() {
+        check_cut_headline(
+            &event.headline,
+            &event.effects,
+            &format!("/random_era/events/{i}"),
+            errors,
+        );
         for (j, effect) in event.effects.iter().enumerate() {
             check_effect(
                 config,
@@ -495,6 +507,113 @@ fn check_events(config: &Config, errors: &mut Vec<ConfigError>) {
     }
 }
 
+/// R69: a power cut's windows each start before they end (inside one day, no wrapping), don't
+/// overlap, and leave some of day trade lit: an event never shuts shops for a whole day.
+fn check_cut_windows(
+    config: &Config,
+    windows: &[super::events::CutWindow],
+    at: &str,
+    errors: &mut Vec<ConfigError>,
+) {
+    let at = format!("{at}/windows");
+    if windows.is_empty() {
+        err(
+            errors,
+            ConfigFile::Events,
+            at.clone(),
+            "a power cut needs at least one window".into(),
+        );
+    }
+    for (i, w) in windows.iter().enumerate() {
+        if w.from >= w.to {
+            err(
+                errors,
+                ConfigFile::Events,
+                format!("{at}/{i}"),
+                format!(
+                    "a window must start before it ends, inside one day ({} to {})",
+                    w.from, w.to
+                ),
+            );
+        }
+        if let Some((j, other)) = windows[..i]
+            .iter()
+            .enumerate()
+            .find(|(_, o)| o.from < w.to && w.from < o.to)
+        {
+            err(
+                errors,
+                ConfigFile::Events,
+                format!("{at}/{i}"),
+                format!(
+                    "{} to {} overlaps window {j} ({} to {})",
+                    w.from, w.to, other.from, other.to
+                ),
+            );
+        }
+    }
+    let day = config.game.clock.trading_hours.day;
+    let (open, close) = (
+        day.open.seconds_since_midnight(),
+        day.close.seconds_since_midnight(),
+    );
+    if open < close && dark_through(windows, open, close) {
+        err(
+            errors,
+            ConfigFile::Events,
+            at,
+            format!(
+                "the cuts black out the whole of day trade ({} to {}); an event can't shut \
+                 shops for a whole day (R69)",
+                day.open, day.close
+            ),
+        );
+    }
+}
+
+/// True if `windows` together cover every second of `open..close`.
+fn dark_through(windows: &[super::events::CutWindow], open: u32, close: u32) -> bool {
+    let mut lit_from = open;
+    loop {
+        let Some(w) = windows.iter().find(|w| {
+            w.from.seconds_since_midnight() <= lit_from && lit_from < w.to.seconds_since_midnight()
+        }) else {
+            return false;
+        };
+        lit_from = w.to.seconds_since_midnight();
+        if lit_from >= close {
+            return true;
+        }
+    }
+}
+
+/// An event's headline names its power cut's hours with `{cut_windows}` exactly when it has a
+/// power cut (R69: the front page says when the lights go out; the text is rendered from the
+/// windows, so the two can't drift apart).
+fn check_cut_headline(
+    headline: &str,
+    effects: &[super::events::Effect],
+    at: &str,
+    errors: &mut Vec<ConfigError>,
+) {
+    use super::events::{CUT_WINDOWS, Effect};
+    let cut = effects.iter().any(|e| matches!(e, Effect::PowerCut { .. }));
+    let named = headline.contains(CUT_WINDOWS);
+    if cut != named {
+        let message = if cut {
+            format!("a power cut's headline must name its hours with {CUT_WINDOWS}")
+        } else {
+            format!("{CUT_WINDOWS} names a power cut's hours; this event has no power cut")
+        };
+        err(
+            errors,
+            ConfigFile::Events,
+            format!("{at}/headline"),
+            message,
+        );
+    }
+}
+
 /// A share (chance, payout, premium) must be between 0 and 1.
 fn check_share(errors: &mut Vec<ConfigError>, pointer: &str, share: Rate) {
     if !(0..=BASIS_POINTS_PER_UNIT).contains(&share.bp()) {
@@ -508,7 +627,7 @@ fn check_share(errors: &mut Vec<ConfigError>, pointer: &str, share: Rate) {
 }
 
 /// One event effect: blocks, goods, groups and business types it names must exist; shares
-/// lie in 0..=1; factors are not negative; open days fit in the week.
+/// lie in 0..=1; factors are not negative; power cuts act within the day (R69).
 fn check_effect(
     config: &Config,
     effect: &super::events::Effect,
@@ -553,16 +672,7 @@ fn check_effect(
             target = Some(t);
             check_share(errors, &format!("{at}/share"), share.rate());
         }
-        Effect::OpenDays { open, of, .. } => {
-            if *of == 0 || open > of {
-                err(
-                    errors,
-                    ConfigFile::Events,
-                    format!("{at}/open"),
-                    format!("open days must be at most `of` ({open} of {of})"),
-                );
-            }
-        }
+        Effect::PowerCut { windows } => check_cut_windows(config, windows, at, errors),
         Effect::PriceNoise { spread, .. } => {
             check_share(errors, &format!("{at}/spread"), spread.rate());
         }

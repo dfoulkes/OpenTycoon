@@ -2,7 +2,8 @@
 # events.yaml: §9. Each event fires on the year step covering its year (1939 on the 1935 step,
 # the Blitz on 1940, Decimal Day on 1970, the crash on 2005). Effects are typed modifiers: some
 # change the world once, the rest sit on the modifier stack for `days` game days (one day is a
-# 5-year step). Block ids are the full board's (map.yaml); a v1 game skips the ones its 3×3
+# 5-year step), or, for a power cut, for hours of the day it fires (R69: no event shuts shops
+# for whole days). Block ids are the full board's (map.yaml); a v1 game skips the ones its 3×3
 # map lacks. Durations and sizes are placeholders.
 groups:                         # goods that effects target, by name (businesses.yaml ids)
   luxury: [clothes, meals]
@@ -38,11 +39,13 @@ historical:
     effects:
       - { kind: decimal_currency }
       - { kind: price_noise, spread: 0.1, days: 1 }
-  - id: three_day_week
+  - id: three_day_week          # R69: the three-day week as power cuts within the day, not whole days shut
     year: 1973
-    headline: "Three-Day Week as Miners Strike"
+    headline: "POWER CUTS: shops dark {cut_windows} as the miners' strike bites"   # {cut_windows} is rendered from the windows
     effects:
-      - { kind: open_days, open: 3, of: 7, days: 1 }
+      # Rolling cuts take 5.5 of day trade's 10 hours (about 4/7, the share of the week the
+      # three-day week lost). Night trade stays lit: the rota cut daytime load, and pubs ran on.
+      - { kind: power_cut, windows: [{ from: "07:00", to: "10:00" }, { from: "13:00", to: "15:30" }] }
   - id: big_bang
     year: 1986
     headline: "Big Bang in the City"

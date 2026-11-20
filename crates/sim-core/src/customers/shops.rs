@@ -150,9 +150,9 @@ pub fn shop_offers(
     out
 }
 
-/// Applies the event modifiers in force (§9) to this tick's offers: shops shut by an open-days
-/// rule (the three-day week) drop out, shelf prices carry any price noise, and each shop's pull
-/// is scaled by its block's footfall. A no-op with no modifiers in force.
+/// Applies the event modifiers in force (§9) to this tick's offers: while a power cut has the
+/// shops dark at `second` of the day (R69) there are none, shelf prices carry any price noise,
+/// and each shop's pull is scaled by its block's footfall. A no-op with no modifiers in force.
 #[allow(
     clippy::cast_precision_loss,
     clippy::float_arithmetic,
@@ -163,13 +163,16 @@ pub fn apply_modifiers(
     map: &Map,
     businesses: &Businesses,
     modifiers: &Modifiers,
-    day: u32,
+    second: u32,
     goods: &GoodsIndex,
 ) {
     if modifiers.is_empty() {
         return;
     }
-    offers.retain(|o| modifiers.may_trade(o.shop, day));
+    if modifiers.dark_until(second).is_some() {
+        offers.clear();
+        return;
+    }
     for o in offers.iter_mut() {
         o.price = modifiers
             .price_factor(o.shop, goods.name(o.good))
