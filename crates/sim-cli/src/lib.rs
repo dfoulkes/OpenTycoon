@@ -8,6 +8,7 @@
 //! - [`bench`]: ticks/sec, ms per game day, real-time factor, tick latency.
 //! - [`budget`]: perf budgets and the regression check.
 //! - [`stats`]: nearest-rank percentiles.
+//! - [`study`]: the balance study (R64, R65): sampled models, rotated seats, balance metrics.
 //!
 //! Nothing here implements a game rule: the harness drives `sim_core::World` and measures
 //! whatever it does.
@@ -19,6 +20,7 @@ pub mod budget;
 pub mod game;
 pub mod overrides;
 pub mod stats;
+pub mod study;
 pub mod timing;
 
 #[cfg(test)]

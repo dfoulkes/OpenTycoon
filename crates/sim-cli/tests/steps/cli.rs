@@ -33,6 +33,11 @@ impl CliState {
             .clone()
     }
 
+    /// The scenario's scratch directory (created on first use).
+    pub fn tmp_dir(&mut self) -> PathBuf {
+        self.tmp()
+    }
+
     fn output(&self) -> &Output {
         self.output.as_ref().expect("sim-cli was not run")
     }

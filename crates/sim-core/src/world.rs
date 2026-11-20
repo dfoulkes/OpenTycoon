@@ -949,6 +949,16 @@ impl World {
         &mut self.businesses
     }
 
+    /// A new game whose AI seats are chosen by the caller: `players` seats, `ai` lists which
+    /// seat plays which personality (in the order the AI phase runs them); the other seats are
+    /// humans or harness brains. Personalities must exist in `ai.yaml`. Balance studies use it
+    /// to rotate personalities through the seats (R65). [`World::new`] is this with the
+    /// `ai.yaml` opponents in the last seats.
+    pub fn seated(config: Config, seed: u64, players: u8, ai: &[(PlayerId, String)]) -> Self {
+        let _ = (config, seed, players, ai);
+        todo!("seated")
+    }
+
     /// The seats played by the AI opponents from `ai.yaml` (the rest are humans, or harness
     /// brains in `sim-cli batch`).
     pub fn ai_seats(&self) -> &[AiSeat] {
@@ -1208,6 +1218,34 @@ mod ai_tests {
                 .is_some(),
             "the Grocer built nothing"
         );
+    }
+
+    #[test]
+    fn a_seated_world_puts_each_personality_where_it_is_asked() {
+        let ai = [
+            (PlayerId(0), "toff".to_owned()),
+            (PlayerId(2), "grocer".to_owned()),
+        ];
+        let w = World::seated(businesses_tests::shipped(), 3, 3, &ai);
+        let seats: Vec<(PlayerId, &str)> = w
+            .ai_seats()
+            .iter()
+            .map(|s| (s.player, s.personality.as_str()))
+            .collect();
+        assert_eq!(seats, vec![(PlayerId(0), "toff"), (PlayerId(2), "grocer")]);
+        assert_eq!(w.players().len(), 3);
+    }
+
+    #[test]
+    fn new_is_seated_with_the_opponents_in_the_last_seats() {
+        let config = businesses_tests::shipped();
+        let mut a = World::new(config.clone(), 11, 2);
+        let mut b = World::seated(config, 11, 2, &[(PlayerId(1), "grocer".to_owned())]);
+        for _ in 0..20_000 {
+            a.tick();
+            b.tick();
+        }
+        assert_eq!(a.state_hash(), b.state_hash());
     }
 
     #[test]

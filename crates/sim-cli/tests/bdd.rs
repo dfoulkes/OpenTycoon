@@ -24,6 +24,8 @@ pub struct HarnessWorld {
     pub batch: steps::batch::BatchState,
     /// Command-line runs (`steps::cli`).
     pub cli: steps::cli::CliState,
+    /// Balance studies (`steps::study`).
+    pub study: steps::study::StudyState,
 }
 
 fn main() {
