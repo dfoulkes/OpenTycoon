@@ -55,6 +55,10 @@ pub struct CityState {
     pub reports: Vec<PhaseReport>,
     /// Every shopper ever spawned (copied as first seen).
     pub spawned: Vec<sim_core::customers::Customer>,
+    /// The second of day of each report in `reports`, in order.
+    pub report_times: Vec<u32>,
+    /// When each shopper first stepped onto the map (second of day), by id.
+    pub out_at: BTreeMap<u64, u32>,
     /// Picks by shop, from "choose where to buy" steps.
     pub picks: BTreeMap<BusinessId, u32>,
     /// Number of shoppers in the last "choose" step.

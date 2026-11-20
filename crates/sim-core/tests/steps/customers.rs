@@ -50,12 +50,17 @@ fn tick(w: &mut SimWorld) {
         &mut rng,
     );
     city.rng = Some(rng);
+    let now = clock.second_of_day();
     for c in &city.customers.agents {
         if !city.spawned.iter().any(|s| s.id == c.id) {
             city.spawned.push(c.clone());
         }
+        if !matches!(c.activity, Activity::Waiting { .. }) {
+            city.out_at.entry(c.id.0).or_insert(now);
+        }
     }
     city.reports.push(report);
+    city.report_times.push(now);
 }
 
 fn parse_hms(text: &str) -> u32 {
@@ -226,6 +231,53 @@ fn lights_out_until(w: &mut SimWorld, time: String) {
             windows: vec![(now, parse_hms(&time))],
         },
     );
+}
+
+#[given(expr = "the lights are out today from {string} to {string}")]
+fn lights_out_today(w: &mut SimWorld, from: String, to: String) {
+    let day = CityState::clock(w).day();
+    w.city.modifiers.push(
+        "power_cut",
+        day + 1,
+        Modifier::PowerCut {
+            windows: vec![(parse_hms(&from), parse_hms(&to))],
+        },
+    );
+}
+
+#[then(regex = r#"^"([^"]+)" sold (\w+) only between "([^"]+)" and "([^"]+)"$"#)]
+fn sold_only_between(w: &mut SimWorld, name: String, good: String, from: String, to: String) {
+    let config = CityState::config(w);
+    let goods = GoodsIndex::new(&config.businesses.goods);
+    let id = w.city.building(&name);
+    let (from, to) = (parse_hms(&from), parse_hms(&to));
+    let times: Vec<u32> = w
+        .city
+        .reports
+        .iter()
+        .zip(&w.city.report_times)
+        .flat_map(|(r, t)| r.sales.iter().map(move |s| (s, *t)))
+        .filter(|(s, _)| s.shop == id && goods.name(s.good) == good)
+        .map(|(_, t)| t)
+        .collect();
+    assert!(!times.is_empty(), "{name} sold no {good}");
+    let outside: Vec<String> = times
+        .iter()
+        .filter(|t| **t < from || **t >= to)
+        .map(|t| format!("{:02}:{:02}:{:02}", t / 3600, t / 60 % 60, t % 60))
+        .collect();
+    assert!(
+        outside.is_empty(),
+        "{name} sold {good} outside its window at {outside:?}"
+    );
+}
+
+#[then(expr = "nobody came out before {string}")]
+fn nobody_out_before(w: &mut SimWorld, time: String) {
+    let at = parse_hms(&time);
+    assert!(!w.city.out_at.is_empty(), "nobody came out");
+    let early: Vec<_> = w.city.out_at.values().filter(|t| **t < at).collect();
+    assert!(early.is_empty(), "came out before {time}: {early:?}");
 }
 
 #[then("a shopper is waiting for the lights to come back on")]
