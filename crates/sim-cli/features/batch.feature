@@ -44,3 +44,13 @@ Feature: Balance batch
     And the file "batch.csv" has 4 lines
     And its output contains "games/sec"
     And its output contains "median"
+
+  # §3, R19, R39: net worth counts land, not just cash. Guards against the harness scoring
+  # cash only, which made every game a £0 tie.
+  @spec-11 @R19
+  Scenario: Players with different assets get different net worths in the CSV
+    Given a new game of the "v1" preset
+    And player 0 holds the lease on "Mayfair", bought in 1930 for £14000
+    When the harness plays it to the whistle and writes the CSV
+    Then player 0's net worth in the CSV is higher than player 1's
+    And the CSV names player 0 the winner

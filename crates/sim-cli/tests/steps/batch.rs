@@ -21,6 +21,8 @@ pub struct BatchState {
     pub world: Option<World>,
     /// Commands a brain issued, with whether day trade was open at the time.
     pub issued: Vec<(Command, bool)>,
+    /// CSV written for a hand-built game.
+    pub csv: Option<String>,
 }
 
 impl BatchState {
@@ -194,4 +196,59 @@ fn first_command(w: &mut HarnessWorld, name: String, pounds: i64) {
 #[then("it bid during day trade")]
 fn bid_in_day_trade(w: &mut HarnessWorld) {
     assert!(w.batch.issued[0].1);
+}
+
+#[given(expr = "player {int} holds the lease on {string}, bought in {int} for £{int}")]
+fn holds_lease(w: &mut HarnessWorld, player: u8, name: String, year: i32, pounds: i64) {
+    let world = w.batch.world.as_mut().unwrap();
+    let term_years = world.config().game.leases.term_years;
+    let block = world
+        .map_mut()
+        .blocks
+        .iter_mut()
+        .find(|b| b.name == name)
+        .unwrap_or_else(|| panic!("no block {name}"));
+    block.lease = Some(sim_core::land::Lease {
+        holder: sim_core::economy::AccountId::Player(PlayerId(player)),
+        start_year: year,
+        term_years,
+        last_price: Money::from_pounds(pounds),
+    });
+}
+
+#[when("the harness plays it to the whistle and writes the CSV")]
+fn play_to_whistle(w: &mut HarnessWorld) {
+    let world = w.batch.world.take().unwrap();
+    let result = sim_cli::game::play_from(world, &GameSpec::default());
+    let mut out = Vec::new();
+    write_csv(&mut out, &[result], Timing::Omit).unwrap();
+    w.batch.csv = Some(String::from_utf8(out).unwrap());
+}
+
+fn csv_cell(w: &HarnessWorld, column: &str) -> String {
+    let text = w.batch.csv.as_ref().expect("no CSV");
+    let mut lines = text.lines();
+    let header: Vec<&str> = lines.next().unwrap().split(',').collect();
+    let row: Vec<&str> = lines.next().unwrap().split(',').collect();
+    let at = header.iter().position(|h| *h == column).unwrap();
+    row[at].to_owned()
+}
+
+#[then(expr = "player {int}'s net worth in the CSV is higher than player {int}'s")]
+fn richer(w: &mut HarnessWorld, a: u8, b: u8) {
+    let worth = |p: u8| -> i64 {
+        csv_cell(w, &format!("p{p}_net_worth_pence")).parse().unwrap()
+    };
+    assert!(
+        worth(a) > worth(b),
+        "p{a} {} vs p{b} {}\n{}",
+        worth(a),
+        worth(b),
+        w.batch.csv.as_ref().unwrap()
+    );
+}
+
+#[then(expr = "the CSV names player {int} the winner")]
+fn csv_winner(w: &mut HarnessWorld, p: u8) {
+    assert_eq!(csv_cell(w, "winner"), format!("p{p}"));
 }
