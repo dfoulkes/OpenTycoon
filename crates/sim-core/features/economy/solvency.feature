@@ -106,3 +106,29 @@ Feature: The midnight solvency check and bankruptcy
     And the game runs for 3 days
     Then the city owns the "bakery" on "Old Kent Road"
     And no money was created or destroyed
+
+  # A 10-high 3×3 bakery on Holborn holds 90 × 0.5 = 45 bread. Holborn has a tube station, so
+  # the morning's shoppers walk past it.
+  @R4
+  Scenario: The city runs a bankrupt player's shop: restocked at 06:00 and selling to shoppers
+    Given player 1 owns a 10-high 3x3 "bakery" on "Holborn"
+    And the "bakery" on "Holborn" is priced at 150% for "bread"
+    And player 1 has a balance of "-£1.00"
+    When the game runs to midnight
+    And the game runs to midnight
+    Then player 1 is bankrupt
+    And the city owns the "bakery" on "Holborn"
+    And the "bakery" on "Holborn" charges 100% for "bread"
+    And the "bakery" on "Holborn" has ordered 45 "bread" for tomorrow
+    When the city's balance changes to "-£1,000,000.00"
+    And the game runs to "06:00"
+    Then the "bakery" on "Holborn" has 45 "bread" in stock
+    When the game runs to "17:00"
+    Then the city has sold "bread" at the "bakery" on "Holborn" today
+    When the game runs to "06:00"
+    Then the "bakery" on "Holborn" has 45 "bread" in stock
+    When the game runs to "17:00"
+    Then the city has sold "bread" at the "bakery" on "Holborn" today
+    And the city's balance is below "£0.00"
+    And the city owns the "bakery" on "Holborn"
+    And no money was created or destroyed

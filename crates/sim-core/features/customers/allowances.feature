@@ -8,8 +8,16 @@ Feature: Allowances are new money
   @R63
   Scenario: Each morning mints every adult's allowance into the shoppers' purse
     Given a fresh city
-    When the fresh city runs until "06:00:00"
+    When the fresh city runs until "05:50:00"
     Then the shoppers' purse holds every adult's daily allowance
+    And the ledger grew by exactly the allowances minted
+
+  @R63 @R51
+  Scenario: Residents' rent comes out of the purse at 06:00, before anyone shops
+    # §8.2: rent comes out of the allowance first.
+    Given a fresh city
+    When the fresh city runs until "06:00:00"
+    Then the shoppers' purse holds every adult's daily allowance less the residents' rent
     And the ledger grew by exactly the allowances minted
 
   @R63

@@ -407,3 +407,73 @@ fn conserved(w: &mut SimWorld) {
     let ledger = world(w).ledger();
     assert_eq!(ledger.total() - ledger.minted(), baseline);
 }
+
+// ---- Residents' rent (R51, R56) and the city-run shop (R4) ---------------------------------
+
+#[then(expr = "{int} people live in the {string} on {string}")]
+fn people_live_in(w: &mut SimWorld, n: u32, type_id: String, block: String) {
+    let id = business_id(w, &type_id, &block);
+    let occupancy = world(w).population().residential.occupancy();
+    assert_eq!(occupancy.get(&id).copied().unwrap_or(0), n);
+}
+
+#[when(expr = "player {int} sets the rent at the {string} on {string} to {string}")]
+fn sets_rent(w: &mut SimWorld, n: u8, type_id: String, block: String, rent: String) {
+    let id = business_id(w, &type_id, &block);
+    let world = world(w);
+    world.submit(
+        player(n),
+        Command::SetRent {
+            building: id,
+            rent: money(&rent),
+        },
+    );
+    world.tick();
+}
+
+/// Rent residents owe `landlord` at the next 06:00 (unchanged by settlement itself).
+fn rent_owed_to(world: &World, landlord: AccountId) -> Money {
+    world
+        .rent_due()
+        .iter()
+        .filter(|d| d.landlord == landlord)
+        .map(|d| d.amount)
+        .sum()
+}
+
+#[then("the shoppers' purse paid every resident's rent")]
+fn purse_paid_rent(w: &mut SimWorld) {
+    let world = world(w);
+    let rent: Money = world.rent_due().iter().map(|d| d.amount).sum();
+    assert!(rent > Money::ZERO, "nobody owes rent");
+    let ledger = world.ledger();
+    assert_eq!(
+        ledger.balance(AccountId::Shoppers),
+        ledger.minted() - rent,
+        "the purse should hold today's allowances less the rent"
+    );
+}
+
+#[then(regex = r#"^(player \d+|the city)'s balance is "([^"]+)" plus its residents' rent$"#)]
+fn balance_plus_rent(w: &mut SimWorld, who: String, amount: String) {
+    let account = account(&who);
+    let world = world(w);
+    let rent = rent_owed_to(world, account);
+    assert!(rent > Money::ZERO, "{who} is owed no rent");
+    assert_eq!(world.ledger().balance(account), money(&amount) + rent);
+}
+
+#[then(regex = r#"^(player \d+|the city)'s balance is below "([^"]+)"$"#)]
+fn balance_below(w: &mut SimWorld, who: String, amount: String) {
+    let balance = world(w).ledger().balance(account(&who));
+    assert!(balance < money(&amount), "{who} has {balance}");
+}
+
+#[then(expr = "the city has sold {string} at the {string} on {string} today")]
+fn city_sold(w: &mut SimWorld, good: String, type_id: String, block: String) {
+    let shop = business(w, &type_id, &block);
+    assert_eq!(shop.owner, AccountId::City);
+    let sold = shop.sold_today.get(&good).copied().unwrap_or(0);
+    assert!(sold > 0, "no {good} sold today");
+    assert!(shop.takings_today > Money::ZERO, "no takings today");
+}

@@ -417,6 +417,16 @@ fn purse_holds(w: &mut SimWorld) {
     assert_eq!(world.ledger().balance(AccountId::Shoppers), due);
 }
 
+#[then("the shoppers' purse holds every adult's daily allowance less the residents' rent")]
+fn purse_holds_less_rent(w: &mut SimWorld) {
+    let config = CityState::config(w);
+    let world = w.city.world.as_ref().unwrap();
+    let due = sim_core::population::daily_allowances(world.population(), &config.customers);
+    let rent: Money = world.rent_due().iter().map(|d| d.amount).sum();
+    assert!(rent > Money::ZERO, "nobody owes rent");
+    assert_eq!(world.ledger().balance(AccountId::Shoppers), due - rent);
+}
+
 #[then("the ledger grew by exactly the allowances minted")]
 fn ledger_grew_by_minted(w: &mut SimWorld) {
     let world = w.city.world.as_ref().unwrap();

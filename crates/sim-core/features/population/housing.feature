@@ -42,6 +42,15 @@ Feature: Apartments and who lives in them
     And 0 people are waiting for the 05:30 train
     And at the 06:00 settlement "Flats" is owed £3.00 by its residents
 
+  @R63 @R51
+  Scenario: A resident never pays more rent than their whole allowance
+    # A working man aged 30–49 gets £22.00 a day. Residents have no savings (R63), so an owner
+    # who puts the rent up past the allowance collects the allowance and no more.
+    Given an apartment block "Flats" on "old_kent_road" 3×3×12 owned by player 0
+    And a working man aged "30-49" has lived in "Flats" since 1930
+    And the rent at "Flats" is £30.00
+    Then at the 06:00 settlement "Flats" is owed £22.00 by its residents
+
   @R52 @R53
   Scenario Outline: Priced out when the cheapest flat is over 20% of the allowance
     # A working man aged 30–49 gets £20 × 1.1 = £22.00 a day; 20% is £4.40.
