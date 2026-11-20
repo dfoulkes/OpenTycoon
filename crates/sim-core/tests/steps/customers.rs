@@ -62,9 +62,7 @@ fn parse_hms(text: &str) -> u32 {
     parts[0] * 3600 + parts[1] * 60 + parts.get(2).copied().unwrap_or(0)
 }
 
-#[given(
-    regex = r#"^an? (bakery|grocery|clothes_store|bar|restaurant) "([^"]+)" on "([^"]+)" with (\d+) (\w+)$"#
-)]
+#[given(regex = r#"^an? (\w+) "([^"]+)" on "([^"]+)" with (\d+) (\w+)$"#)]
 fn shop(w: &mut SimWorld, kind: String, name: String, block: String, qty: i64, good: String) {
     let id = CityState::add_building(w, &name, &kind, &block, (3, 3, 4), AccountId::City);
     w.city
@@ -485,11 +483,11 @@ fn cohort_shares(config: &sim_core::Config, year: i32) -> Vec<(Cohort, f64)> {
         .customers
         .demographics
         .iter()
-        .filter(|(y, _)| y.parse::<i32>().unwrap() <= year)
-        .last()
+        .rfind(|(y, _)| y.parse::<i32>().unwrap() <= year)
         .unwrap()
         .1;
-    let share = |r: &sim_core::config::Ratio| r.rate().bp() as f64 / 10_000.0;
+    let share =
+        |r: &sim_core::config::Ratio| f64::from(i32::try_from(r.rate().bp()).unwrap()) / 10_000.0;
     let mut out = Vec::new();
     for (ci, class) in Class::ALL.iter().enumerate() {
         for (bi, band) in demo.age.iter().enumerate() {
@@ -635,7 +633,7 @@ fn every_good_wanted(w: &mut SimWorld) {
 )]
 fn city_supports_reference_shops(w: &mut SimWorld) {
     let config = CityState::config(w);
-    let adults = config.customers.initial_population as f64;
+    let adults = f64::from(u32::try_from(config.customers.initial_population).unwrap());
     let mut short = Vec::new();
     let mut checked = 0;
     for (id, kind) in &config.businesses.types {
@@ -658,7 +656,7 @@ fn city_supports_reference_shops(w: &mut SimWorld) {
                 .sum::<f64>()
                 * adults;
             checked += 1;
-            if demand < footfall as f64 {
+            if demand < f64::from(i32::try_from(footfall).unwrap()) {
                 short.push(format!(
                     "{id}: {good} in {year}: {demand:.1} wanted < {footfall}"
                 ));
@@ -670,4 +668,13 @@ fn city_supports_reference_shops(w: &mut SimWorld) {
         short.is_empty(),
         "the starting city can't support: {short:#?}"
     );
+}
+
+#[given(expr = "the city's year is {int}")]
+fn city_year(w: &mut SimWorld, year: i32) {
+    let clock = CityState::clock(w);
+    while clock.year() < year {
+        clock.advance();
+    }
+    assert_eq!(clock.year(), year);
 }

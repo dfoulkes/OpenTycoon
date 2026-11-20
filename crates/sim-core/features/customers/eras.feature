@@ -68,3 +68,27 @@ Feature: What shoppers want changes by decade
   @R55 @R64
   Scenario: Every good on sale is wanted by somebody while it is on sale
     Then every good a walk-in shop type sells is wanted by some shopper in every step it trades
+
+  # §7.1: a type past its obsolete year draws shoppers with the same fade as an obsolete good.
+  @R55 @R64
+  Scenario Outline: A shop of an obsolete type draws fewer shoppers than one still in fashion
+    Given the city's year is <year>
+    And a news_stand "Kiosk" on "holborn" with 1000 newspapers
+    And a general_store "Corner" on "holborn" with 1000 newspapers
+    When 1000 middle shoppers at "holborn" choose where to buy newspapers
+    Then "Kiosk" was chosen by at <bound> <pct>% of them
+
+    Examples:
+      | year | bound | pct |
+      | 2005 | least | 40  |
+      | 2025 | most  | 15  |
+
+  # §7.5: online sellers have no door; their demand model is e-commerce's.
+  @R64
+  Scenario: Nobody walks to an online seller
+    Given the city's year is 2000
+    And an ecommerce "Warehouse" on "holborn" with 1000 books
+    And a bookshop "Books" on "holborn" with 1000 books
+    When 1000 middle shoppers at "holborn" choose where to buy books
+    Then "Warehouse" was never chosen
+    And "Books" was chosen by at least 95% of them

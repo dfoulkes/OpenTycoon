@@ -1152,10 +1152,10 @@ mod businesses_tests {
         assert_eq!(w.businesses.get(id).unwrap().stock_of("bread"), 0);
         run_to(&mut w, 6 * 3600); // day 1, 06:00
         assert_eq!(w.businesses.get(id).unwrap().stock_of("bread"), 40);
-        // Two mornings of utilities at £4.50 (costs.feature), one delivery of 40 × 4p = £1.60.
+        // Two mornings of utilities at £5.40 (costs.feature), one delivery of 40 × 36p = £14.40.
         assert_eq!(
             w.ledger.balance(ME),
-            start - cost - Money::from_pence(450 + 450 + 160)
+            start - cost - Money::from_pence(540 + 540 + 1_440)
         );
         // Settlement conserves money; the only new money is the shoppers' allowances (R63).
         assert_eq!(

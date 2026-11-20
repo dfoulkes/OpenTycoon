@@ -1,6 +1,13 @@
 # yaml-language-server: $schema=schema/businesses.schema.json
-# businesses.yaml: §7. The five v1 businesses from 1930 (§10c M1). Every number here is our
-# own placeholder, to be regenerated from our own formulas via the balance harness.
+# businesses.yaml: §7, §7.4. Every business type from 1930 to 2030+ and the goods of every era.
+# The stats are our own, derived from one formula (docs/economy.md "Business stats"):
+#   - min_footprint and max_height from the type's size class;
+#   - utility_factor from the type's utility profile;
+#   - purchase_price = ref_price × (1 − the good's margin class);
+#   - stock_density so a reference building (min_footprint × reference.height) selling
+#     reference.sell_through of its stock at reference prices covers its rent and utilities at
+#     Medium tier and earns its build cost back in reference.payback_days.
+# Size class, utility profile and margin class are named in the comment on each line.
 build_base_rate: 10             # placeholder: £ per unit of building volume (§5.3)
 fit_out:                        # §7.1
   low:    { build_cost_mult: 0.8, appeal: 0.8 }   # placeholder
@@ -10,58 +17,724 @@ reference:                      # the stats formula's reference shop (docs/econo
   height: 10                    # a reference building is min_footprint × this high
   sell_through: 0.8             # share of its stock a competently run shop sells (reference footfall)
   payback_days: 10              # days for a Medium-tier reference shop to earn back its build cost
-goods:                          # ref_price is the reference retail price; purchase_price is wholesale
-  bread:      { name: "Bread",           ref_price: 0.10, purchase_price: 0.04 }   # placeholder
-  groceries:  { name: "Groceries",       ref_price: 0.50, purchase_price: 0.25 }   # placeholder
-  clothes:    { name: "Clothes",         ref_price: 3.00, purchase_price: 1.40 }   # placeholder
-  drinks:     { name: "Drinks",          ref_price: 0.20, purchase_price: 0.07 }   # placeholder
-  meals:      { name: "Restaurant meal", ref_price: 1.50, purchase_price: 0.60 }   # placeholder
+goods:                          # ref_price: reference retail price; purchase_price: wholesale (§8.3)
+  bread: { name: "Bread", ref_price: 0.60, purchase_price: 0.36 }   # staple margin 40%
+  groceries: { name: "Fruit & veg", ref_price: 2.00, purchase_price: 1.10 }   # fresh margin 45%
+  meat: { name: "Meat", ref_price: 2.50, purchase_price: 1.38 }   # fresh margin 45%
+  fish: { name: "Fish", ref_price: 1.80, purchase_price: 0.99 }   # fresh margin 45%
+  dairy: { name: "Dairy", ref_price: 0.80, purchase_price: 0.44 }   # fresh margin 45%
+  snacks: { name: "Tea & cake", ref_price: 1.20, purchase_price: 0.42 }   # prepared margin 65%
+  pies: { name: "Pie & mash", ref_price: 1.50, purchase_price: 0.53 }   # prepared margin 65%
+  clothes: { name: "Clothes", ref_price: 12.00, purchase_price: 6.00 }   # durable margin 50%
+  books: { name: "Books", ref_price: 4.00, purchase_price: 2.00 }   # durable margin 50%
+  electrical: { name: "Electrical goods", ref_price: 20.00, purchase_price: 10.00 }   # durable margin 50%
+  furniture: { name: "Furniture", ref_price: 30.00, purchase_price: 15.00 }   # durable margin 50%
+  hardware: { name: "Tools & hardware", ref_price: 3.00, purchase_price: 1.50 }   # durable margin 50%
+  jewellery: { name: "Jewellery", ref_price: 40.00, purchase_price: 18.00, luxury: true }   # luxury margin 55%
+  newspapers: { name: "Newspapers & magazines", ref_price: 0.30, purchase_price: 0.18, obsolete_year: 2010 }   # staple margin 40%
+  souvenirs: { name: "Souvenirs", ref_price: 3.00, purchase_price: 1.50 }   # durable margin 50%
+  toys: { name: "Toys", ref_price: 5.00, purchase_price: 2.50 }   # durable margin 50%
+  consultations: { name: "Doctor's consultation", ref_price: 6.00, purchase_price: 1.20 }   # service margin 80%
+  drinks: { name: "Drinks", ref_price: 1.50, purchase_price: 0.45 }   # drinks margin 70%
+  meals: { name: "Restaurant meal", ref_price: 6.00, purchase_price: 2.10 }   # prepared margin 65%
+  dancing: { name: "Dancing", ref_price: 3.00, purchase_price: 0.60 }   # service margin 80%
+  movies: { name: "Cinema ticket", ref_price: 1.50, purchase_price: 0.30 }   # service margin 80%
+  theatre: { name: "Theatre seat", ref_price: 8.00, purchase_price: 1.60 }   # service margin 80%
+  antiques: { name: "Antiques", ref_price: 50.00, purchase_price: 22.50, unlock_year: 1940, luxury: true }   # luxury margin 55%
+  ice_cream: { name: "Ice cream", ref_price: 0.80, purchase_price: 0.28, unlock_year: 1940 }   # prepared margin 65%
+  games: { name: "Games (pool, bowling, arcade)", ref_price: 1.00, purchase_price: 0.20, unlock_year: 1940 }   # service margin 80%
+  sports_goods: { name: "Sports goods", ref_price: 10.00, purchase_price: 5.00, unlock_year: 1950 }   # durable margin 50%
+  music: { name: "Recorded music", ref_price: 3.00, purchase_price: 1.50, unlock_year: 1950, obsolete_year: 2010 }   # durable margin 50%
+  fast_food: { name: "Fast food", ref_price: 2.50, purchase_price: 0.88, unlock_year: 1950 }   # prepared margin 65%
+  holidays: { name: "Package holiday", ref_price: 25.00, purchase_price: 16.25, unlock_year: 1960 }   # travel margin 35%
+  medicine: { name: "Medicine", ref_price: 4.00, purchase_price: 2.00, unlock_year: 1960 }   # durable margin 50%
+  videos: { name: "Video rental", ref_price: 2.00, purchase_price: 0.40, unlock_year: 1970, obsolete_year: 2008 }   # service margin 80%
+  fitness: { name: "Fitness session", ref_price: 4.00, purchase_price: 0.80, unlock_year: 1970 }   # service margin 80%
+  computers: { name: "Computers", ref_price: 25.00, purchase_price: 15.00, unlock_year: 1980 }   # tech margin 40%
+  phones: { name: "Telephones", ref_price: 15.00, purchase_price: 9.00, unlock_year: 1980, obsolete_year: 1995 }   # tech margin 40%
+  video_games: { name: "Video games", ref_price: 8.00, purchase_price: 4.00, unlock_year: 1990 }   # durable margin 50%
+  betting: { name: "Bets", ref_price: 2.00, purchase_price: 0.40, unlock_year: 1990 }   # service margin 80%
+  second_hand_clothes: { name: "Second-hand clothes", ref_price: 3.00, purchase_price: 0.45, unlock_year: 1990 }   # secondhand margin 85%
+  fried_chicken: { name: "Fried chicken", ref_price: 2.50, purchase_price: 0.88, unlock_year: 1990 }   # prepared margin 65%
+  coffee: { name: "Coffee", ref_price: 2.50, purchase_price: 0.75, unlock_year: 1990 }   # drinks margin 70%
+  mobile_phones: { name: "Mobile phones", ref_price: 20.00, purchase_price: 12.00, unlock_year: 1990 }   # tech margin 40%
+  internet_access: { name: "Internet access", ref_price: 2.00, purchase_price: 0.40, unlock_year: 1995, obsolete_year: 2015 }   # service margin 80%
+  online_betting: { name: "Online bets", ref_price: 3.00, purchase_price: 0.30, unlock_year: 2000 }   # digital margin 90%
+  music_streams: { name: "Music streaming", ref_price: 1.00, purchase_price: 0.10, unlock_year: 2000 }   # digital margin 90%
+  craft_beer: { name: "Craft beer", ref_price: 4.50, purchase_price: 1.35, unlock_year: 2005 }   # drinks margin 70%
+  vapes: { name: "Vapes", ref_price: 6.00, purchase_price: 3.00, unlock_year: 2010 }   # durable margin 50%
+  video_streams: { name: "Video streaming", ref_price: 1.00, purchase_price: 0.10, unlock_year: 2010 }   # digital margin 90%
+  takeaway: { name: "Delivered takeaway", ref_price: 9.00, purchase_price: 3.15, unlock_year: 2010 }   # prepared margin 65%
+  desk_days: { name: "Co-working desk day", ref_price: 15.00, purchase_price: 3.00, unlock_year: 2015 }   # service margin 80%
+  escape_games: { name: "Escape room game", ref_price: 20.00, purchase_price: 4.00, unlock_year: 2015 }   # service margin 80%
+  grooming: { name: "Haircut & beauty", ref_price: 12.00, purchase_price: 2.40, unlock_year: 2015 }   # service margin 80%
+  ev_charging: { name: "EV charge", ref_price: 8.00, purchase_price: 5.20, unlock_year: 2025 }   # energy margin 35%
+  vr_experiences: { name: "VR experience", ref_price: 12.00, purchase_price: 2.40, unlock_year: 2030 }   # service margin 80%
+  robo_meals: { name: "Robot-cooked meal", ref_price: 7.00, purchase_price: 2.45, unlock_year: 2030 }   # prepared margin 65%
+  cultured_meat: { name: "Lab-grown meat", ref_price: 3.00, purchase_price: 1.65, unlock_year: 2030 }   # fresh margin 45%
 types:
+  # ---- 1930 ------------------------------------------------------------
   bakery:
     name: "Bakery"
-    min_footprint: [2, 2]
-    max_height: 12              # R58
-    stock_density: 0.5
+    min_footprint: [2, 2]       # size: small
+    max_height: 12                # R58, size: small
+    stock_density: 9.25  # ref 2×2×10: needs £44.40/day
     hours: day
     goods: [bread]
-    utility_factor: { electricity: 1.0, gas: 1.5, water: 1.0, telecoms: 0.5 }
+    utility_factor: { electricity: 1.0, gas: 2.0, water: 1.5, telecoms: 0.5 }   # profile: kitchen
     unlock_year: 1930
-  grocery:
-    name: "Grocery"
-    min_footprint: [2, 3]
-    max_height: 16              # R58
-    stock_density: 0.6
+  bookshop:
+    name: "Bookshop"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 0.905  # ref 2×3×10: needs £65.10/day
     hours: day
-    goods: [groceries]
-    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 0.5 }
+    goods: [books]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 0.5 }   # profile: retail
+    unlock_year: 1930
+  butcher:
+    name: "Butcher"
+    min_footprint: [2, 2]       # size: small
+    max_height: 12                # R58, size: small
+    stock_density: 1.79  # ref 2×2×10: needs £44.20/day
+    hours: day
+    goods: [meat]
+    utility_factor: { electricity: 1.5, gas: 0.5, water: 1.5, telecoms: 0.5 }   # profile: chilled
+    unlock_year: 1930
+  cafe:
+    name: "Café"
+    min_footprint: [2, 2]       # size: small
+    max_height: 12                # R58, size: small
+    stock_density: 2.06  # ref 2×2×10: needs £44.40/day
+    hours: day
+    goods: [snacks]
+    utility_factor: { electricity: 1.0, gas: 2.0, water: 1.5, telecoms: 0.5 }   # profile: kitchen
     unlock_year: 1930
   clothes_store:
     name: "Clothes Store"
-    min_footprint: [3, 3]
-    max_height: 20              # R58
-    stock_density: 0.3
+    min_footprint: [3, 3]       # size: large
+    max_height: 20                # R58, size: large
+    stock_density: 0.302  # ref 3×3×10: needs £97.65/day
     hours: day
     goods: [clothes]
-    utility_factor: { electricity: 1.0, gas: 0.3, water: 0.2, telecoms: 0.5 }
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 0.5 }   # profile: retail
     unlock_year: 1930
+  dairy:
+    name: "Dairy"
+    min_footprint: [2, 2]       # size: small
+    max_height: 12                # R58, size: small
+    stock_density: 5.53  # ref 2×2×10: needs £44.20/day
+    hours: day
+    goods: [dairy]
+    utility_factor: { electricity: 1.5, gas: 0.5, water: 1.5, telecoms: 0.5 }   # profile: chilled
+    unlock_year: 1930
+  pie_and_mash:
+    name: "Pie & Mash Shop"
+    min_footprint: [2, 2]       # size: small
+    max_height: 12                # R58, size: small
+    stock_density: 1.66  # ref 2×2×10: needs £44.40/day
+    hours: day
+    goods: [pies]
+    utility_factor: { electricity: 1.0, gas: 2.0, water: 1.5, telecoms: 0.5 }   # profile: kitchen
+    unlock_year: 1930
+  doctors_surgery:
+    name: "Doctor's Surgery"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 0.307  # ref 2×3×10: needs £66.30/day
+    hours: day
+    goods: [consultations]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 1.5, telecoms: 1.5 }   # profile: clinic
+    unlock_year: 1930
+  electrical_shop:
+    name: "Electrical Shop"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 0.184  # ref 2×3×10: needs £66.00/day
+    hours: day
+    goods: [electrical]
+    utility_factor: { electricity: 1.5, gas: 0.5, water: 0.5, telecoms: 1.0 }   # profile: electronic
+    unlock_year: 1930
+  fishmonger:
+    name: "Fishmonger"
+    min_footprint: [2, 2]       # size: small
+    max_height: 12                # R58, size: small
+    stock_density: 2.46  # ref 2×2×10: needs £44.20/day
+    hours: day
+    goods: [fish]
+    utility_factor: { electricity: 1.5, gas: 0.5, water: 1.5, telecoms: 0.5 }   # profile: chilled
+    unlock_year: 1930
+  furniture_shop:
+    name: "Furniture Shop"
+    min_footprint: [3, 4]       # size: hall
+    max_height: 20                # R58, size: hall
+    stock_density: 0.121  # ref 3×4×10: needs £130.20/day
+    hours: day
+    goods: [furniture]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 0.5 }   # profile: retail
+    unlock_year: 1930
+  grocery:
+    name: "Greengrocer"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 2.21  # ref 2×3×10: needs £66.30/day
+    hours: day
+    goods: [groceries]
+    utility_factor: { electricity: 1.5, gas: 0.5, water: 1.5, telecoms: 0.5 }   # profile: chilled
+    unlock_year: 1930
+  hardware_shop:
+    name: "Hardware Shop"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 1.21  # ref 2×3×10: needs £65.10/day
+    hours: day
+    goods: [hardware]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 0.5 }   # profile: retail
+    unlock_year: 1930
+  jeweller:
+    name: "Jeweller"
+    min_footprint: [2, 2]       # size: small
+    max_height: 12                # R58, size: small
+    stock_density: 0.0775  # ref 2×2×10: needs £43.40/day
+    hours: day
+    goods: [jewellery]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 0.5 }   # profile: retail
+    unlock_year: 1930
+  news_stand:
+    name: "News Stand"
+    min_footprint: [1, 2]       # size: kiosk
+    max_height: 6                # R58, size: kiosk
+    stock_density: 18.1  # ref 1×2×10: needs £21.70/day
+    hours: day
+    goods: [newspapers]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 0.5 }   # profile: retail
+    unlock_year: 1930
+    obsolete_year: 2010
+  souvenir_shop:
+    name: "Souvenir Shop"
+    min_footprint: [2, 2]       # size: small
+    max_height: 12                # R58, size: small
+    stock_density: 1.21  # ref 2×2×10: needs £43.40/day
+    hours: day
+    goods: [souvenirs]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 0.5 }   # profile: retail
+    unlock_year: 1930
+  toy_shop:
+    name: "Toy Shop"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 0.724  # ref 2×3×10: needs £65.10/day
+    hours: day
+    goods: [toys]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 0.5 }   # profile: retail
+    unlock_year: 1930
+  ballroom:
+    name: "Ballroom"
+    min_footprint: [3, 4]       # size: hall
+    max_height: 20                # R58, size: hall
+    stock_density: 0.617  # ref 3×4×10: needs £133.20/day
+    hours: night
+    goods: [dancing]
+    utility_factor: { electricity: 2.0, gas: 1.0, water: 0.5, telecoms: 0.5 }   # profile: venue
+    unlock_year: 1930
+    obsolete_year: 1970
   bar:
     name: "Bar"
-    min_footprint: [2, 3]
-    max_height: 12              # R58
-    stock_density: 0.4
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 1.47  # ref 2×3×10: needs £65.94/day
     hours: night
     goods: [drinks]
-    utility_factor: { electricity: 1.2, gas: 0.5, water: 1.2, telecoms: 0.5 }
+    utility_factor: { electricity: 1.2, gas: 0.5, water: 1.5, telecoms: 0.5 }   # profile: bar
+    unlock_year: 1930
+  cinema:
+    name: "Cinema"
+    min_footprint: [3, 4]       # size: hall
+    max_height: 20                # R58, size: hall
+    stock_density: 1.24  # ref 3×4×10: needs £133.20/day
+    hours: night
+    goods: [movies]
+    utility_factor: { electricity: 2.0, gas: 1.0, water: 0.5, telecoms: 0.5 }   # profile: venue
     unlock_year: 1930
   restaurant:
     name: "Restaurant"
-    min_footprint: [3, 3]
-    max_height: 16              # R58
-    stock_density: 0.3
+    min_footprint: [3, 3]       # size: large
+    max_height: 20                # R58, size: large
+    stock_density: 0.412  # ref 3×3×10: needs £99.90/day
     hours: night
     goods: [meals]
-    utility_factor: { electricity: 1.2, gas: 1.5, water: 1.2, telecoms: 0.5 }
+    utility_factor: { electricity: 1.0, gas: 2.0, water: 1.5, telecoms: 0.5 }   # profile: kitchen
     unlock_year: 1930
+  theatre:
+    name: "Theatre"
+    min_footprint: [3, 4]       # size: hall
+    max_height: 20                # R58, size: hall
+    stock_density: 0.232  # ref 3×4×10: needs £133.20/day
+    hours: night
+    goods: [theatre]
+    utility_factor: { electricity: 2.0, gas: 1.0, water: 0.5, telecoms: 0.5 }   # profile: venue
+    unlock_year: 1930
+  # ---- 1940 ------------------------------------------------------------
+  antique_shop:
+    name: "Antique Shop"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 0.062  # ref 2×3×10: needs £65.10/day
+    hours: day
+    goods: [antiques]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 0.5 }   # profile: retail
+    unlock_year: 1940
+  ice_cream_parlour:
+    name: "Ice Cream Parlour"
+    min_footprint: [2, 2]       # size: small
+    max_height: 12                # R58, size: small
+    stock_density: 3.07  # ref 2×2×10: needs £44.20/day
+    hours: day
+    goods: [ice_cream]
+    utility_factor: { electricity: 1.5, gas: 0.5, water: 1.5, telecoms: 0.5 }   # profile: chilled
+    unlock_year: 1940
+  nightclub:
+    name: "Nightclub"
+    min_footprint: [3, 3]       # size: large
+    max_height: 20                # R58, size: large
+    stock_density: 0.871  # ref 3×3×10: needs £99.90/day
+    hours: night
+    goods: [dancing, drinks]
+    utility_factor: { electricity: 2.0, gas: 1.0, water: 0.5, telecoms: 0.5 }   # profile: venue
+    unlock_year: 1940
+  pool_hall:
+    name: "Pool Hall"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 1.85  # ref 2×3×10: needs £66.60/day
+    hours: night
+    goods: [games]
+    utility_factor: { electricity: 2.0, gas: 1.0, water: 0.5, telecoms: 0.5 }   # profile: venue
+    unlock_year: 1940
+  # ---- 1950 ------------------------------------------------------------
+  sports_shop:
+    name: "Sports Shop"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 0.362  # ref 2×3×10: needs £65.10/day
+    hours: day
+    goods: [sports_goods]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 0.5 }   # profile: retail
+    unlock_year: 1950
+  music_store:
+    name: "Music Store"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 1.21  # ref 2×3×10: needs £65.10/day
+    hours: day
+    goods: [music]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 0.5 }   # profile: retail
+    unlock_year: 1950
+    obsolete_year: 2010
+  delicatessen:
+    name: "Delicatessen"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 2.5  # ref 2×3×10: needs £66.30/day
+    hours: day
+    goods: [meat, fish, dairy, groceries]
+    utility_factor: { electricity: 1.5, gas: 0.5, water: 1.5, telecoms: 0.5 }   # profile: chilled
+    unlock_year: 1950
+  fast_food_outlet:
+    name: "Fast Food Outlet"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 0.992  # ref 2×3×10: needs £66.60/day
+    hours: night
+    goods: [fast_food]
+    utility_factor: { electricity: 1.0, gas: 2.0, water: 1.5, telecoms: 0.5 }   # profile: kitchen
+    unlock_year: 1950
+  # ---- 1960 ------------------------------------------------------------
+  travel_agency:
+    name: "Travel Agency"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 0.294  # ref 2×3×10: needs £66.00/day
+    hours: day
+    goods: [holidays]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 2.0 }   # profile: office
+    unlock_year: 1960
+    obsolete_year: 2020
+  general_store:
+    name: "General Store"
+    min_footprint: [3, 3]       # size: large
+    max_height: 20                # R58, size: large
+    stock_density: 5.03  # ref 3×3×10: needs £99.45/day
+    hours: day
+    goods: [groceries, dairy, newspapers, bread]
+    utility_factor: { electricity: 1.5, gas: 0.5, water: 1.5, telecoms: 0.5 }   # profile: chilled
+    unlock_year: 1960
+  pharmacy:
+    name: "Pharmacy"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 0.921  # ref 2×3×10: needs £66.30/day
+    hours: day
+    goods: [medicine]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 1.5, telecoms: 1.5 }   # profile: clinic
+    unlock_year: 1960
+  bowling_alley:
+    name: "Bowling Alley"
+    min_footprint: [3, 4]       # size: hall
+    max_height: 20                # R58, size: hall
+    stock_density: 1.3  # ref 3×4×10: needs £133.20/day
+    hours: night
+    goods: [games, fast_food]
+    utility_factor: { electricity: 2.0, gas: 1.0, water: 0.5, telecoms: 0.5 }   # profile: venue
+    unlock_year: 1960
+  # ---- 1970 ------------------------------------------------------------
+  department_store:
+    name: "Department Store"
+    min_footprint: [4, 6]       # size: big
+    max_height: 30                # R58, size: big
+    stock_density: 0.185  # ref 4×6×10: needs £260.40/day
+    hours: day
+    goods: [clothes, books, jewellery, electrical, furniture, toys]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 0.5 }   # profile: retail
+    unlock_year: 1970
+  health_club:
+    name: "Health Club"
+    min_footprint: [3, 3]       # size: large
+    max_height: 20                # R58, size: large
+    stock_density: 0.412  # ref 3×3×10: needs £99.90/day
+    hours: day
+    goods: [fitness, sports_goods]
+    utility_factor: { electricity: 1.5, gas: 1.0, water: 1.5, telecoms: 0.5 }   # profile: leisure
+    unlock_year: 1970
+  amusement_arcade:
+    name: "Amusement Arcade"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 1.85  # ref 2×3×10: needs £66.60/day
+    hours: night
+    goods: [games]
+    utility_factor: { electricity: 2.0, gas: 1.0, water: 0.5, telecoms: 0.5 }   # profile: venue
+    unlock_year: 1970
+  video_store:
+    name: "Video Store"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 0.905  # ref 2×3×10: needs £65.10/day
+    hours: night
+    goods: [videos]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 0.5 }   # profile: retail
+    unlock_year: 1970
+    obsolete_year: 2008
+  # ---- 1980 ------------------------------------------------------------
+  computer_shop:
+    name: "Computer Shop"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 0.22  # ref 2×3×10: needs £66.00/day
+    hours: day
+    goods: [computers]
+    utility_factor: { electricity: 1.5, gas: 0.5, water: 0.5, telecoms: 1.0 }   # profile: electronic
+    unlock_year: 1980
+  phone_shop:
+    name: "Phone Shop"
+    min_footprint: [2, 2]       # size: small
+    max_height: 12                # R58, size: small
+    stock_density: 0.367  # ref 2×2×10: needs £44.00/day
+    hours: day
+    goods: [phones]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 2.0 }   # profile: office
+    unlock_year: 1980
+    obsolete_year: 1995
+  supermarket:
+    name: "Supermarket"
+    min_footprint: [4, 6]       # size: big
+    max_height: 30                # R58, size: big
+    stock_density: 1.21  # ref 4×6×10: needs £265.20/day
+    hours: day
+    goods: [meat, fish, groceries, dairy, bread, clothes]
+    utility_factor: { electricity: 1.5, gas: 0.5, water: 1.5, telecoms: 0.5 }   # profile: chilled
+    unlock_year: 1980
+  electronics_superstore:
+    name: "Electronics Superstore"
+    min_footprint: [3, 4]       # size: hall
+    max_height: 20                # R58, size: hall
+    stock_density: 0.336  # ref 3×4×10: needs £132.00/day
+    hours: day
+    goods: [videos, music, electrical, computers]
+    utility_factor: { electricity: 1.5, gas: 0.5, water: 0.5, telecoms: 1.0 }   # profile: electronic
+    unlock_year: 1980
+  # ---- 1990 ------------------------------------------------------------
+  games_software_house:
+    name: "Games Software House"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 0.459  # ref 2×3×10: needs £66.00/day
+    hours: day
+    goods: [video_games]
+    utility_factor: { electricity: 1.5, gas: 0.5, water: 0.5, telecoms: 1.0 }   # profile: electronic
+    unlock_year: 1990
+  betting_shop:
+    name: "Betting Shop"
+    min_footprint: [2, 2]       # size: small
+    max_height: 12                # R58, size: small
+    stock_density: 0.917  # ref 2×2×10: needs £44.00/day
+    hours: day
+    goods: [betting]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 2.0 }   # profile: office
+    unlock_year: 1990
+  charity_shop:
+    name: "Charity Shop"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 0.557  # ref 2×3×10: needs £65.10/day
+    hours: day
+    goods: [second_hand_clothes]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 0.5 }   # profile: retail
+    unlock_year: 1990
+  chicken_shop:
+    name: "Chicken Shop"
+    min_footprint: [2, 2]       # size: small
+    max_height: 12                # R58, size: small
+    stock_density: 0.992  # ref 2×2×10: needs £44.40/day
+    hours: night
+    goods: [fried_chicken]
+    utility_factor: { electricity: 1.0, gas: 2.0, water: 1.5, telecoms: 0.5 }   # profile: kitchen
+    unlock_year: 1990
+  coffee_chain:
+    name: "Coffee Chain"
+    min_footprint: [2, 2]       # size: small
+    max_height: 12                # R58, size: small
+    stock_density: 0.888  # ref 2×2×10: needs £44.40/day
+    hours: day
+    goods: [coffee]
+    utility_factor: { electricity: 1.0, gas: 2.0, water: 1.5, telecoms: 0.5 }   # profile: kitchen
+    unlock_year: 1990
+  mobile_phone_shop:
+    name: "Mobile Phone Shop"
+    min_footprint: [2, 2]       # size: small
+    max_height: 12                # R58, size: small
+    stock_density: 0.275  # ref 2×2×10: needs £44.00/day
+    hours: day
+    goods: [mobile_phones]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 2.0 }   # profile: office
+    unlock_year: 1990
+  # ---- 1995 ------------------------------------------------------------
+  internet_cafe:
+    name: "Internet Café"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 0.934  # ref 2×3×10: needs £67.20/day
+    hours: day
+    goods: [internet_access]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 2.0 }   # profile: office
+    unlock_year: 1995
+    obsolete_year: 2015
+  ecommerce:
+    name: "E-commerce Warehouse"
+    min_footprint: [3, 4]       # size: hall
+    max_height: 20                # R58, size: hall
+    stock_density: 0.365  # ref 3×4×10: needs £134.40/day
+    hours: day
+    goods: [clothes, books, electrical, toys]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 2.0 }   # profile: office
+    unlock_year: 1995
+    channel: online
+  # ---- 2000 ------------------------------------------------------------
+  online_casino:
+    name: "Online Casino"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 0.573  # ref 2×3×10: needs £72.12/day
+    hours: night
+    goods: [online_betting]
+    utility_factor: { electricity: 4.0, gas: 0.2, water: 1.0, telecoms: 3.0 }   # profile: server
+    unlock_year: 2000
+    channel: online
+  gym:
+    name: "Gym"
+    min_footprint: [3, 3]       # size: large
+    max_height: 20                # R58, size: large
+    stock_density: 0.465  # ref 3×3×10: needs £100.35/day
+    hours: day
+    goods: [fitness]
+    utility_factor: { electricity: 1.5, gas: 1.0, water: 1.5, telecoms: 0.5 }   # profile: leisure
+    unlock_year: 2000
+  music_streaming:
+    name: "Music Streaming"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 1.72  # ref 2×3×10: needs £72.12/day
+    hours: day
+    goods: [music_streams]
+    utility_factor: { electricity: 4.0, gas: 0.2, water: 1.0, telecoms: 3.0 }   # profile: server
+    unlock_year: 2000
+    channel: online
+  # ---- 2005 ------------------------------------------------------------
+  boutique_hotel:
+    name: "Boutique Hotel"
+    min_footprint: [3, 3]       # size: tower
+    max_height: 40                # R58, size: tower
+    stock_density: 0
+    hours: hotel
+    goods: []
+    utility_factor: { electricity: 1.2, gas: 1.2, water: 1.5, telecoms: 0.5 }   # profile: hotel
+    unlock_year: 2005
+  craft_taproom:
+    name: "Craft Brewery & Taproom"
+    min_footprint: [3, 3]       # size: large
+    max_height: 20                # R58, size: large
+    stock_density: 0.491  # ref 3×3×10: needs £99.36/day
+    hours: night
+    goods: [craft_beer]
+    utility_factor: { electricity: 1.2, gas: 0.5, water: 1.5, telecoms: 0.5 }   # profile: bar
+    unlock_year: 2005
+  # ---- 2010 ------------------------------------------------------------
+  vape_shop:
+    name: "Vape Shop"
+    min_footprint: [2, 2]       # size: small
+    max_height: 12                # R58, size: small
+    stock_density: 0.606  # ref 2×2×10: needs £43.60/day
+    hours: day
+    goods: [vapes]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 0.5 }   # profile: retail
+    unlock_year: 2010
+  video_streaming:
+    name: "Video Streaming"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 1.72  # ref 2×3×10: needs £72.12/day
+    hours: night
+    goods: [video_streams]
+    utility_factor: { electricity: 4.0, gas: 0.2, water: 1.0, telecoms: 3.0 }   # profile: server
+    unlock_year: 2010
+    channel: online
+  food_delivery_platform:
+    name: "Food Delivery Platform"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 0.277  # ref 2×3×10: needs £67.20/day
+    hours: night
+    goods: [takeaway]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 2.0 }   # profile: office
+    unlock_year: 2010
+    channel: online
+  # ---- 2015 ------------------------------------------------------------
+  coworking_space:
+    name: "Co-working Space"
+    min_footprint: [3, 3]       # size: large
+    max_height: 20                # R58, size: large
+    stock_density: 0.125  # ref 3×3×10: needs £100.80/day
+    hours: day
+    goods: [desk_days]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 2.0 }   # profile: office
+    unlock_year: 2015
+  escape_room:
+    name: "Escape Room"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 0.093  # ref 2×3×10: needs £66.90/day
+    hours: night
+    goods: [escape_games]
+    utility_factor: { electricity: 2.0, gas: 1.0, water: 0.5, telecoms: 0.5 }   # profile: venue
+    unlock_year: 2015
+  barber_beauty_bar:
+    name: "Barber & Beauty Bar"
+    min_footprint: [2, 2]       # size: small
+    max_height: 12                # R58, size: small
+    stock_density: 0.156  # ref 2×2×10: needs £44.80/day
+    hours: day
+    goods: [grooming]
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 1.5, telecoms: 1.5 }   # profile: clinic
+    unlock_year: 2015
+  # ---- 2020 ------------------------------------------------------------
+  dark_kitchen:
+    name: "Dark Kitchen"
+    min_footprint: [2, 3]       # size: medium
+    max_height: 16                # R58, size: medium
+    stock_density: 0.276  # ref 2×3×10: needs £66.90/day
+    hours: night
+    goods: [takeaway]
+    utility_factor: { electricity: 1.0, gas: 2.0, water: 1.5, telecoms: 0.5 }   # profile: kitchen
+    unlock_year: 2020
+    channel: online
+  click_and_collect:
+    name: "Click & Collect Locker"
+    min_footprint: [1, 2]       # size: kiosk
+    max_height: 6                # R58, size: kiosk
+    stock_density: 0
+    hours: none
+    goods: []
+    utility_factor: { electricity: 1.0, gas: 0.5, water: 0.5, telecoms: 0.5 }   # profile: retail
+    unlock_year: 2020
+    channel: infrastructure
+  data_centre:
+    name: "Data Centre"
+    min_footprint: [4, 4]       # size: plant
+    max_height: 30                # R58, size: plant
+    stock_density: 0
+    hours: none
+    goods: []
+    utility_factor: { electricity: 4.0, gas: 0.2, water: 1.0, telecoms: 3.0 }   # profile: server
+    unlock_year: 2020
+    channel: infrastructure
+  # ---- 2025 ------------------------------------------------------------
+  ev_charging_hub:
+    name: "EV Charging Hub"
+    min_footprint: [3, 4]       # size: yard
+    max_height: 6                # R58, size: yard
+    stock_density: 0.969  # ref 3×4×10: needs £139.44/day
+    hours: day
+    goods: [ev_charging]
+    utility_factor: { electricity: 5.0, gas: 0.0, water: 0.2, telecoms: 0.5 }   # profile: charger
+    unlock_year: 2025
+  vertical_farm:
+    name: "Vertical Farm"
+    min_footprint: [3, 3]       # size: tower
+    max_height: 40                # R58, size: tower
+    stock_density: 0
+    hours: none
+    goods: []
+    utility_factor: { electricity: 3.0, gas: 0.5, water: 3.0, telecoms: 0.5 }   # profile: farm
+    unlock_year: 2025
+    channel: infrastructure
+  # ---- 2030 ------------------------------------------------------------
+  drone_delivery_hub:
+    name: "Drone Delivery Hub"
+    min_footprint: [3, 3]       # size: large
+    max_height: 20                # R58, size: large
+    stock_density: 0
+    hours: none
+    goods: []
+    utility_factor: { electricity: 1.5, gas: 0.5, water: 0.5, telecoms: 1.0 }   # profile: electronic
+    unlock_year: 2030
+    channel: infrastructure
+  vr_arcade:
+    name: "VR Arcade"
+    min_footprint: [3, 3]       # size: large
+    max_height: 20                # R58, size: large
+    stock_density: 0.155  # ref 3×3×10: needs £100.35/day
+    hours: night
+    goods: [vr_experiences]
+    utility_factor: { electricity: 2.0, gas: 1.0, water: 0.5, telecoms: 0.5 }   # profile: venue
+    unlock_year: 2030
+  robo_restaurant:
+    name: "Robo-Restaurant"
+    min_footprint: [3, 3]       # size: large
+    max_height: 20                # R58, size: large
+    stock_density: 0.354  # ref 3×3×10: needs £100.35/day
+    hours: night
+    goods: [robo_meals]
+    utility_factor: { electricity: 1.0, gas: 2.0, water: 1.5, telecoms: 0.5 }   # profile: kitchen
+    unlock_year: 2030
+  lab_grown_butcher:
+    name: "Lab-grown Butcher"
+    min_footprint: [2, 2]       # size: small
+    max_height: 12                # R58, size: small
+    stock_density: 1.48  # ref 2×2×10: needs £44.40/day
+    hours: day
+    goods: [cultured_meat]
+    utility_factor: { electricity: 1.5, gas: 0.5, water: 1.5, telecoms: 0.5 }   # profile: chilled
+    unlock_year: 2030
   # The one apartments type (§7.2; R20, R28, R50, R51, R56): the city's starting blocks (R28,
   # map.yaml city_apartments) and every residential building. Flats per building =
   # volume ÷ customers.yaml residential.flat_size (R50); the owner sets the rent (R51). No goods,
@@ -73,5 +746,5 @@ types:
     stock_density: 0            # no stock (R56)
     hours: none                 # no trading window
     goods: []                   # flats, not goods
-    utility_factor: { electricity: 0.8, gas: 0.8, water: 1.0, telecoms: 0.5 }   # placeholder
+    utility_factor: { electricity: 0.8, gas: 0.8, water: 1.0, telecoms: 0.5 }   # profile: residential
     unlock_year: 1930

@@ -5,9 +5,9 @@ Feature: Shoppers come from home and from the tube
   a daily allowance and a shopping list that depend on who they are.
 
   Background:
+    # A fixed two-rule table, so every shopper has a list (the shipped table is era content).
     Given the shipped config
-    And the shipped config with "customers.yaml" key "/desires/0/goods" set to "{bread: 1.0}"
-    And the shipped config with "customers.yaml" key "/desires/1/goods" set to "{drinks: 1.0}"
+    And the shipped config with "customers.yaml" key "/desires" set to "[{match: {window: day}, goods: {bread: 1.0}}, {match: {window: night}, goods: {drinks: 1.0}}]"
 
   @R55
   Scenario Outline: The daily allowance depends on class, age and sex
@@ -28,7 +28,9 @@ Feature: Shoppers come from home and from the tube
 
   @R55
   Scenario Outline: What people want depends on class, age, sex, the hour and the year
+    # The v1 table: an everyone rule and an upper-class rule per window.
     Given the shipped config
+    And the shipped config with "customers.yaml" key "/desires" set to "[{match: {window: day}, goods: {bread: 0.6, groceries: 0.5, clothes: 0.05}}, {match: {window: night}, goods: {drinks: 0.3, meals: 0.1}}, {match: {class: upper, window: day}, goods: {bread: 0.4, groceries: 0.3, clothes: 0.2}}, {match: {class: upper, window: night}, goods: {drinks: 0.3, meals: 0.4}}]"
     And the shipped config with "customers.yaml" key "/desires/2/match" set to "{sex: female, age: '18-29', window: day, from_year: 1950}"
     Then P(<good> | <class> <sex> aged "<band>", <window>, <year>) is <p>
 

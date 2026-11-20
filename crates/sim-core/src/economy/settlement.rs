@@ -236,8 +236,10 @@ mod tests {
                 .map(|b| b.amount)
                 .sum()
         };
+        // Volume 40 on Low (×0.6): rent £1.20 to the leaseholder; utilities 40 × 6p (the
+        // kitchen profile, docs/economy.md) = £2.40 and 100 bread × 36p = £36.00 to the city.
         assert_eq!(to(P1), Money::from_pence(120));
-        assert_eq!(to(AccountId::City), Money::from_pence(600));
+        assert_eq!(to(AccountId::City), Money::from_pence(3_840));
     }
 
     #[test]
@@ -267,8 +269,9 @@ mod tests {
         let bills = settlement_bills(&map, &businesses, &utilities, &config, 1930);
         assert!(bills.iter().all(|b| b.from != b.to));
         let paid: Money = bills.iter().map(|b| b.amount).sum();
-        // £7.20 less the 80p electricity bill it now pays itself.
-        assert_eq!(paid, Money::from_pence(640));
+        // £39.60 (rent £1.20, utilities £2.40, stock £36.00) less the 80p electricity bill it
+        // now pays itself.
+        assert_eq!(paid, Money::from_pence(3_880));
     }
 
     #[test]

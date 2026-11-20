@@ -22,6 +22,7 @@ pub fn check(config: &Config) -> Vec<ConfigError> {
     check_city_apartments(config, &mut errors);
     check_auctions(config, &mut errors);
     check_utilities(config, &mut errors);
+    check_eras(config, &mut errors);
     errors
 }
 
@@ -482,7 +483,8 @@ fn check_desires(config: &Config, bands: &BTreeSet<&str>, errors: &mut Vec<Confi
                     format!("unknown good {good:?} (not in businesses.yaml)"),
                 );
             }
-            if !(0.0..=1.0).contains(weight) {
+            let scale = rule.mode == super::customers::DesireMode::Scale;
+            if !scale && !(0.0..=1.0).contains(weight) {
                 err(
                     errors,
                     file,
@@ -981,6 +983,103 @@ fn check_auctions(config: &Config, errors: &mut Vec<ConfigError>) {
                 format!("/increments/{i}"),
                 "increments must be in ascending order with no repeats".into(),
             );
+        }
+    }
+}
+
+/// Era content (§7.1, §7.4, §7.5, §8.2; R45, R64): unlock and obsolete years in order, no type
+/// selling a good before anyone wants it, online sellers only once the internet is up, the
+/// stats formula's reference shop in range, scale rules in range, and no desire rule naming a
+/// good that unlocks only after the rule ends.
+fn check_eras(config: &Config, errors: &mut Vec<ConfigError>) {
+    use super::businesses::Channel;
+    let b = &config.businesses;
+    let file = ConfigFile::Businesses;
+    let backwards = |unlock: Option<i32>, obsolete: Option<i32>| matches!((unlock, obsolete), (Some(u), Some(o)) if o < u);
+    for (id, good) in &b.goods {
+        if backwards(good.unlock_year, good.obsolete_year) {
+            err(
+                errors,
+                file,
+                format!("/goods/{id}/obsolete_year"),
+                format!(
+                    "obsolete before it unlocks ({:?} < {:?})",
+                    good.obsolete_year, good.unlock_year
+                ),
+            );
+        }
+    }
+    let internet = config.utilities.internet.upgrade_year;
+    for (id, kind) in &b.types {
+        let at = format!("/types/{id}");
+        if backwards(Some(kind.unlock_year), kind.obsolete_year) {
+            err(
+                errors,
+                file,
+                format!("{at}/obsolete_year"),
+                format!("obsolete before it unlocks in {}", kind.unlock_year),
+            );
+        }
+        for (i, name) in kind.goods.iter().enumerate() {
+            if let Some(unlock) = b.goods.get(name).and_then(|g| g.unlock_year)
+                && unlock > kind.unlock_year
+            {
+                err(
+                    errors,
+                    file,
+                    format!("{at}/goods/{i}"),
+                    format!(
+                        "{name} unlocks in {unlock}, after the type ({}): it would stock what nobody wants",
+                        kind.unlock_year
+                    ),
+                );
+            }
+        }
+        if kind.channel == Channel::Online && kind.unlock_year < internet {
+            err(
+                errors,
+                file,
+                format!("{at}/unlock_year"),
+                format!(
+                    "an online business needs the internet ({internet}): utilities.yaml internet.upgrade_year (R15)"
+                ),
+            );
+        }
+    }
+    let s = b.reference.sell_through.rate();
+    if s <= Rate::ZERO || s > Rate::ONE {
+        err(
+            errors,
+            file,
+            "/reference/sell_through".into(),
+            "must be above 0 and at most 1".into(),
+        );
+    }
+    for (i, rule) in config.customers.desires.iter().enumerate() {
+        for (name, weight) in &rule.goods {
+            let at = format!("/desires/{i}/goods/{name}");
+            if rule.mode == super::customers::DesireMode::Scale && !(0.0..=10.0).contains(weight) {
+                err(
+                    errors,
+                    ConfigFile::Customers,
+                    at.clone(),
+                    "a scale must be between 0 and 10".into(),
+                );
+            }
+            if let (Some(until), Some(unlock)) = (
+                rule.matcher.until_year,
+                b.goods.get(name).and_then(|g| g.unlock_year),
+            ) && unlock > until
+            {
+                err(
+                    errors,
+                    ConfigFile::Customers,
+                    at,
+                    format!(
+                        "never wanted: {name} unlocks in {unlock}, after this rule ends ({until})"
+                    ),
+                );
+            }
         }
     }
 }
