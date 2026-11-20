@@ -52,6 +52,31 @@ Feature: Balance study
     When I generate the models
     Then model 1 overrides every year under "customers.births_per_woman" by its "births" factor
 
+  @R64
+  Scenario Outline: A categorical parameter gives each value an equal share of the models
+    Given the shipped config
+    And a study of <models> models from seed <seed>
+    And the categorical parameter "land" on "game.net_worth.land_value" with values "book_decay, market, market_no_decay"
+    When I generate the models
+    Then the <sampled> sampled models of "land" take each value between <least> and <most> times
+    And every sampled model of "land" sets "game.net_worth.land_value" to its value
+
+    Examples:
+      | models | seed | sampled | least | most |
+      | 13     | 3    | 12      | 4     | 4    |
+      | 31     | 9    | 30      | 10    | 10   |
+      | 12     | 1    | 11      | 3     | 4    |
+
+  @R64
+  Scenario: Model 0 shows the shipped category, and models.csv shows value names
+    Given the shipped config
+    And a study of 4 models of 2 games from seed 0 with the roster "grocer, idle" on preset "v1"
+    And the categorical parameter "land" on "game.net_worth.land_value" with values "market, market_no_decay"
+    When I run the study
+    Then the study finishes with 4 models
+    And models.csv shows "land" as "book_decay" for model 0
+    And models.csv shows "land" as one of "market, market_no_decay" for models 1 to 3
+
   # ---- Seats ---------------------------------------------------------------------------------
 
   @R65
