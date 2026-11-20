@@ -4,8 +4,10 @@ Feature: Business auctions
   land: the same one-at-a-time queue, the same 120-second countdown, and no shortcuts
   for distressed sellers. A land auction sells the land only.
 
+  # The distressed-seller scenario needs player 0 overdrawn after buying, so starting cash (R62) is pinned to £0.
   Background:
     Given the shipped config
+    And the shipped config with "game.yaml" key "/players/starting_cash" set to "0"
     And a game with 3 players
     And player 0 has won the apartment block on "Whitechapel" at auction
 

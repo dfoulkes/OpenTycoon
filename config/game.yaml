@@ -39,4 +39,4 @@ leases:
 players:
   min: 2                        # §1
   max: 6                        # §1
-  starting_cash: 0              # placeholder: the spec sets no starting cash; players start on the overdraft
+  starting_cash: 7000           # R62: every player starts with £7,000 (configurable)

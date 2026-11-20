@@ -5,4 +5,3 @@
 R4   # partial: hand-over, defaults and city-never-bust proven (economy); city-run businesses actually trading needs businesses/customers trading
 R56  # partial: apartment land rent/utilities/no stock proven (housing.feature); 06:00 settlement billing them is economy's
 R59  # partial: 70/30 commuter/tourist split proven; everyone unhoused takes the train at close until hotels (post-v1)
-R62  # starting cash: separate PR

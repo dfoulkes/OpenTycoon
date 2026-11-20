@@ -69,6 +69,7 @@ Feature: Opening an auction
   # §5.1 and R7: the opening bid, like every bid, is capped at balance + credit limit.
   @R8
   Scenario: An opening bid above the bidder's ceiling is refused
-    Given a game with 2 players
+    Given the shipped config with "game.yaml" key "/players/starting_cash" set to "0"
+    And a game with 2 players
     When player 0 opens an auction on "Mayfair" with £14,000
     Then the command is refused: over the ceiling

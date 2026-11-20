@@ -5,8 +5,10 @@ Feature: Bidding round the table
   only for that round. A full round with no new bids closes the auction and the highest
   bidder wins and pays at once. A turn that runs out its 10 seconds is a pass.
 
+  # Ceilings here are measured from a zero balance, so starting cash (R62) is pinned to £0.
   Background:
     Given the shipped config
+    And the shipped config with "game.yaml" key "/players/starting_cash" set to "0"
     And a game with 4 players
 
   @R8
