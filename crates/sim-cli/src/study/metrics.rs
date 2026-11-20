@@ -118,6 +118,11 @@ impl GameOutcome {
         self.net_worth.len() > 1
             && (0..self.net_worth.len()).all(|s| s == seat || key(s) > key(seat))
     }
+
+    /// R65's idle rule for `seat`. Stub: still the old rule (strictly last).
+    pub fn idle_below_solvent_ais(&self, _roster: &Roster, seat: usize) -> bool {
+        self.strictly_last(seat)
+    }
 }
 
 /// Raw counts for one model; [`metrics`] turns them into shares and the verdict.
@@ -131,6 +136,8 @@ pub struct Tally {
     pub bankrupt: Vec<u64>,
     /// Games the idle seat finished strictly last.
     pub idle_last: u64,
+    /// Games the idle seat finished below every AI still solvent (R65).
+    pub idle_below_solvent: u64,
     /// Sum of the idle seat's finishing positions.
     pub idle_rank_sum: u64,
     /// Final net worths per roster entry, pence.
@@ -163,6 +170,9 @@ impl Tally {
                 self.idle_rank_sum += u64::from(game.rank(seat));
                 if game.strictly_last(seat) {
                     self.idle_last += 1;
+                }
+                if game.idle_below_solvent_ais(roster, seat) {
+                    self.idle_below_solvent += 1;
                 }
             }
         }
@@ -215,6 +225,9 @@ pub struct ModelMetrics {
     pub idle_mean_rank: Option<f64>,
     /// Share of games the idle seat finished strictly last, `None` without an idle seat.
     pub idle_last_rate: Option<f64>,
+    /// Share of games the idle seat finished below every AI still solvent, `None` without an
+    /// idle seat.
+    pub idle_below_solvent_rate: Option<f64>,
     /// R65: every AI win share within the bounds, AI bankruptcy below the limit, the idle
     /// seat last often enough. Never true without an idle seat or games.
     pub balanced: bool,
@@ -277,6 +290,8 @@ pub fn metrics(roster: &Roster, tally: &Tally, criteria: &Criteria) -> ModelMetr
     let has_idle = roster.idle().is_some();
     let idle_mean_rank = (has_idle && games > 0).then(|| share(tally.idle_rank_sum, games));
     let idle_last_rate = (has_idle && games > 0).then(|| share(tally.idle_last, games));
+    let idle_below_solvent_rate =
+        (has_idle && games > 0).then(|| share(tally.idle_below_solvent, games));
     let ai_bankruptcy_rate = share(ai_bankrupt, games * ai_seats);
     let evenness_entropy = normalised_entropy(&ai_wins);
     let balanced = games > 0
@@ -298,6 +313,7 @@ pub fn metrics(roster: &Roster, tally: &Tally, criteria: &Criteria) -> ModelMetr
         ai_bankruptcy_rate,
         idle_mean_rank,
         idle_last_rate,
+        idle_below_solvent_rate,
         balanced,
         score: evenness_entropy,
         entries,

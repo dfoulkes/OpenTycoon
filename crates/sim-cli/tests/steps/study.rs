@@ -7,9 +7,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use cucumber::{given, then, when};
 use sim_cli::study::{
-    Distribution, Entry, GamePlan, Kind, ModelMetrics, ModelSpec, Parameter, Roster, RunOptions,
-    StudyDef, StudyReport, Tally, generate, gini, metrics, model_config, normalised_entropy,
-    overrides_for, plan, resolve_roster, run_study, wilson,
+    Distribution, Entry, GameOutcome, GamePlan, Kind, ModelMetrics, ModelSpec, Parameter, Roster,
+    RunOptions, StudyDef, StudyReport, Tally, generate, gini, metrics, model_config,
+    normalised_entropy, overrides_for, plan, resolve_roster, run_study, wilson,
 };
 use sim_core::ConfigSources;
 
@@ -32,6 +32,8 @@ pub struct StudyState {
     pub interval: Option<(f64, f64)>,
     /// Win counts for evenness.
     pub counts: Vec<u64>,
+    /// A synthetic game.
+    pub game: Option<GameOutcome>,
     /// A synthetic tally.
     pub tally: Option<Tally>,
     /// Metrics of the last model computed.
@@ -393,9 +395,78 @@ fn synthetic_bankrupt(w: &mut HarnessWorld, n: u64) {
     t.bankrupt[1] = n - n / 2;
 }
 
+#[given(expr = "the idle seat finishes below every solvent AI in {int} games")]
+fn synthetic_idle_below_solvent(w: &mut HarnessWorld, n: u64) {
+    w.study.tally.as_mut().unwrap().idle_below_solvent = n;
+}
+
 #[given(expr = "the idle seat finishes strictly last in {int} games")]
 fn synthetic_idle_last(w: &mut HarnessWorld, n: u64) {
     w.study.tally.as_mut().unwrap().idle_last = n;
+}
+
+/// `"900"` is a solvent player with 900 pence; `"-200 bankrupt"` a bankrupt one.
+fn final_position(s: &str) -> (i64, bool) {
+    let (nw, bankrupt) = match s.trim().strip_suffix("bankrupt") {
+        Some(nw) => (nw, true),
+        None => (s, false),
+    };
+    (nw.trim().parse().unwrap(), bankrupt)
+}
+
+#[given(regex = r"^a game that ends with grocer (.+), landlord (.+), toff (.+), idle (.+)$")]
+fn a_finished_game(
+    w: &mut HarnessWorld,
+    grocer: String,
+    landlord: String,
+    toff: String,
+    idle: String,
+) {
+    let (net_worth, bankrupt) = [grocer, landlord, toff, idle]
+        .iter()
+        .map(|s| final_position(s))
+        .unzip();
+    w.study.game = Some(GameOutcome {
+        index: 0,
+        seed: 0,
+        rotation: 0,
+        seating: vec![0, 1, 2, 3],
+        winner: None,
+        tie: false,
+        net_worth,
+        bankrupt,
+        days: 0,
+        ticks: 0,
+        state_hash: 0,
+    });
+}
+
+#[when("I tally that game")]
+fn tally_that_game(w: &mut HarnessWorld) {
+    let roster = w.study.roster.clone().unwrap();
+    let mut t = Tally::new(roster.len());
+    t.add(&roster, w.study.game.as_ref().unwrap());
+    w.study.metrics = Some(metrics(&roster, &t, &StudyDef::default().criteria));
+    w.study.tally = Some(t);
+}
+
+#[then(regex = r"^the idle seat (satisfies|fails) the idle rule$")]
+fn idle_rule(w: &mut HarnessWorld, verdict: String) {
+    let roster = w.study.roster.as_ref().unwrap();
+    let game = w.study.game.as_ref().unwrap();
+    let idle = roster.idle().unwrap();
+    let seat = game.seating.iter().position(|e| *e == idle).unwrap();
+    assert_eq!(
+        game.idle_below_solvent_ais(roster, seat),
+        verdict == "satisfies",
+        "{game:?}"
+    );
+}
+
+#[then(expr = "the model's idle_below_solvent_rate is {float}")]
+fn idle_below_solvent_rate(w: &mut HarnessWorld, rate: f64) {
+    let m = w.study.metrics.as_ref().unwrap();
+    assert_eq!(m.idle_below_solvent_rate, Some(rate), "{m:?}");
 }
 
 #[when("I compute the model's metrics")]
