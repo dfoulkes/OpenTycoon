@@ -371,6 +371,10 @@ name = "client-ext"
 version = "0.1.0"
 dependencies = [
  "godot",
+ "protocol",
+ "serde_json",
+ "server",
+ "tungstenite",
 ]
 
 [[package]]
