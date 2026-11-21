@@ -38,7 +38,7 @@ but `genes` is optional:
 | `selection` | `{ method: tournament, tournament_size: 3 }` | `tournament` or `rank` |
 | `mutation` | `{ rate: 0.25, sigma: 0.1 }` | per-gene chance, and the step as a share of the gene's range |
 | `crossover` | `{ rate: 0.5 }` | chance a child has two parents; 0 turns crossover off |
-| `fitness` | `{ bankruptcy_penalty: 0.5 }` | the fitness weight (below) |
+| `fitness` | `{ bankruptcy_penalty: 0.5, low_win_floor: 0.10, net_worth_scale: 700000, max_net_worth_weight: 0.8 }` | the fitness weights (below) |
 | `economy` | none: `config/economy.yaml` | path to an adopted `economy.yaml` (e.g. a study overlay), relative to the working directory |
 | `preset` | `full` | preset from `game.yaml`; if missing, the longest preset is used (with a warning) |
 | `seed` | 0 | drives the first population, the breeding and the game seeds |
@@ -141,23 +141,66 @@ For a candidate of personality `P` over its `N` evaluation games:
 | Term | Definition |
 |---|---|
 | `wins` | games `P`'s seat won **outright**: highest net worth among solvent players at the whistle (a tie at the top, or nobody solvent, is nobody's win), as in the study |
-| `win_share` | `wins / N` |
-| `bankrupt_rate` | games `P`'s seat ended bankrupt / `N` |
-| **`fitness`** | `win_share − bankruptcy_penalty × bankrupt_rate` (penalty default 0.5) |
-| `nw_vs_idle_median` | the median over the games of (`P`'s final net worth − the idle seat's), in pence (nearest rank: the lower middle for an even `N`); `P`'s own median net worth if the roster has no idle seat |
+| `win_share` (`s`) | `wins / N` |
+| `bankrupt_rate` (`b`) | games `P`'s seat ended bankrupt / `N` |
+| `nw_vs_idle_median` (`m`) | the median over the games of (`P`'s final net worth − the idle seat's), in pence (nearest rank: the lower middle for an even `N`); `P`'s own median net worth if the roster has no idle seat |
+| `c` | the net-worth term: `clamp(m / net_worth_scale, −1, 1)` |
+| `ω` | the net-worth weight: 0 at or above the floor `f`; below it `max_net_worth_weight × (f − s) / f`, rising linearly from 0 at the floor to `max_net_worth_weight` at a win share of 0 |
+| **`fitness`** | at or above the floor: `s − p·b`; below it: `(1 − ω)·s + ω·f·c − p·b` |
 
 Net worth is the economy's final midnight board, as `sim-cli batch` and the study score it.
 
-**Ranking**, best first: higher `fitness`; then (the tie-break) higher `nw_vs_idle_median`; then
-the lower candidate index. It is a total order, computed from integer counts and pence, so it is
-exact and identical on every platform and thread count, and a resumed run (which reads the
-counts back from `generations.csv`) ranks exactly as an uninterrupted one.
+The weights, under `fitness:` in the definition:
+
+| Key | Default | Rule | Meaning |
+|---|---|---|---|
+| `bankruptcy_penalty` (`p`) | 0.5 | 0 to 1,000 | cost of one unit of bankruptcy rate |
+| `low_win_floor` (`f`) | 0.10 | 0 to 1 | below this win share, net worth is blended in; 0 turns the blend off |
+| `net_worth_scale` | 700000 | positive, whole pence | the median margin over idle that counts as a full net-worth term |
+| `max_net_worth_weight` | 0.8 | 0 to 1 | the net-worth weight at a win share of 0 |
+
+The shares and weights take at most six decimal places; a value out of range, with more
+decimals, or a scale of 0 or less fails before any game, naming the key
+(`fitness.low_win_floor: must be between 0 and 1`).
+
+**Why the blend (R78).** When one personality wins every game, every other personality's win
+share is 0 and the old fitness (`s − p·b`) gives all their candidates the same score; selection
+then ran on the tie-break alone and the fitness curves were flat at 0. Below the floor the
+blend moves the score onto net worth gained over idle, so those candidates have a real,
+graded fitness: a genome that builds wealth beats one that loses it, and a lucky win in 24
+games no longer outranks a genome that finishes far further ahead of idle. The net-worth term
+is multiplied by the floor, so `f·c` never exceeds `f`: a candidate below the floor never
+scores above one at the floor with the same bankruptcies, and fitness is continuous at the
+floor (`ω = 0` there). Winning stays what the game is about.
+
+**Defaults.** At or above the floor `ω = 0` and fitness is exactly `s − p·b`, so any personality
+winning at least 10% of its games ranks exactly as before. 0.10 is the bottom of the balance
+target (every AI wins 10–40% of games, R65): a personality below it is the one that cannot win
+as things stand. The scale is the starting cash (£7,000, R62): a candidate that finishes a full
+starting stake ahead of idle earns the whole term, and the v1 medians observed (within about
+±£4,000) stay inside the clamp, so it rarely saturates. The weight 0.8 leaves a fifth of a
+zero-or-near-zero win share's say to the wins themselves.
+
+**Ranking**, best first: a candidate with no games last; then higher `fitness`; then (the
+tie-break) higher `nw_vs_idle_median`; then the lower candidate index. It is a total order on
+integers. The weights are converted to whole parts per million when the definition loads, and
+the fitness is computed in fixed point (units of 10⁻¹²) from the integer counts and pence with
+`i128` intermediates and division rounded toward −∞; no float enters the ranking. At or above
+the floor the fitness is one division (`(wins·10¹² − p_ppm·bankruptcies·10⁶) / N`), so
+candidates with the same number of games (all of a run's do) compare exactly as their rational
+fitnesses do for up to 10⁶ games per evaluation. Below the floor it takes three such steps, so
+it may sit up to three units (3 × 10⁻¹²) below the exact value; that only matters between
+candidates whose exact fitnesses agree to 12 decimals, which then fall to the tie-break. So
+the ranking is identical on every platform and thread count, and a resumed run (which reads
+the counts back from `generations.csv`) ranks exactly as an uninterrupted one. Floats appear
+only in the printed `fitness` column and the curves in `summary.json`.
 
 Why this shape: winning is what the game is about, so win share leads. A bankrupt player cannot
 win, so bankruptcy already costs wins; the penalty also discourages reckless strategies that
-win now and then and go bust often. With few games many candidates tie on win share, and the
-median margin over the idle seat (a player who never acts) separates a strategy that builds
-wealth from one that loses it, without letting one freak game decide.
+win now and then and go bust often, and it applies below the floor too. With few games many
+candidates tie on win share, and the median margin over the idle seat (a player who never
+acts) separates a strategy that builds wealth from one that loses it, without letting one
+freak game decide.
 
 ## Outputs
 
@@ -285,3 +328,14 @@ in generation 0 and every game from generation 1, so the other personalities' fi
 personality found a strategy the others' current settings cannot answer) but it also means a
 short preset can be dominated by one personality; judge the overnight run on the full preset
 and watch `lineup_win_share`.
+
+The same run with the R78 blend (shipped weights) played the same games and crowned the same
+champions; only the `fitness` column changed. The other personalities' curves are no longer
+flat at 0 (in generations 1–2: Grocer best 0.021/0.022, Landlord 0.014/0.016, Speculator
+−0.005/−0.003; the Toff stays at 0, its median margin over idle being exactly 0 in every v1
+game), but their champions' net worth over idle did not improve across generations (Grocer
+£1,922 → £1,853 → £1,921, Landlord £1,946 → £1,268 → £1,428, Speculator £638 → −£396 → −£227),
+exactly as before. The reason: when every candidate of a personality has 0 wins, the blend
+orders them by `c`, which is the old tie-break's order while no median reaches the clamp, so
+the ranking cannot change. The blend changes selection only where win shares below the floor
+differ (a lucky win or two against more wealth), which in this run did not alter a rank.

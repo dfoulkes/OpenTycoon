@@ -19,7 +19,11 @@ elitism: 2               # the best two of each personality carry over unchanged
 selection: { method: tournament, tournament_size: 3 }
 mutation: { rate: 0.25, sigma: 0.1 }   # per-gene chance; step = sigma × the gene's range
 crossover: { rate: 0.5 }               # chance a child has two parents (uniform crossover)
-fitness: { bankruptcy_penalty: 0.5 }   # fitness = win share − 0.5 × bankruptcy rate
+# Fitness (docs/evolve.md "Fitness"): win share − 0.5 × bankruptcy rate. Below a win share of
+# 0.10, net worth gained over idle (clamped at ±£7,000, the starting cash) is blended in, its
+# weight rising linearly to 0.8 at a win share of 0, so losers still improve when one
+# personality dominates (R78). At or above 0.10 nothing changes. net_worth_scale is in pence.
+fitness: { bankruptcy_penalty: 0.5, low_win_floor: 0.10, net_worth_scale: 700000, max_net_worth_weight: 0.8 }
 preset: full             # 1930–2050
 seed: 0
 # economy: study-out/models/<id>/economy.yaml   # evolve under an adopted economic model
