@@ -1,0 +1,63 @@
+{
+  "type": "snapshot",
+  "tick": 0,
+  "clock": { "year": 1930, "day": 0, "time": "06:00", "speed": 1 },
+  "board": {
+    "cols": 3, "rows": 3, "width_m": 124.0, "depth_m": 124.0,
+    "blocks": [
+      { "key": "old_kent_road", "name": "Old Kent Road", "district": "East End", "set": "light_blue", "col": 0, "row": 0, "x": 4.0, "z": 4.0, "w": 36.0, "d": 36.0, "buildable": true },
+      { "key": "whitechapel", "name": "Whitechapel", "district": "East End", "set": "light_blue", "col": 1, "row": 0, "x": 44.0, "z": 4.0, "w": 36.0, "d": 36.0, "buildable": true },
+      { "key": "bethnal_green", "name": "Bethnal Green", "district": "East End", "set": "light_blue", "col": 2, "row": 0, "x": 84.0, "z": 4.0, "w": 36.0, "d": 36.0, "buildable": true },
+      { "key": "soho", "name": "Soho", "district": "West End", "set": "orange", "col": 0, "row": 1, "x": 4.0, "z": 44.0, "w": 36.0, "d": 36.0, "buildable": true },
+      { "key": "holborn", "name": "Holborn", "district": "West End", "set": "orange", "col": 1, "row": 1, "x": 44.0, "z": 44.0, "w": 36.0, "d": 36.0, "buildable": true },
+      { "key": "bloomsbury", "name": "Bloomsbury", "district": "West End", "set": "orange", "col": 2, "row": 1, "x": 84.0, "z": 44.0, "w": 36.0, "d": 36.0, "buildable": true },
+      { "key": "knightsbridge", "name": "Knightsbridge", "district": "Mayfair & Belgravia", "set": "green", "col": 0, "row": 2, "x": 4.0, "z": 84.0, "w": 36.0, "d": 36.0, "buildable": true },
+      { "key": "belgravia", "name": "Belgravia", "district": "Mayfair & Belgravia", "set": "green", "col": 1, "row": 2, "x": 44.0, "z": 84.0, "w": 36.0, "d": 36.0, "buildable": true },
+      { "key": "mayfair", "name": "Mayfair", "district": "Mayfair & Belgravia", "set": "green", "col": 2, "row": 2, "x": 84.0, "z": 84.0, "w": 36.0, "d": 36.0, "buildable": true }
+    ],
+    "river": [ { "x": 0.0, "z": 80.0, "w": 124.0, "d": 4.0 } ],
+    "bridges": [ { "x": 40.0, "z": 80.0, "w": 4.0, "d": 4.0 } ],
+    "streets": [
+      { "x": 0.0, "z": 0.0, "w": 124.0, "d": 4.0 },
+      { "x": 0.0, "z": 40.0, "w": 124.0, "d": 4.0 },
+      { "x": 0.0, "z": 120.0, "w": 124.0, "d": 4.0 },
+      { "x": 0.0, "z": 0.0, "w": 4.0, "d": 124.0 },
+      { "x": 40.0, "z": 0.0, "w": 4.0, "d": 124.0 },
+      { "x": 80.0, "z": 0.0, "w": 4.0, "d": 124.0 },
+      { "x": 120.0, "z": 0.0, "w": 4.0, "d": 124.0 }
+    ]
+  },
+  "players": [
+    { "id": "p0", "name": "The Grocer", "cash": 100000, "net_worth": 100000, "bankrupt": false },
+    { "id": "p1", "name": "The Banker", "cash": 100000, "net_worth": 100000, "bankrupt": false }
+  ],
+  "lots": [
+    { "key": "old_kent_road", "owner": "unowned", "land_value": 200000, "lease": null, "building": null, "business": null,
+      "takings_per_day": 0, "costs_per_day": 0, "profit_per_day": 0, "rent_per_day": 0, "open_for_bids": true, "last_sale_price": null },
+    { "key": "whitechapel", "owner": "city", "land_value": 200000, "lease": null,
+      "building": { "kind": "apartments", "name": "City Flats", "floors": 3, "flats": 9 },
+      "business": { "name": "City Flats", "kind": "apartments", "city_run": true },
+      "takings_per_day": 1200, "costs_per_day": 800, "profit_per_day": 400, "rent_per_day": 0, "open_for_bids": false, "last_sale_price": null },
+    { "key": "bethnal_green", "owner": "unowned", "land_value": 220000, "lease": null, "building": null, "business": null,
+      "takings_per_day": 0, "costs_per_day": 0, "profit_per_day": 0, "rent_per_day": 0, "open_for_bids": true, "last_sale_price": null },
+    { "key": "soho", "owner": "unowned", "land_value": 500000, "lease": null, "building": null, "business": null,
+      "takings_per_day": 0, "costs_per_day": 0, "profit_per_day": 0, "rent_per_day": 0, "open_for_bids": true, "last_sale_price": null },
+    { "key": "holborn", "owner": "p0", "land_value": 500000, "lease": { "years_left": 20 },
+      "building": { "kind": "shop", "name": "Corner Shop", "floors": 5, "flats": 0 },
+      "business": { "name": "Corner Shop", "kind": "grocer", "city_run": false },
+      "takings_per_day": 5000, "costs_per_day": 3000, "profit_per_day": 2000, "rent_per_day": 500, "open_for_bids": false, "last_sale_price": 480000 },
+    { "key": "bloomsbury", "owner": "unowned", "land_value": 550000, "lease": null, "building": null, "business": null,
+      "takings_per_day": 0, "costs_per_day": 0, "profit_per_day": 0, "rent_per_day": 0, "open_for_bids": true, "last_sale_price": null },
+    { "key": "knightsbridge", "owner": "unowned", "land_value": 1100000, "lease": null, "building": null, "business": null,
+      "takings_per_day": 0, "costs_per_day": 0, "profit_per_day": 0, "rent_per_day": 0, "open_for_bids": true, "last_sale_price": null },
+    { "key": "belgravia", "owner": "unowned", "land_value": 1200000, "lease": null, "building": null, "business": null,
+      "takings_per_day": 0, "costs_per_day": 0, "profit_per_day": 0, "rent_per_day": 0, "open_for_bids": true, "last_sale_price": null },
+    { "key": "mayfair", "owner": "p1", "land_value": 1400000, "lease": { "years_left": 12 },
+      "building": { "kind": "shop", "name": "Fine Goods", "floors": 2, "flats": 0 },
+      "business": { "name": "Fine Goods", "kind": "jeweller", "city_run": false },
+      "takings_per_day": 9000, "costs_per_day": 4000, "profit_per_day": 5000, "rent_per_day": 900, "open_for_bids": false, "last_sale_price": 1300000 }
+  ],
+  "auction": null,
+  "bids": [],
+  "walkers": [ 2.0, 2.0, 42.0, 20.0, 100.0, 122.0 ]
+}
