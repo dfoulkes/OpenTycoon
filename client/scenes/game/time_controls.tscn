@@ -1,0 +1,66 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/time_controls.gd" id="1_time"]
+
+[node name="TimeControls" type="PanelContainer"]
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -248.0
+offset_top = -52.0
+offset_right = -12.0
+offset_bottom = -12.0
+grow_horizontal = 0
+grow_vertical = 0
+script = ExtResource("1_time")
+
+[node name="Row" type="HBoxContainer" parent="."]
+layout_mode = 2
+alignment = 1
+
+[node name="PauseButton" type="Button" parent="Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(56, 32)
+layout_mode = 2
+tooltip_text = "Pause / play (Space)"
+focus_mode = 0
+toggle_mode = true
+text = "II"
+
+[node name="Speed1Button" type="Button" parent="Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(36, 32)
+layout_mode = 2
+tooltip_text = "Speed 1 (1)"
+focus_mode = 0
+toggle_mode = true
+text = ">"
+
+[node name="Speed2Button" type="Button" parent="Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(36, 32)
+layout_mode = 2
+tooltip_text = "Speed 2 (2)"
+focus_mode = 0
+toggle_mode = true
+text = ">>"
+
+[node name="Speed3Button" type="Button" parent="Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(36, 32)
+layout_mode = 2
+tooltip_text = "Speed 3 (3)"
+focus_mode = 0
+toggle_mode = true
+text = ">>>"
+
+[node name="Speed4Button" type="Button" parent="Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(36, 32)
+layout_mode = 2
+tooltip_text = "Speed 4 (4)"
+focus_mode = 0
+toggle_mode = true
+text = ">>>>"
