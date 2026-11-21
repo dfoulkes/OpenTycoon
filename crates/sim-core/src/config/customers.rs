@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::types::{Pounds, Ratio};
+use super::types::{ClockTime, Pounds, Ratio};
 use crate::businesses::Hours;
 use crate::population::{Class, Sex};
 
@@ -37,6 +37,8 @@ pub struct CustomersConfig {
     pub allowance: AllowanceSettings,
     /// Shopping-list weights per segment (R55).
     pub desires: Vec<DesireRule>,
+    /// When each good is shopped for, per segment (R70).
+    pub shopping_windows: ShoppingWindows,
     /// How demand fades after a good's or a type's obsolete year (§7.1).
     pub obsolescence: Obsolescence,
     /// Population mix by era, keyed by year.
@@ -187,6 +189,65 @@ pub struct DesireRule {
     pub mode: DesireMode,
     /// `P(good)` weight per good id (`set`, 0–1), or a multiplier (`scale`, 0–10).
     pub goods: BTreeMap<String, f64>,
+}
+
+/// When each good is shopped for, per segment (R70; docs/economy.md "Shopping windows").
+///
+/// Rules apply in order, like `desires`: every rule whose match fits the shopper sets the window
+/// of each good it names, so a later, narrower rule overrides an earlier, broader one. Within a
+/// rule `"*"` (every good) applies first, then groups, then single goods.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ShoppingWindows {
+    /// Named groups of goods (`businesses.yaml` ids) that rules can name instead of each good.
+    #[serde(default)]
+    pub groups: BTreeMap<String, Vec<String>>,
+    /// The rules, in order.
+    pub rules: Vec<WindowRule>,
+}
+
+/// The key that names every good in a [`WindowRule`].
+pub const EVERY_GOOD: &str = "*";
+
+/// One rule of [`ShoppingWindows`]: a segment, and the window for each good, group or `"*"`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WindowRule {
+    /// Which shoppers, trade and years this rule applies to.
+    #[serde(rename = "match")]
+    pub matcher: WindowMatch,
+    /// The window per good id, group name or `"*"`. Each must sit inside its trade's hours.
+    pub windows: BTreeMap<String, ShopWindow>,
+}
+
+/// Segment selector for a [`WindowRule`]. Unset fields match everyone; `trade` is required.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WindowMatch {
+    /// Day or night trade: the list the windows apply to.
+    pub trade: Hours,
+    /// Class, if restricted.
+    pub class: Option<Class>,
+    /// Age band id, if restricted.
+    pub age: Option<String>,
+    /// Sex, if restricted.
+    pub sex: Option<Sex>,
+    /// First year the rule applies, if restricted.
+    #[schemars(range(min = 1800, max = 2500))]
+    pub from_year: Option<i32>,
+    /// Last year the rule applies, if restricted.
+    #[schemars(range(min = 1800, max = 2500))]
+    pub until_year: Option<i32>,
+}
+
+/// A shopping window: from `from` (inclusive) to `to` (exclusive), inside one trading window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ShopWindow {
+    /// The window opens.
+    pub from: ClockTime,
+    /// The window closes.
+    pub to: ClockTime,
 }
 
 /// How a [`DesireRule`] combines with the rules before it.

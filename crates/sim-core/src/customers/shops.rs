@@ -51,6 +51,16 @@ impl GoodsIndex {
             .unwrap_or((None, None))
     }
 
+    /// How many goods the catalogue holds.
+    pub fn len(&self) -> usize {
+        self.names.len()
+    }
+
+    /// True if the catalogue is empty.
+    pub fn is_empty(&self) -> bool {
+        self.names.is_empty()
+    }
+
     /// A good's id by name.
     pub fn id(&self, name: &str) -> Option<GoodId> {
         self.names

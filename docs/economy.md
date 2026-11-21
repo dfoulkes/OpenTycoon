@@ -183,6 +183,78 @@ cheap produce, delivery) are later mechanics. The boutique hotel trades in the h
 Allowances stay flat across eras (§8.2, R6: no inflation); what changes by decade is what
 people want, not how much they have.
 
+## Shopping windows (R70)
+
+R70: each good is shopped for in a time window that depends on the shopper's age band, class
+and sex. If the window passes without a purchase, the good is not bought that day and the
+shopper goes on to their next item. The table is `customers.yaml` `shopping_windows`; the code is
+`crates/sim-core/src/customers/windows.rs` (resolving the table) and `customers/errands.rs` (what a
+shopper does next); the scenarios are `features/customers/windows.feature`.
+
+**The table.** Rules apply in order, like `desires`: each rule whose match fits the shopper sets
+the window of every good or group it names, so a later, narrower rule overrides an earlier,
+broader one. A rule matches on `trade` (`day` or `night`, required), and optionally `class`,
+`age`, `sex`, `from_year` and `until_year`. Within a rule `"*"` (every good) applies first and
+replaces everything set before it, then the groups it names, then single goods. A window runs
+from `from` up to (not including) `to`. Config validation rejects an unknown good, group or age
+band, a window that does not start before it ends, a window outside its trade's hours, a group
+named like a good, and any segment left without a window for a good it can want in any year
+step of any preset (each error names the key).
+
+**Groups** (shipped): papers (newspapers); food (bread, fruit & veg, meat, fish, dairy, pies,
+cultured meat); treats (snacks, ice cream, coffee, vapes); fashion (clothes, second-hand
+clothes, jewellery, grooming); shows (movies, theatre); late (dancing, drinks, craft beer, fast
+food, fried chicken, games, escape games, VR).
+
+**Shipped windows** (placeholders, in rule order; later rows override earlier ones for the goods
+they name):
+
+| Who | Trade | Years | Windows |
+|---|---|---|---|
+| Everyone | day | all | anything 09:00–17:00; the paper 07:00–10:00 |
+| Everyone | night | all | anything 19:00–23:50; shows 19:00–21:00; meals 19:00–22:00 |
+| Working class | day | all | anything 16:00–17:00 (after work); the paper 07:00–08:30; food and treats 12:00–14:00 (lunchtime) |
+| Middle-class women | day | to 1965 | food 09:00–12:00 (the morning shop) |
+| Middle class | day | from 1970 | food 12:00–14:00 (most adults at work) |
+| Middle class 18–29 | day | all | fashion 15:00–17:00 |
+| Upper class | day | all | anything 10:00–16:00; the paper 08:00–10:00 |
+| 18–29 and 30–49 | day | from 1990 | coffee 07:00–10:00 |
+| 65+ | day | all | anything 09:00–12:00; the paper 07:00–09:00 |
+| Upper class 65+ | day | all | anything 10:00–11:00 |
+| 18–29 | night | all | the late group 21:00–23:50 |
+| 65+ | night | all | anything 19:00–21:30 |
+
+**A shopper's day.** The rolled list is sorted by window (earliest opening, then earliest
+closing). The shopper sets out at their earliest window's opening, trickling in over
+`movement.spawn_spread_minutes` but never after half that window has gone. They try for a good
+only inside its window. Between windows they are off the map (at work, at home) and step back
+out where they left off when the next window opens. A window that passes without a purchase
+drops the good:
+
+- **No shop can sell it now** (every candidate is dark, sold out, shut or too dear): dropped at
+  once, since stock does not arrive mid-day (R2).
+- **They reach the door after the window has closed:** dropped; no sale and no lost sale.
+- **Sold out at the door:** a lost sale against that shop, as before (§8.3); they re-score while
+  the window is open.
+
+A dropped good is **not a lost sale against any shop**, so it does not touch reputation. Online
+buying (§7.5, from 1995) ignores windows: shoppers roll for it once as they first set out. When
+the list is done, residents go home, commuters take the train and tourists wander until the
+hotels open (R42), as before.
+
+**Power cuts (R69 with R70).** During a cut shoppers wait on the street, but only while the
+window they are out for will still be open when the lights return. If the window closes in the
+dark (or the lights come back exactly as it closes), they drop that good and plan their next
+item; if their next window opens after the lights are back, they are away until it opens. As
+shipped, the 1970 cuts (07:00–10:00 and 13:00–15:30) black out the morning paper's window for
+everyone but upper-class pensioners, and leave working people's lunchtime food window
+(12:00–14:00) only the hour before 13:00.
+
+With every rule a whole-trade wildcard (`"*"` 07:00–17:00 by day, 19:00–23:50 by night),
+shoppers behave exactly as before R70: the state hash of `sim-cli run --seed 42` matches the
+pre-R70 build. The scenarios that are about something else (bankruptcy arithmetic, online
+shares, the R69 waiting rule) use that table (`Given shoppers shop at any hour of trade`).
+
 ## Retail through the eras (R68)
 
 R68: a competently run shop must be profitable in every era, and retail is fixed in the

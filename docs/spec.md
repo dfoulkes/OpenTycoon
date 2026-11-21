@@ -368,6 +368,8 @@ demographics:         # population mix by era
 
 Each person rolls their shopping list from `P(good | age, class, sex, hour, year)`. Rent comes out of the allowance first (residents), and online spend comes out of what's left (§7.5). Allowances are flat over time because there's no inflation. All numbers above are placeholders for tuning.
 
+**Shopping windows (R70).** Each good is shopped for in a time window that depends on the shopper's age band, class and sex (and the era): young middle-class shoppers buy clothes 15:00–17:00, upper-class pensioners shop at 10:00, working people buy food at lunchtime. A shopper works through their list in window order and sets out for the earliest. If a window passes without a purchase (every shop dark in a power cut, sold out or shut, or they arrive too late) the good is not bought that day and they move on to their next item; that is not a lost sale against any shop. Online buying ignores windows. The table is `customers.yaml` `shopping_windows`; defaults are in `docs/economy.md`.
+
 ### 8.3 Shop choice
 
 For each good on the list, the customer scores every reachable open shop with stock:
@@ -401,7 +403,7 @@ Announced on the year step as a newspaper front page. Some are fixed history, so
 | 1953 | Coronation | One-day souvenir and bar boom |
 | 1966 | World Cup | Pubs and bars ×2 for a day |
 | 1971 | Decimal Day | Currency display flips; one day of price confusion (random ±10%) |
-| 1973–74 | Oil crisis / three-day week | Power cuts (R69): for the 1970 step's day, every walk-in shop is dark 07:00–10:00 and 13:00–15:30 (configurable), and the front page names the hours. Shoppers wait for the lights. The locked order still arrives at 06:00; night trade is lit |
+| 1973–74 | Oil crisis / three-day week | Power cuts (R69): for the 1970 step's day, every walk-in shop is dark 07:00–10:00 and 13:00–15:30 (configurable), and the front page names the hours. Shoppers wait for the lights while their window is open; a window that closes in the dark is missed (R70). The locked order still arrives at 06:00; night trade is lit |
 | 1986 | Big Bang | The City's desirability jumps; Upper-class share rises |
 | 1987 | Docklands / Canary Wharf | Docklands desirability: Low → High |
 | 2000 | Dot-com bubble → 2001 bust | Online business valuations swing |

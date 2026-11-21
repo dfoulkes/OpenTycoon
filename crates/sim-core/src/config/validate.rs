@@ -18,6 +18,7 @@ pub fn check(config: &Config) -> Vec<ConfigError> {
     errors.extend(check_board(config, &config.map));
     check_businesses(config, &mut errors);
     check_customers(config, &mut errors);
+    check_shopping_windows(config, &mut errors);
     check_events(config, &mut errors);
     check_ai(config, &mut errors);
     check_auctions(config, &mut errors);
@@ -418,6 +419,175 @@ fn check_desires(config: &Config, bands: &BTreeSet<&str>, errors: &mut Vec<Confi
                 );
             }
         }
+    }
+}
+
+/// R70: shopping windows name real goods, groups and bands, each window starts before it ends
+/// and sits inside its trade's hours, and every segment has a window for every good it can
+/// want, in every year step of every preset.
+fn check_shopping_windows(config: &Config, errors: &mut Vec<ConfigError>) {
+    use super::customers::EVERY_GOOD;
+    use crate::businesses::Hours;
+    let c = &config.customers;
+    let sw = &c.shopping_windows;
+    let file = ConfigFile::Customers;
+    let goods = &config.businesses.goods;
+    for (name, members) in &sw.groups {
+        let at = format!("/shopping_windows/groups/{name}");
+        if name == EVERY_GOOD || goods.contains_key(name) {
+            err(
+                errors,
+                file,
+                at.clone(),
+                format!("{name:?} is a good (or \"*\"), not a group name"),
+            );
+        }
+        for (i, good) in members.iter().enumerate() {
+            if !goods.contains_key(good) {
+                err(
+                    errors,
+                    file,
+                    format!("{at}/{i}"),
+                    format!("unknown good {good:?} (not in businesses.yaml)"),
+                );
+            }
+        }
+    }
+    let bands: BTreeSet<&str> = c.age_bands.iter().map(|b| b.id.as_str()).collect();
+    let hours = &config.game.clock.trading_hours;
+    for (i, rule) in sw.rules.iter().enumerate() {
+        let at = format!("/shopping_windows/rules/{i}");
+        let m = &rule.matcher;
+        let trade = match m.trade {
+            Hours::Day => Some(("day", hours.day)),
+            Hours::Night => Some(("night", hours.night)),
+            Hours::Hotel | Hours::None => {
+                err(
+                    errors,
+                    file,
+                    format!("{at}/match/trade"),
+                    "shopping windows are for day or night trade".into(),
+                );
+                None
+            }
+        };
+        if let Some(age) = &m.age {
+            if !bands.contains(age.as_str()) {
+                err(
+                    errors,
+                    file,
+                    format!("{at}/match/age"),
+                    format!("unknown age band {age:?}"),
+                );
+            }
+        }
+        for (key, w) in &rule.windows {
+            let wat = format!("{at}/windows/{key}");
+            if key != EVERY_GOOD && !goods.contains_key(key) && !sw.groups.contains_key(key) {
+                err(
+                    errors,
+                    file,
+                    wat.clone(),
+                    format!("unknown good or group {key:?}"),
+                );
+            }
+            if w.from >= w.to {
+                err(
+                    errors,
+                    file,
+                    wat.clone(),
+                    format!(
+                        "a window must start before it ends ({} to {})",
+                        w.from, w.to
+                    ),
+                );
+            } else if let Some((name, open)) = trade {
+                if w.from < open.open || w.to > open.close {
+                    err(
+                        errors,
+                        file,
+                        wat,
+                        format!(
+                            "{} to {} must sit inside {name} trade ({} to {})",
+                            w.from, w.to, open.open, open.close
+                        ),
+                    );
+                }
+            }
+        }
+    }
+    check_window_coverage(config, errors);
+}
+
+/// R70: every cohort has a window for every good it can want (desire weight above 0), in each
+/// trade and every year step any preset can reach. One error per (trade, good), naming the
+/// first segment and year that lacks it.
+fn check_window_coverage(config: &Config, errors: &mut Vec<ConfigError>) {
+    use crate::businesses::Hours;
+    use crate::customers::{shopping, windows};
+    use crate::population::{AgeBand, Class, Cohort, Sex};
+    let c = &config.customers;
+    let clock = &config.game.clock;
+    let step = i32::try_from(clock.years_per_day.max(1)).unwrap_or(i32::MAX);
+    let first = config
+        .game
+        .presets
+        .values()
+        .map(|p| p.start_year)
+        .chain([clock.start_year])
+        .min();
+    let last = config
+        .game
+        .presets
+        .values()
+        .map(|p| p.end_year)
+        .chain([clock.end_year])
+        .max();
+    let (Some(first), Some(last)) = (first, last) else {
+        return;
+    };
+    let mut reported: BTreeSet<(Hours, String)> = BTreeSet::new();
+    let bands = u8::try_from(c.age_bands.len()).unwrap_or(u8::MAX);
+    let mut year = first;
+    while year <= last {
+        for trade in [Hours::Day, Hours::Night] {
+            for class in Class::ALL {
+                for band in (0..bands).map(AgeBand) {
+                    for sex in Sex::ALL {
+                        let cohort = Cohort { band, sex, class };
+                        let resolved = windows::resolve(c, cohort, trade, year);
+                        for (good, p) in shopping::desire_weights(c, cohort, trade, year) {
+                            if p <= 0.0 || resolved.get(good).is_some() {
+                                continue;
+                            }
+                            if reported.insert((trade, good.to_owned())) {
+                                let trade_name = if trade == Hours::Day { "day" } else { "night" };
+                                err(
+                                    errors,
+                                    ConfigFile::Customers,
+                                    "/shopping_windows".into(),
+                                    format!(
+                                        "no {trade_name} window for {good}: a {} {} aged {} wants it in {year}",
+                                        class_name(class),
+                                        if sex == Sex::Female { "woman" } else { "man" },
+                                        crate::population::band_id(c, band),
+                                    ),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        year = year.saturating_add(step);
+    }
+}
+
+fn class_name(class: crate::population::Class) -> &'static str {
+    match class {
+        crate::population::Class::Working => "working",
+        crate::population::Class::Middle => "middle",
+        crate::population::Class::Upper => "upper",
     }
 }
 

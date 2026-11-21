@@ -8,6 +8,7 @@ Feature: Shoppers come from home and from the tube
     # A fixed two-rule table, so every shopper has a list (the shipped table is era content).
     Given the shipped config
     And the shipped config with "customers.yaml" key "/desires" set to "[{match: {window: day}, goods: {bread: 1.0}}, {match: {window: night}, goods: {drinks: 1.0}}]"
+    And shoppers shop at any hour of trade
 
   @R55
   Scenario Outline: The daily allowance depends on class, age and sex
@@ -66,7 +67,9 @@ Feature: Shoppers come from home and from the tube
 
   @R25
   Scenario: Day shoppers still on the map at 17:00 despawn
-    Given the shipped config with "customers.yaml" key "/movement/spawn_spread_minutes" set to "600"
+    # Out for bread in the last ten minutes of trade, at a slow walk (R70 windows).
+    Given the shipped config with "customers.yaml" key "/shopping_windows/rules/0/windows" set to "{'*': {from: '16:50', to: '17:00'}}"
+    And the shipped config with "customers.yaml" key "/movement/spawn_spread_minutes" set to "0"
     And the shipped config with "customers.yaml" key "/movement/cells_per_tick" set to "1"
     And a city of 2000 working men aged "30-49"
     And a bakery "Bun" on "holborn" with 5000 bread

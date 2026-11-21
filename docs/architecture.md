@@ -40,7 +40,7 @@ the split for M1 parallel work.
 | `businesses` | `src/businesses.rs` | buildings, types, prices, orders, stock, write-off | R2, R10, R13, R35, R41, R58 | types + cost formulas |
 | `utilities` | `src/utilities.rs` | utility bills, holders, auctions, nationalisation and privatisation | R11, R12, R24 | **real**: auctioned like land; elections move ownership |
 | `population` | `src/population.rs` | cohort model, births, ageing, arrivals | R6, R53, R60, R61 | types only |
-| `customers` | `src/customers/` | shoppers, shopping lists, shop scoring, movement, tourists' nights (wandering, looking for a bed), online demand (`online.rs`) | R15, R25, R38, R42, R55, R59, §8.3 | **real**: hotels and online from wave A |
+| `customers` | `src/customers/` | shoppers, shopping lists, shopping windows (`windows.rs`, `errands.rs`), shop scoring, movement, tourists' nights (wandering, looking for a bed), online demand (`online.rs`) | R15, R25, R38, R42, R55, R59, R69, R70, §8.3 | **real**: hotels and online from wave A |
 | `hotels` | `src/hotels.rs` | the Hotel unlock (full set) and one per set, rooms by volume, room offers and check-in | R14, R29, R30 | **real** (wave A) |
 | `ai` | `src/ai/` | AI personalities behind the `Brain` trait, each seat on its own RNG stream | §10, R66, R67 | **real**: the Grocer, the Landlord, the Toff, the Speculator and Sir Penny Sugar (`ai.yaml`, one block each; shared `ai::kit`, including the line-yield reading behind opportunism, R66, and rent by vacancy, R67) |
 | `events` | `src/events/` | history, random events, elections, insurance, front page, the modifier stack | R12, R16 | **real**: every §9 event as a typed modifier; world side in `src/world/events_phase.rs` |

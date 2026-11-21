@@ -620,6 +620,55 @@
       ],
       "type": "object"
     },
+    "ShopWindow": {
+      "additionalProperties": false,
+      "description": "A shopping window: from `from` (inclusive) to `to` (exclusive), inside one trading window.",
+      "properties": {
+        "from": {
+          "description": "The window opens.",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+          "type": "string"
+        },
+        "to": {
+          "description": "The window closes.",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "type": "object"
+    },
+    "ShoppingWindows": {
+      "additionalProperties": false,
+      "description": "When each good is shopped for, per segment (R70; docs/economy.md \"Shopping windows\").\n\nRules apply in order, like `desires`: every rule whose match fits the shopper sets the window\nof each good it names, so a later, narrower rule overrides an earlier, broader one. Within a\nrule `\"*\"` (every good) applies first, then groups, then single goods.",
+      "properties": {
+        "groups": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "default": {},
+          "description": "Named groups of goods (`businesses.yaml` ids) that rules can name instead of each good.",
+          "type": "object"
+        },
+        "rules": {
+          "description": "The rules, in order.",
+          "items": {
+            "$ref": "#/$defs/WindowRule"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "rules"
+      ],
+      "type": "object"
+    },
     "TierF64": {
       "additionalProperties": false,
       "description": "A float per desirability tier.",
@@ -682,6 +731,91 @@
       },
       "required": [
         "commuter_share"
+      ],
+      "type": "object"
+    },
+    "WindowMatch": {
+      "additionalProperties": false,
+      "description": "Segment selector for a [`WindowRule`]. Unset fields match everyone; `trade` is required.",
+      "properties": {
+        "age": {
+          "description": "Age band id, if restricted.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "class": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Class"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Class, if restricted."
+        },
+        "from_year": {
+          "description": "First year the rule applies, if restricted.",
+          "format": "int32",
+          "maximum": 2500,
+          "minimum": 1800,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "sex": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sex"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Sex, if restricted."
+        },
+        "trade": {
+          "$ref": "#/$defs/Hours",
+          "description": "Day or night trade: the list the windows apply to."
+        },
+        "until_year": {
+          "description": "Last year the rule applies, if restricted.",
+          "format": "int32",
+          "maximum": 2500,
+          "minimum": 1800,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "trade"
+      ],
+      "type": "object"
+    },
+    "WindowRule": {
+      "additionalProperties": false,
+      "description": "One rule of [`ShoppingWindows`]: a segment, and the window for each good, group or `\"*\"`.",
+      "properties": {
+        "match": {
+          "$ref": "#/$defs/WindowMatch",
+          "description": "Which shoppers, trade and years this rule applies to."
+        },
+        "windows": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ShopWindow"
+          },
+          "description": "The window per good id, group name or `\"*\"`. Each must sit inside its trade's hours.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "match",
+        "windows"
       ],
       "type": "object"
     }
@@ -790,6 +924,10 @@
       "$ref": "#/$defs/ResidentialSettings",
       "description": "Apartment affordability (R50, R52, R54)."
     },
+    "shopping_windows": {
+      "$ref": "#/$defs/ShoppingWindows",
+      "description": "When each good is shopped for, per segment (R70)."
+    },
     "tourists": {
       "$ref": "#/$defs/TouristSettings",
       "description": "Tourists' tastes: the souvenir bonus (§7.3, R29)."
@@ -809,6 +947,7 @@
     "migration_per_day",
     "allowance",
     "desires",
+    "shopping_windows",
     "obsolescence",
     "demographics",
     "price_sensitivity",

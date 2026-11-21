@@ -1,8 +1,10 @@
 # R69: events act within a game day, never across whole days (a game day is a 5-year era). The
 # 1970s three-day week is power cuts: on the 1970 step every walk-in shop is dark for a few hours
 # of day trade, and the front page says when. The locked stock order still arrives at 06:00 and
-# is billed (§2.2, R1). Shoppers who find the lights out wait for them to come back on (§8.3, as
-# for any shut shop), then choose again. Night trade is not cut.
+# is billed (§2.2, R1). Shoppers who find the lights out wait for them to come back on, then
+# choose again, as long as the window for what they are out for (R70) is still open; if it
+# closes in the dark they move on to their next item (features/customers/windows.feature).
+# Night trade is not cut.
 #
 # Shipped windows (events.yaml): dark 07:00–10:00 and 13:00–15:30, 5½ of the 10 hours of day
 # trade (about 4/7, the three-day week's share of a week lost).
@@ -42,9 +44,11 @@ Feature: Power cuts darken the shops for a few hours of the day
   # dark, nobody counts as turned away (the shop isn't out of stock), and those who would have
   # set out during the cut wait for the lights. A shopper who reaches a shop's door as the lights
   # go out is customers/choice.feature.
-  @R69 @R16
+  # With a window open all day (R70), the lights come back in time for everyone out for bread.
+  @R69 @R70 @R16
   Scenario: Shoppers don't buy in a dark shop, and buy once the lights are back
     Given the shipped config with "events.yaml" key "/historical/5/effects/0/windows" set to "[{from: '07:20', to: '09:00'}]"
+    And shoppers shop at any hour of trade
     And a new game with 2 players
     And the game has run to "07:00"
     And player 1 has a bakery selling bread on each of "Old Kent Road, Whitechapel, Bethnal Green, Soho, Holborn, Bloomsbury, Knightsbridge"

@@ -8,8 +8,8 @@ use super::movement::{Cell, Geometry, step_towards};
 use super::online::{self, OnlineOffer};
 use super::shops::{GoodId, GoodsIndex, ShopOffer};
 use super::{
-    Activity, CheckIn, Customer, Customers, LostSale, Origin, PhaseInputs, PhaseReport, Sale, Wave,
-    adjust_offer, next_errand, reputation_of, scoring, spawn_wave, till_price,
+    Activity, CheckIn, Customer, Customers, LostSale, Origin, PhaseInputs, PhaseReport, Plan, Sale,
+    Wave, adjust_offer, next_errand, plan, reputation_of, scoring, spawn_wave, till_price,
 };
 use crate::businesses::{BusinessId, Businesses, LostSale as ShopLostSale};
 use crate::clock::TradingWindow;
@@ -106,9 +106,16 @@ fn window_edges(
     }
     if now == trading.night.1 {
         let before = state.agents.len();
-        state
-            .agents
-            .retain(|c| !(c.wave == Wave::Night && matches!(c.activity, Activity::Waiting { .. })));
+        // Those who never came out stay in; those off the map between errands (R70) are done
+        // for the night, except tourists, who still need a bed.
+        state.agents.retain(|c| {
+            !(c.wave == Wave::Night
+                && match c.activity {
+                    Activity::Waiting { .. } => true,
+                    Activity::Away { .. } => !(c.origin == Origin::Tourist && beds_open),
+                    _ => false,
+                })
+        });
         report.despawned += (before - state.agents.len()) as u64;
         for c in state.agents.iter_mut().filter(|c| c.wave == Wave::Night) {
             c.activity = after_night_trade(c, beds_open);
@@ -201,34 +208,44 @@ impl Step<'_, '_> {
             if self.now < from {
                 return true;
             }
-            if let Some(until) = self.dark_until {
-                // A power cut (R69): nothing to go out for until the lights come back on.
-                c.activity = Activity::Waiting { from: until };
-                return true;
-            }
-            c.activity = Activity::Choosing;
+            // Setting out: online first, whatever the hour (§7.5; windows are for the high
+            // street, R70).
             self.shop_online(c);
+            // Then out only for an item whose window is open with the lights on (R69, R70);
+            // otherwise stay away until there is one, dropping what the dark costs them.
+            let (next, missed) = plan(c, self.now, self.dark_until);
+            self.report.missed += missed;
+            c.activity = match next {
+                Plan::Wait { until, .. } => Activity::Away { until },
+                Plan::Go | Plan::Done => Activity::Choosing,
+            };
         }
-        if let Activity::WaitingForPower { until } = c.activity {
+        if let Activity::Away { until } | Activity::WaitingForPower { until } = c.activity {
             if self.now < until {
                 return true;
             }
             c.activity = Activity::Choosing;
         }
-        if let (Activity::Choosing, Some(until)) = (c.activity, self.dark_until) {
-            // Every shop is dark: wait where they stand, then choose again (R69).
-            c.activity = Activity::WaitingForPower { until };
-            return true;
-        }
         match c.activity {
-            Activity::Waiting { .. } | Activity::WaitingForPower { .. } | Activity::Wandering => {
-                true
-            }
+            Activity::Waiting { .. }
+            | Activity::Away { .. }
+            | Activity::WaitingForPower { .. }
+            | Activity::Wandering => true,
             Activity::Choosing => {
                 let rules = &self.inputs.config.customers;
                 let geometry = self.geometry();
-                c.activity =
-                    next_errand(c, self.offers, &self.reputation, rules, geometry, self.rng);
+                let (next, missed) = next_errand(
+                    c,
+                    self.now,
+                    self.dark_until,
+                    self.offers,
+                    &self.reputation,
+                    rules,
+                    geometry,
+                    self.rng,
+                );
+                self.report.missed += missed;
+                c.activity = next;
                 if c.activity == Activity::Leaving {
                     c.activity = after_shopping(c, self.beds_open);
                 }
@@ -242,14 +259,7 @@ impl Step<'_, '_> {
             Activity::Walking { to, shop, good } => {
                 c.at = step_towards(c.at, to, self.cells());
                 if c.at == to {
-                    if let Some(until) = self.dark_until {
-                        // The shop is dark (R69): no sale and no lost sale; wait at the door
-                        // for the lights, then choose again.
-                        c.activity = Activity::WaitingForPower { until };
-                    } else {
-                        self.buy(c, shop, good);
-                        c.activity = Activity::Choosing;
-                    }
+                    self.at_the_door(c, shop, good);
                 }
                 true
             }
@@ -278,6 +288,24 @@ impl Step<'_, '_> {
                 c.at = step_towards(c.at, to, self.cells());
                 c.at != to || !self.check_in(c, hotel)
             }
+        }
+    }
+
+    /// At a shop's door (R69, R70): too late for the item's window, or dark until after it
+    /// closes, and the item is missed (no sale, no lost sale); dark but lit again in time, and
+    /// they wait at the door; otherwise they buy, or it is a lost sale (§8.3).
+    fn at_the_door(&mut self, c: &mut Customer, shop: BusinessId, good: GoodId) {
+        let closes = c.list.iter().find(|e| e.good == good).map(|e| e.to);
+        let lit_at = self.dark_until.unwrap_or(self.now);
+        if closes.is_none_or(|to| to <= lit_at) {
+            c.list.retain(|e| e.good != good);
+            self.report.missed += 1;
+            c.activity = Activity::Choosing;
+        } else if let Some(until) = self.dark_until {
+            c.activity = Activity::WaitingForPower { until };
+        } else {
+            self.buy(c, shop, good);
+            c.activity = Activity::Choosing;
         }
     }
 
@@ -325,7 +353,7 @@ impl Step<'_, '_> {
             Ok(amount) => {
                 let amount = till_price(self.inputs, shop, self.goods.name(good), amount);
                 c.budget -= amount;
-                c.list.retain(|g| *g != good);
+                c.list.retain(|e| e.good != good);
                 self.report.sales.push(Sale {
                     shop,
                     good,

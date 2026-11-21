@@ -105,6 +105,57 @@ desires:                        # §8.2, R55, R64: P(good | age, class, sex, hou
   - match: { sex: male }
     mode: scale
     goods: { hardware: 1.3, betting: 1.6, drinks: 1.15, sports_goods: 1.3 }
+shopping_windows:               # R70: when each good is shopped for, by segment (docs/economy.md "Shopping windows")
+  # Rules apply in order, like desires: every rule whose match fits the shopper sets the window
+  # of each good or group it names, so later, narrower rules override earlier, broader ones.
+  # Within a rule "*" (every good) applies first and replaces everything set before it, then
+  # groups, then single goods. Match on trade (day|night, required), class, age, sex, from_year,
+  # until_year. A window runs from `from` up to `to` and must sit inside its trade's hours.
+  # A shopper works through their list in window order; a window that passes without a purchase
+  # (shops dark, sold out, or too late) drops the good for the day. All windows are placeholders.
+  groups:
+    papers: [newspapers]
+    food: [bread, groceries, meat, fish, dairy, pies, cultured_meat]
+    treats: [snacks, ice_cream, coffee, vapes]
+    fashion: [clothes, second_hand_clothes, jewellery, grooming]
+    shows: [movies, theatre]
+    late: [dancing, drinks, craft_beer, fast_food, fried_chicken, games, escape_games, vr_experiences]
+  rules:
+    # Everyone, every era: the morning paper, then anything in shop hours; a night out.
+    - match: { trade: day }
+      windows: { "*": { from: "09:00", to: "17:00" }, papers: { from: "07:00", to: "10:00" } }
+    - match: { trade: night }
+      windows: { "*": { from: "19:00", to: "23:50" }, shows: { from: "19:00", to: "21:00" }, meals: { from: "19:00", to: "22:00" } }
+    # Working people: the paper on the way in, food and treats at lunchtime, the rest after work.
+    - match: { trade: day, class: working }
+      windows: { "*": { from: "16:00", to: "17:00" }, papers: { from: "07:00", to: "08:30" }, food: { from: "12:00", to: "14:00" }, treats: { from: "12:00", to: "14:00" } }
+    # Until the 1960s the middle-class housewife does the food shopping in the morning.
+    - match: { trade: day, class: middle, sex: female, until_year: 1965 }
+      windows: { food: { from: "09:00", to: "12:00" } }
+    # From the 1970s most middle-class adults are at work too: food at lunchtime.
+    - match: { trade: day, class: middle, from_year: 1970 }
+      windows: { food: { from: "12:00", to: "14:00" } }
+    # Young middle-class shoppers buy clothes late in the afternoon.
+    - match: { trade: day, class: middle, age: "18-29" }
+      windows: { fashion: { from: "15:00", to: "17:00" } }
+    # The upper class shops at leisure, mid-morning to mid-afternoon.
+    - match: { trade: day, class: upper }
+      windows: { "*": { from: "10:00", to: "16:00" }, papers: { from: "08:00", to: "10:00" } }
+    # From the 1990s the young take a coffee on the way to work.
+    - match: { trade: day, age: "18-29", from_year: 1990 }
+      windows: { coffee: { from: "07:00", to: "10:00" } }
+    - match: { trade: day, age: "30-49", from_year: 1990 }
+      windows: { coffee: { from: "07:00", to: "10:00" } }
+    # Pensioners shop in the morning, the paper first; upper-class pensioners at ten.
+    - match: { trade: day, age: "65+" }
+      windows: { "*": { from: "09:00", to: "12:00" }, papers: { from: "07:00", to: "09:00" } }
+    - match: { trade: day, age: "65+", class: upper }
+      windows: { "*": { from: "10:00", to: "11:00" } }
+    # Nights: the young go out late; pensioners are home early.
+    - match: { trade: night, age: "18-29" }
+      windows: { late: { from: "21:00", to: "23:50" } }
+    - match: { trade: night, age: "65+" }
+      windows: { "*": { from: "19:00", to: "21:30" } }
 obsolescence:                   # §7.1: demand fades after a good's or a type's obsolete year
   fade_years: 15                # linear fade from 1 at the obsolete year to the floor
   floor: 0.1                    # collectors and die-hards: the share that never goes away
