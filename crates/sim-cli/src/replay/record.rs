@@ -324,13 +324,14 @@ mod tests {
         }
     }
 
-    proptest! {
-        #![proptest_config(ProptestConfig::with_cases(4))]
-
-        /// Checkpoints are monotonic in time: one per midnight, days 1, 2, 3, … at strictly
-        /// increasing ticks a whole day apart; the command log's ticks never go backwards.
-        #[test]
-        fn checkpoints_are_monotonic_in_time(seed in 0u64..1_000, scripted in any::<bool>()) {
+    /// Checkpoints are monotonic in time: one per midnight, days 1, 2, 3, … at strictly
+    /// increasing ticks a whole day apart; the command log's ticks never go backwards.
+    #[test]
+    fn checkpoints_are_monotonic_in_time() {
+        // Read config/ before the first case: a broken file fails here once, not as a shrunk
+        // case.
+        let _ = shipped_config();
+        proptest!(ProptestConfig::with_cases(4), |(seed in 0u64..1_000, scripted in any::<bool>())| {
             let brain = if scripted { BrainKind::Scripted } else { BrainKind::Idle };
             let (_, replay) = record(seed, brain);
             let per_day = sim_core::clock::ClockRules::from_config(&v1().game.clock).ticks_per_day();
@@ -341,6 +342,6 @@ mod tests {
             }
             prop_assert!(replay.checkpoints.windows(2).all(|w| w[0].tick < w[1].tick));
             prop_assert!(replay.commands.windows(2).all(|w| w[0].tick <= w[1].tick));
-        }
+        });
     }
 }

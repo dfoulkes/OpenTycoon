@@ -26,11 +26,23 @@ pub mod timing;
 
 #[cfg(test)]
 pub(crate) mod test_support {
+    use std::sync::OnceLock;
+
     use sim_core::{Config, ConfigSources};
 
-    /// The repo's shipped config.
+    /// The repo's shipped config. `config/` is read once per test binary, so a file that
+    /// changes while the tests run (an edit, a branch switch in the same checkout) can't change
+    /// the config half way through; property tests call this before their first case, so a
+    /// broken file fails the test once instead of being shrunk as a counterexample.
     pub fn shipped_config() -> Config {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config");
-        Config::load(&ConfigSources::read_dir(&dir).unwrap()).unwrap()
+        static SHIPPED: OnceLock<Result<ConfigSources, String>> = OnceLock::new();
+        let sources = SHIPPED.get_or_init(|| {
+            let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config");
+            ConfigSources::read_dir(&dir).map_err(|e| format!("reading shipped config: {e}"))
+        });
+        match sources {
+            Ok(sources) => Config::load(sources).unwrap(),
+            Err(e) => panic!("{e}"),
+        }
     }
 }
