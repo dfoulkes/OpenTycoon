@@ -15,6 +15,9 @@ use serde::Serialize;
 use sim_core::Config;
 
 use crate::game::{GameResult, GameSpec, Winner, play};
+use crate::replay::record::RecordContext;
+use crate::replay::snapshot::ConfigSnapshot;
+use crate::replay::writer::RunWriter;
 use crate::stats::{Distribution, distribution, rate};
 use crate::timing::Stopwatch;
 
@@ -94,6 +97,32 @@ pub fn run_batch(config: &Config, spec: &BatchSpec) -> Result<BatchReport, Batch
         wall: watch.elapsed(),
         threads: pool.current_num_threads(),
     })
+}
+
+/// Recording a batch (`--record`): where and under what header.
+#[derive(Debug)]
+pub struct BatchRecording<'w, 'a> {
+    /// Header fields every game shares.
+    pub ctx: RecordContext,
+    /// The effective config's snapshot (stored once).
+    pub snapshot: ConfigSnapshot,
+    /// The run's writer.
+    pub writer: &'w mut RunWriter<'a>,
+    /// Games per manifest part; each part's replays are held in memory until written.
+    pub chunk: u64,
+    /// What recorded it (`batch`, `record`).
+    pub source: String,
+}
+
+/// [`run_batch`], recording every game into `rec`'s store: one manifest part per `rec.chunk`
+/// games (`part-00000`, `part-00001`, …). The results are identical to an unrecorded batch.
+pub fn run_batch_recorded(
+    config: &Config,
+    spec: &BatchSpec,
+    rec: &mut BatchRecording<'_, '_>,
+) -> Result<BatchReport, BatchError> {
+    let _ = rec;
+    run_batch(config, spec)
 }
 
 /// Whether the CSV carries the per-game wall time (the only non-deterministic column).

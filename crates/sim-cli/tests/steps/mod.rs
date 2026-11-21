@@ -3,6 +3,7 @@
 pub mod batch;
 pub mod cli;
 pub mod config;
+pub mod replay;
 pub mod study;
 
 use std::path::PathBuf;

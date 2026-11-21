@@ -27,6 +27,14 @@ serde_yaml_ng.workspace = true
 serde_path_to_error.workspace = true
 libm.workspace = true
 thiserror.workspace = true
+postcard.workspace = true
+zstd.workspace = true
+parquet.workspace = true
+rusty-s3.workspace = true
+ureq.workspace = true
+url.workspace = true
+crc32fast.workspace = true
+bytes.workspace = true
 
 [dev-dependencies]
 cucumber.workspace = true

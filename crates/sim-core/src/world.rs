@@ -173,6 +173,21 @@ impl From<LeverError> for BusinessCommandError {
     }
 }
 
+/// One command as phase 2 applied it, reported to [`World::tick_with`]'s observer. Recorders
+/// (`sim-cli` replays) log these; the world itself keeps no record.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Applied<'a> {
+    /// The tick it was applied on (the clock has already advanced to it).
+    pub tick: u64,
+    /// Who sent it.
+    pub player: PlayerId,
+    /// The command as submitted.
+    pub command: &'a Command,
+    /// The world took it. False when a rule refused it (it changed nothing) or the player is
+    /// bankrupt (R4).
+    pub accepted: bool,
+}
+
 /// One phase of the tick, in tick order (module docs; docs/architecture.md "The tick").
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -322,9 +337,21 @@ impl World {
     /// for the harness's per-phase timing (`sim-cli bench --phases`): sim-core never reads the
     /// wall clock, the observer does. `tick` passes a no-op, which compiles away.
     pub fn tick_observed(&mut self, after: &mut impl FnMut(Phase)) -> ClockEvents {
+        self.tick_with(after, &mut |_| {})
+    }
+
+    /// [`World::tick_observed`], also calling `applied` for every command phase 2 applies, in
+    /// the order it applies them, with whether the world accepted it. Like `after`, the
+    /// observer only reads, so the tick is exactly [`World::tick`]'s. Replay recorders use it.
+    pub fn tick_with(
+        &mut self,
+        after: &mut impl FnMut(Phase),
+        applied: &mut impl FnMut(Applied<'_>),
+    ) -> ClockEvents {
         let fired = self.clock.advance();
         after(Phase::Clock);
-        self.apply_commands();
+        let _ = applied; // red: not wired yet
+        self.apply_commands(&mut |_| {});
         after(Phase::Commands);
         if fired.midnight {
             self.midnight_reckoning();
@@ -355,56 +382,65 @@ impl World {
 
     /// Phase 2. Commands are applied in submission order; each module owner wires its own.
     /// A bankrupt player is out of the game, so their commands are dropped (R4).
-    fn apply_commands(&mut self) {
+    /// `applied` hears each one, with whether it was accepted.
+    fn apply_commands(&mut self, applied: &mut impl FnMut(Applied<'_>)) {
+        let tick = self.clock.tick();
         for (player, command) in std::mem::take(&mut self.queued) {
-            if !self.is_active(player) {
-                continue;
-            }
-            match command {
-                Command::SellToCity { business } => {
-                    // A refused sale (not the seller's, no such business) changes nothing.
-                    let _ = economy::bankruptcy::sell_to_city(
-                        player,
-                        business,
-                        &mut self.ledger,
-                        &mut self.businesses,
-                        &self.config,
-                    );
-                }
-                Command::SetPrice { .. }
-                | Command::SetOrder { .. }
-                | Command::SetOpen { .. }
-                | Command::Build { .. } => {
-                    // A refused lever or build changes nothing. Reporting rejections to the
-                    // client is the protocol's job (M2).
-                    let _ = self.apply_business_command(player, command);
-                }
-                Command::OpenLandAuction { .. }
-                | Command::OpenBusinessAuction { .. }
-                | Command::OfferForAuction { .. }
-                | Command::Raise { .. }
-                | Command::Pass
-                | Command::OpenUtilityAuction { .. } => {
-                    self.apply_auction_command(player, &command);
-                }
-                Command::SetRent { .. } => self.apply_population_command(player, &command),
-                Command::SetInsurance { insured } => self.set_insurance(player, insured),
+            let accepted = self.is_active(player) && self.apply_command(player, &command);
+            applied(Applied {
+                tick,
+                player,
+                command: &command,
+                accepted,
+            });
+        }
+    }
+
+    /// Applies one command from an active player; true if the world accepted it. A refused
+    /// command changes nothing. Reporting rejections to the client is the protocol's job (M2).
+    fn apply_command(&mut self, player: PlayerId, command: &Command) -> bool {
+        match command {
+            Command::SellToCity { business } => economy::bankruptcy::sell_to_city(
+                player,
+                *business,
+                &mut self.ledger,
+                &mut self.businesses,
+                &self.config,
+            )
+            .is_ok(),
+            Command::SetPrice { .. }
+            | Command::SetOrder { .. }
+            | Command::SetOpen { .. }
+            | Command::Build { .. } => self.apply_business_command(player, command).is_ok(),
+            Command::OpenLandAuction { .. }
+            | Command::OpenBusinessAuction { .. }
+            | Command::OfferForAuction { .. }
+            | Command::Raise { .. }
+            | Command::Pass
+            | Command::OpenUtilityAuction { .. } => self.apply_auction_command(player, command),
+            Command::SetRent { .. } => self.apply_population_command(player, command),
+            Command::SetInsurance { insured } => {
+                self.set_insurance(player, *insured);
+                true
             }
         }
     }
 
-    /// Phase 2, population's commands: owner-set rent (R51). Refused changes are dropped.
-    fn apply_population_command(&mut self, player: PlayerId, command: &Command) {
-        if let Command::SetRent { building, rent } = command {
-            let _refused = residential::set_rent(
-                &mut self.population.residential,
-                &self.businesses,
-                &self.config.customers.residential.building_type,
-                player,
-                *building,
-                *rent,
-            );
-        }
+    /// Phase 2, population's commands: owner-set rent (R51). Refused changes are dropped;
+    /// returns whether it was accepted.
+    fn apply_population_command(&mut self, player: PlayerId, command: &Command) -> bool {
+        let Command::SetRent { building, rent } = command else {
+            return false;
+        };
+        residential::set_rent(
+            &mut self.population.residential,
+            &self.businesses,
+            &self.config.customers.residential.building_type,
+            player,
+            *building,
+            *rent,
+        )
+        .is_ok()
     }
 
     /// End of phase 3 (owner: population): the cohort model's year step (R61). The clock has
@@ -588,8 +624,8 @@ impl World {
     }
 
     /// Phase 2, auction commands (§5.1): opening bids, offers, raises and passes. Other
-    /// commands are left to their owners.
-    fn apply_auction_command(&mut self, player: PlayerId, command: &Command) {
+    /// commands are left to their owners. Returns whether the auction house accepted it.
+    fn apply_auction_command(&mut self, player: PlayerId, command: &Command) -> bool {
         let now = self.clock.tick();
         let result = match command {
             Command::OpenLandAuction { block, bid } => self.open_land_auction(player, *block, *bid),
@@ -609,9 +645,11 @@ impl World {
                 let bidders = self.active_players();
                 self.auctions.pass(player, now, &bidders)
             }
-            _ => return,
+            _ => return false,
         };
+        let accepted = result.is_ok();
         self.auctions.record(player, result);
+        accepted
     }
 
     /// A player's opening bid on an unleased block; the minimum is its land base price (R23).
@@ -862,7 +900,7 @@ impl World {
     fn apply_business_command(
         &mut self,
         player: PlayerId,
-        command: Command,
+        command: &Command,
     ) -> Result<(), BusinessCommandError> {
         let me = AccountId::Player(player);
         let owns = |b: &Businesses, id: BusinessId| b.get(id).is_some_and(|x| x.owner == me);
@@ -871,31 +909,36 @@ impl World {
                 business,
                 good,
                 price,
-            } if owns(&self.businesses, business)
+            } if owns(&self.businesses, *business)
                 && self
                     .businesses
-                    .get(business)
+                    .get(*business)
                     .is_some_and(|b| crate::hotels::is_hotel(&self.config, &b.type_id))
-                && good == self.config.businesses.hotel.room_good =>
+                && *good == self.config.businesses.hotel.room_good =>
             {
-                crate::hotels::set_room_price(&mut self.businesses, &self.config, business, price)?;
+                crate::hotels::set_room_price(
+                    &mut self.businesses,
+                    &self.config,
+                    *business,
+                    *price,
+                )?;
             }
             Command::SetPrice {
                 business,
                 good,
                 price,
-            } if owns(&self.businesses, business) => {
-                self.businesses.set_price(business, &good, price)?;
+            } if owns(&self.businesses, *business) => {
+                self.businesses.set_price(*business, good, *price)?;
             }
             Command::SetOrder {
                 business,
                 good,
                 quantity,
-            } if owns(&self.businesses, business) => {
-                self.businesses.set_order(business, &good, quantity)?;
+            } if owns(&self.businesses, *business) => {
+                self.businesses.set_order(*business, good, *quantity)?;
             }
-            Command::SetOpen { business, open } if owns(&self.businesses, business) => {
-                self.businesses.set_open(business, open)?;
+            Command::SetOpen { business, open } if owns(&self.businesses, *business) => {
+                self.businesses.set_open(*business, *open)?;
             }
             Command::Build {
                 block,
@@ -904,6 +947,7 @@ impl World {
                 height,
                 fit_out,
             } => {
+                let (block, height, fit_out) = (*block, *height, *fit_out);
                 let holds = self
                     .map
                     .block(block)
@@ -912,7 +956,7 @@ impl World {
                 if !holds {
                     return Err(BusinessCommandError::NotLeaseholder);
                 }
-                if crate::hotels::is_hotel(&self.config, &type_id) {
+                if crate::hotels::is_hotel(&self.config, type_id) {
                     crate::hotels::check_build(
                         &self.config,
                         &self.map,
@@ -923,9 +967,9 @@ impl World {
                     .map_err(BusinessCommandError::Hotel)?;
                 }
                 let request = BuildRequest {
-                    type_id,
+                    type_id: type_id.clone(),
                     block,
-                    footprint,
+                    footprint: *footprint,
                     height,
                     owner: me,
                     fit_out,
@@ -1201,6 +1245,34 @@ mod businesses_tests {
                 break;
             }
         }
+    }
+
+    #[test]
+    fn tick_with_reports_every_applied_command_and_whether_it_was_accepted() {
+        let mut w = world_with_lease();
+        w.submit(P0, bakery()); // holds the lease: built
+        w.submit(PlayerId(1), bakery()); // not the leaseholder: refused
+        let mut seen = Vec::new();
+        w.tick_with(&mut |_| {}, &mut |a| {
+            seen.push((a.tick, a.player, a.command.clone(), a.accepted));
+        });
+        assert_eq!(
+            seen,
+            vec![(1, P0, bakery(), true), (1, PlayerId(1), bakery(), false)]
+        );
+    }
+
+    #[test]
+    fn tick_with_runs_exactly_the_same_tick_as_tick() {
+        let mut plain = World::new(shipped(), 11, 3);
+        let mut observed = plain.clone();
+        let mut heard = 0u32;
+        for _ in 0..20_000 {
+            plain.tick();
+            observed.tick_with(&mut |_| {}, &mut |_| heard += 1);
+        }
+        assert!(heard > 0, "the AI seats should have sent commands");
+        assert_eq!(plain.state_hash(), observed.state_hash());
     }
 
     #[test]
