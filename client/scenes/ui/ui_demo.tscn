@@ -1,0 +1,57 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/ui_demo.gd" id="1_demo"]
+[ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="2_hud"]
+[ext_resource type="PackedScene" path="res://scenes/ui/lot_card.tscn" id="3_card"]
+[ext_resource type="PackedScene" path="res://scenes/ui/bid_feed.tscn" id="4_feed"]
+
+[node name="UiDemo" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_demo")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.36, 0.45, 0.33, 1)
+
+[node name="Hud" parent="." instance=ExtResource("2_hud")]
+unique_name_in_owner = true
+layout_mode = 1
+
+[node name="LotCard" parent="." instance=ExtResource("3_card")]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -360.0
+offset_top = 92.0
+offset_right = -20.0
+offset_bottom = 600.0
+grow_horizontal = 0
+
+[node name="BidFeed" parent="." instance=ExtResource("4_feed")]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = -300.0
+offset_right = 380.0
+offset_bottom = -20.0
+grow_vertical = 0
+
+[node name="Tick" type="Timer" parent="."]
+unique_name_in_owner = true
+autostart = true

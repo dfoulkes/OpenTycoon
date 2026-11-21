@@ -1,0 +1,44 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/bid_feed.gd" id="1_feed"]
+[ext_resource type="Theme" path="res://theme/inspector_theme.tres" id="2_theme"]
+
+[node name="BidFeed" type="PanelContainer"]
+custom_minimum_size = Vector2(340, 260)
+offset_right = 340.0
+offset_bottom = 260.0
+theme = ExtResource("2_theme")
+theme_type_variation = &"HudPanel"
+script = ExtResource("1_feed")
+
+[node name="Body" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="AuctionStrip" type="PanelContainer" parent="Body"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"AuctionStrip"
+
+[node name="AuctionLabel" type="Label" parent="Body/AuctionStrip"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "LIVE: —"
+autowrap_mode = 3
+
+[node name="Title" type="Label" parent="Body"]
+layout_mode = 2
+theme_type_variation = &"SectionTitle"
+text = "AUCTION ROOM"
+
+[node name="Scroll" type="ScrollContainer" parent="Body"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Entries" type="VBoxContainer" parent="Body/Scroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2

@@ -1,0 +1,255 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/lot_card.gd" id="1_card"]
+[ext_resource type="Theme" path="res://theme/inspector_theme.tres" id="2_theme"]
+
+[node name="LotCard" type="PanelContainer"]
+custom_minimum_size = Vector2(320, 0)
+offset_right = 320.0
+offset_bottom = 480.0
+theme = ExtResource("2_theme")
+script = ExtResource("1_card")
+
+[node name="Body" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Header" type="PanelContainer" parent="Body"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"CardHeader"
+
+[node name="Titles" type="VBoxContainer" parent="Body/Header"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="DistrictLabel" type="Label" parent="Body/Header/Titles"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"CardTitle"
+theme_override_font_sizes/font_size = 12
+text = "District"
+uppercase = true
+horizontal_alignment = 1
+
+[node name="NameLabel" type="Label" parent="Body/Header/Titles"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"CardTitle"
+text = "Lot"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Stats" type="GridContainer" parent="Body"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 4
+columns = 2
+
+[node name="OwnerCaption" type="Label" parent="Body/Stats"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Owner"
+
+[node name="OwnerValue" type="Label" parent="Body/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 3
+
+[node name="LandValueCaption" type="Label" parent="Body/Stats"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Land value"
+
+[node name="LandValueValue" type="Label" parent="Body/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 3
+
+[node name="LeaseCaption" type="Label" parent="Body/Stats"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Lease"
+
+[node name="LeaseValue" type="Label" parent="Body/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 3
+
+[node name="BuildingCaption" type="Label" parent="Body/Stats"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Building"
+
+[node name="BuildingValue" type="Label" parent="Body/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 3
+
+[node name="BusinessCaption" type="Label" parent="Body/Stats"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Business"
+
+[node name="BusinessBox" type="HBoxContainer" parent="Body/Stats"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="BusinessValue" type="Label" parent="Body/Stats/BusinessBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 3
+
+[node name="CityRunBadge" type="Label" parent="Body/Stats/BusinessBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 4
+theme_type_variation = &"Badge"
+text = "CITY-RUN"
+
+[node name="TakingsCaption" type="Label" parent="Body/Stats"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Takings / day"
+
+[node name="TakingsValue" type="Label" parent="Body/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 3
+
+[node name="CostsCaption" type="Label" parent="Body/Stats"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Costs / day"
+
+[node name="CostsValue" type="Label" parent="Body/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 3
+
+[node name="ProfitCaption" type="Label" parent="Body/Stats"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Profit / day"
+
+[node name="ProfitValue" type="Label" parent="Body/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 3
+
+[node name="RentCaption" type="Label" parent="Body/Stats"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Rent / day"
+
+[node name="RentValue" type="Label" parent="Body/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 3
+
+[node name="OpenForBidsCaption" type="Label" parent="Body/Stats"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Open for bids"
+
+[node name="OpenForBidsValue" type="Label" parent="Body/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 3
+
+[node name="LastSaleCaption" type="Label" parent="Body/Stats"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Last sale"
+
+[node name="LastSaleValue" type="Label" parent="Body/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 3
+
+[node name="AuctionBox" type="VBoxContainer" parent="Body"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="AuctionStrip" type="PanelContainer" parent="Body/AuctionBox"]
+layout_mode = 2
+theme_type_variation = &"AuctionStrip"
+
+[node name="AuctionTitle" type="Label" parent="Body/AuctionBox/AuctionStrip"]
+layout_mode = 2
+text = "UNDER THE HAMMER"
+horizontal_alignment = 1
+
+[node name="AuctionStats" type="GridContainer" parent="Body/AuctionBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 4
+columns = 2
+
+[node name="AuctionHighCaption" type="Label" parent="Body/AuctionBox/AuctionStats"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "High bid"
+
+[node name="AuctionHighValue" type="Label" parent="Body/AuctionBox/AuctionStats"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 3
+
+[node name="AuctionBidderCaption" type="Label" parent="Body/AuctionBox/AuctionStats"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Bidder"
+
+[node name="AuctionBidderValue" type="Label" parent="Body/AuctionBox/AuctionStats"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 3
+
+[node name="AuctionTimeCaption" type="Label" parent="Body/AuctionBox/AuctionStats"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Time left"
+
+[node name="AuctionTimeValue" type="Label" parent="Body/AuctionBox/AuctionStats"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 3
+
+[node name="CloseButton" type="Button" parent="Body"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 8
+text = "Close"
