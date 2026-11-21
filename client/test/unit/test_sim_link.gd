@@ -41,9 +41,11 @@ func test_a_single_player_game_streams_a_snapshot_then_deltas() -> void:
 	assert_eq(_snapshot["board"]["cols"], 9)
 
 	link.set_speed(4)
-	await wait_for_signal(link.delta_received, 10, "delta")
+	# The first delta may only report the speed change (still at tick 0 on a slow
+	# machine); wait for one where the sim has stepped.
+	await wait_until(func() -> bool: return int(_delta.get("tick", 0)) > 0, 20, "a delta past tick 0")
 	assert_eq(_delta.get("type"), "delta")
-	assert_true(_delta["tick"] > 0)
+	assert_gt(int(_delta.get("tick", 0)), 0)
 
 	link.leave()
 	await wait_for_signal(link.disconnected, 10, "disconnected")

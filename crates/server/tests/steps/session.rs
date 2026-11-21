@@ -166,7 +166,7 @@ fn lot_per_block(w: &mut ServerWorld) {
 #[then(expr = "the board has river water and {int} bridges")]
 fn river(w: &mut ServerWorld, bridges: usize) {
     let b = &w.session.snapshot.as_ref().unwrap().board;
-    assert!(!b.river.is_empty());
+    assert_ne!(b.river.len(), 0, "the board has a river");
     assert_eq!(b.bridges.len(), bridges);
 }
 
@@ -298,7 +298,11 @@ fn empty_delta(w: &mut ServerWorld) {
 #[then("the delta has some lots or players")]
 fn busy_delta(w: &mut ServerWorld) {
     let d = w.session.delta.as_ref().unwrap();
-    assert!(!(d.lots.is_empty() && d.players.is_empty()));
+    assert_ne!(
+        d.lots.len() + d.players.len(),
+        0,
+        "a delta carries changed lots or players"
+    );
 }
 
 #[when("I play through the session until an auction opens")]
