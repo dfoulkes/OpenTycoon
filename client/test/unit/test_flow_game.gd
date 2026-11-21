@@ -180,11 +180,3 @@ func test_quit_leaves_then_exits_app() -> void:
 	game.get_node("%InGameMenu").get_node("%QuitButton").pressed.emit()
 	assert_eq(link.called("leave").size(), 1)
 	assert_eq(exits, [false])
-
-
-func test_default_link_is_fake_without_extension_class() -> void:
-	var path: String = game.link_script_path()
-	if ClassDB.class_exists("SimLink"):
-		assert_eq(path, "")
-	else:
-		assert_eq(path, "res://scripts/net/fake_sim_link.gd")

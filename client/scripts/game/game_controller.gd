@@ -9,6 +9,10 @@ const HUD_SCENE := "res://scenes/ui/hud.tscn"
 const LOT_CARD_SCENE := "res://scenes/ui/lot_card.tscn"
 const BID_FEED_SCENE := "res://scenes/ui/bid_feed.tscn"
 const FAKE_LINK := "res://scripts/net/fake_sim_link.gd"
+
+## "real" (the Rust SimLink), "fake" (sample data, asked for) or "missing" (no server built).
+## Empty until _ready picks it; tests set it before adding the scene.
+var link_mode := ""
 const THEME_PATH := "res://theme/inspector_theme.tres"
 
 var economy_path := ""
@@ -72,6 +76,16 @@ func apply_camera_settings() -> void:
 	rig.pan_speed = float(Settings.get_value("pan_speed"))
 	rig.edge_pan_enabled = bool(Settings.get_value("edge_pan"))
 	rig.invert_rotate = bool(Settings.get_value("invert_rotate"))
+
+
+## Which link to use. Stub.
+static func choose_link_mode(_has_simlink: bool, _want_samples: bool) -> String:
+	return "fake"
+
+
+## True when the SAMPLE DATA banner is showing. Stub.
+func sample_banner_visible() -> bool:
+	return false
 
 
 ## "" when the Rust `SimLink` is registered, else the GDScript fake's path.
