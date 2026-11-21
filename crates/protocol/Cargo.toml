@@ -1,6 +1,6 @@
 [package]
 name = "protocol"
-description = "OpenTycoon wire messages shared by server and client (placeholder until M2)."
+description = "OpenTycoon wire messages shared by server and client (inspector protocol v1, docs/inspector-protocol.md)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

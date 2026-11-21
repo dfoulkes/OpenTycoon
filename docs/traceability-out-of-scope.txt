@@ -14,3 +14,4 @@ R47  # client: Godot + gdext stack
 R48  # client: world scale (config value exists in game.yaml)
 R49  # architecture: multiplayer audience (M5)
 R78  # harness: sim-cli evolve's fitness, not a sim rule; proven by crates/sim-cli/features/evolve.feature (@R78), outside cargo trace's sim-core scan
+R89  # look and feel: a design steer, not a sim rule

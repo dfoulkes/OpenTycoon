@@ -14,6 +14,10 @@ crate-type = ["cdylib"]
 
 [dependencies]
 godot.workspace = true
+protocol.workspace = true
+server.workspace = true
+serde_json.workspace = true
+tungstenite.workspace = true
 
 [lints]
 workspace = true

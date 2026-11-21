@@ -1,0 +1,42 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_hud"]
+[ext_resource type="Theme" path="res://theme/inspector_theme.tres" id="2_theme"]
+
+[node name="Hud" type="PanelContainer"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 48.0
+grow_horizontal = 2
+theme = ExtResource("2_theme")
+theme_type_variation = &"HudPanel"
+script = ExtResource("1_hud")
+
+[node name="Row" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="ClockLabel" type="Label" parent="Row"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"HudLabel"
+theme_override_font_sizes/font_size = 18
+text = "—"
+vertical_alignment = 1
+
+[node name="SpeedLabel" type="Label" parent="Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_type_variation = &"HudLabel"
+text = "—"
+vertical_alignment = 1
+
+[node name="Divider" type="VSeparator" parent="Row"]
+layout_mode = 2
+
+[node name="Players" type="HBoxContainer" parent="Row"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 24

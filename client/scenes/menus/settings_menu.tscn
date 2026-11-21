@@ -1,0 +1,124 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/menus/settings_menu.gd" id="1_settings"]
+
+[node name="SettingsMenu" type="PanelContainer"]
+custom_minimum_size = Vector2(520, 420)
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_settings")
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 16
+
+[node name="VBox" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Margin/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "Settings"
+horizontal_alignment = 1
+
+[node name="Tabs" type="TabContainer" parent="Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+current_tab = 0
+
+[node name="Graphics" type="VBoxContainer" parent="Margin/VBox/Tabs"]
+layout_mode = 2
+metadata/_tab_index = 0
+
+[node name="FullscreenCheck" type="CheckButton" parent="Margin/VBox/Tabs/Graphics"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Fullscreen"
+
+[node name="VsyncCheck" type="CheckButton" parent="Margin/VBox/Tabs/Graphics"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "V-Sync"
+
+[node name="MsaaRow" type="HBoxContainer" parent="Margin/VBox/Tabs/Graphics"]
+layout_mode = 2
+
+[node name="MsaaLabel" type="Label" parent="Margin/VBox/Tabs/Graphics/MsaaRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Anti-aliasing (MSAA)"
+
+[node name="MsaaOption" type="OptionButton" parent="Margin/VBox/Tabs/Graphics/MsaaRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+
+[node name="Controls" type="ScrollContainer" parent="Margin/VBox/Tabs"]
+visible = false
+layout_mode = 2
+horizontal_scroll_mode = 0
+metadata/_tab_index = 1
+
+[node name="BindingsList" type="GridContainer" parent="Margin/VBox/Tabs/Controls"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 24
+columns = 2
+
+[node name="Camera" type="VBoxContainer" parent="Margin/VBox/Tabs"]
+visible = false
+layout_mode = 2
+metadata/_tab_index = 2
+
+[node name="PanRow" type="HBoxContainer" parent="Margin/VBox/Tabs/Camera"]
+layout_mode = 2
+
+[node name="PanLabel" type="Label" parent="Margin/VBox/Tabs/Camera/PanRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Pan speed"
+
+[node name="PanSpeedSlider" type="HSlider" parent="Margin/VBox/Tabs/Camera/PanRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+min_value = 10.0
+max_value = 150.0
+step = 1.0
+value = 40.0
+
+[node name="PanSpeedValue" type="Label" parent="Margin/VBox/Tabs/Camera/PanRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 0)
+layout_mode = 2
+text = "40"
+horizontal_alignment = 2
+
+[node name="EdgePanCheck" type="CheckButton" parent="Margin/VBox/Tabs/Camera"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Pan at screen edge"
+
+[node name="InvertRotateCheck" type="CheckButton" parent="Margin/VBox/Tabs/Camera"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Invert rotate"
+
+[node name="BackButton" type="Button" parent="Margin/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Back"

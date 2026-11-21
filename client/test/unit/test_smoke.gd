@@ -13,7 +13,7 @@ func test_main_scene_loads() -> void:
 	assert_not_null(scene)
 	var main: Node = scene.instantiate()
 	add_child_autofree(main)
-	assert_eq(main.get_child_count() >= 3, true, "camera, sun and label present")
+	assert_eq(main.get_child_count() >= 3, true, "backdrop, menu panels and status label present")
 
 
 func test_rust_extension_is_registered() -> void:

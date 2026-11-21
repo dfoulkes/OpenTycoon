@@ -52,6 +52,13 @@ pub use map::{MapChoice, MapConfig, MapFile};
 pub use types::{ClockTime, Pounds, Ratio};
 pub use utilities::UtilitiesConfig;
 
+/// YAML files that live in the config directory beside the nine but are not the sim's: they
+/// belong to other crates, which load and validate them themselves. [`ConfigSources::read_dir`]
+/// skips them instead of calling them typos.
+///
+/// - `server.yaml`: the inspector server's pacing and wire limits (`crates/server`, R88).
+pub const COMPANION_FILES: [&str; 1] = ["server.yaml"];
+
 /// One of the nine config files.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ConfigFile {
@@ -219,7 +226,8 @@ impl ConfigSources {
     }
 
     /// Reads the nine config files from `dir`. A missing file, or any other `*.yaml`/`*.yml`
-    /// in the directory (a likely typo), is an error.
+    /// in the directory (a likely typo) that is not one of the [`COMPANION_FILES`], is an
+    /// error. Companion files are left for the crates that own them.
     #[cfg(feature = "fs")]
     pub fn read_dir(dir: &std::path::Path) -> Result<Self, ConfigErrors> {
         let mut sources = Self::new();
@@ -232,7 +240,9 @@ impl ConfigSources {
                     let is_yaml = std::path::Path::new(&name).extension().is_some_and(|e| {
                         e.eq_ignore_ascii_case("yaml") || e.eq_ignore_ascii_case("yml")
                     });
-                    if is_yaml && !ConfigFile::ALL.iter().any(|f| f.file_name() == name) {
+                    let known = ConfigFile::ALL.iter().any(|f| f.file_name() == name)
+                        || COMPANION_FILES.contains(&name.as_str());
+                    if is_yaml && !known {
                         errors.push(ConfigError::new(
                             name,
                             "",

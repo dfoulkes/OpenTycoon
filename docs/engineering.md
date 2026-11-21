@@ -15,6 +15,8 @@ rule is proven by a test written before the code.**
   `features/clock/clock.feature`, `features/auctions/passing.feature`.
 - The harness's own behaviour (batch, bench, overrides, perf budget) lives in
   `crates/sim-cli/features/`, run by `crates/sim-cli/tests/bdd.rs` (tags `@spec-11`, `@R45`).
+- The inspector server's behaviour (session and connection, `@R88 @R40 @R44`) lives in
+  `crates/server/features/`, run by `crates/server/tests/bdd.rs`.
 - They run with the [`cucumber`](https://docs.rs/cucumber) crate through one harness,
   `crates/sim-core/tests/bdd.rs` (`harness = false`, driven by `futures::executor::block_on`; no
   async runtime). Run them with `cargo bdd`.

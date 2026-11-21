@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=schema/server.schema.json
+# server.yaml: the inspector server (spec §10d, R88; docs/inspector-protocol.md). Not sim config:
+# sim-core never reads it (it is one of sim-core's COMPANION_FILES) and nothing here can change a
+# game's result, only how fast it runs and how much of it goes on the wire.
+ticks_per_second: [7.2, 14.4, 28.8, 115.2]   # speeds 1-4: 1x (8,640 ticks in game.yaml's 20 real minutes, R34), 2x, 4x, 16x
+start_speed: 1                  # a new game starts at 1x (0 = paused)
+deltas_per_second: 10           # at most; each delta carries every tick since the last
+max_catch_up_seconds: 1         # behind by more than this (a stall): drop the backlog, don't race
+max_walkers: 2000               # walker positions per message (the shipped 2,000 adults all fit)
+recent_bids: 50                 # bid events in the snapshot's history
+token:
+  length: 32                    # hex characters in the one-time single-player token

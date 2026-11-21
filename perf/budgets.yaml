@@ -43,3 +43,16 @@ budgets:
     limit: 20
     baseline: 1.6
     why: "engineering.md §4: config load + validate < 20 ms (not tick time; independent of D)"
+# Inspector wire sizes (docs/perf.md "Wire sizes"): bytes of JSON on the full 9x9 board, seed 42,
+# four AI seats, measured by crates/server/tests/wire_budget.rs over three game days. Sizes are
+# deterministic, so they run in `cargo test` and the limit applies exactly (no tolerance).
+# perf-budget does not measure them.
+wire:
+  snapshot_bytes:
+    limit: 262144
+    baseline: 43154   # 2026-11-21: three game days in, the busiest snapshot
+    why: "256 KiB: the worst snapshot is every lot holding a stocked shop (81 x ~1.2 KB) plus max_walkers (2,000) walkers at ~14 bytes each (28 KB) plus the board"
+  delta_bytes:
+    limit: 65536
+    baseline: 6491    # largest delta, one every 12 ticks (16x speed at 10 deltas/s)
+    why: "64 KiB: max_walkers walkers (28 KB) plus every lot changed at once (~32 KB); at deltas_per_second (10) that is 640 KB/s on loopback, well inside one frame's parse"

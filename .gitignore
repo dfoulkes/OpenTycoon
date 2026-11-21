@@ -25,3 +25,4 @@ client/bin/
 
 # sim-cli evolve output (docs/evolve.md)
 /evolve-out/
+/target
