@@ -8,7 +8,7 @@
 
 use serde_json::{Value as Json, json};
 
-use super::fitness::Evaluation;
+use super::fitness::{Evaluation, FitnessWeights};
 use super::genome::{self, Genome, Origin};
 use crate::study::Parameter;
 use crate::study::output::{csv_field, split_csv_line};
@@ -69,7 +69,7 @@ fn f6(v: f64) -> String {
 
 impl Candidate {
     /// Its row, in [`COLUMNS`] order.
-    pub fn row(&self, genes: &[&Parameter], penalty: f64) -> Vec<String> {
+    pub fn row(&self, genes: &[&Parameter], weights: &FitnessWeights) -> Vec<String> {
         let mut row = vec![
             self.generation.to_string(),
             self.personality.clone(),
@@ -91,7 +91,7 @@ impl Candidate {
                 e.bankruptcies.to_string(),
                 f6(e.bankrupt_rate()),
                 e.nw_vs_idle.map(|v| v.to_string()).unwrap_or_default(),
-                f6(e.fitness(penalty)),
+                f6(e.fitness(weights)),
             ]),
             Err(_) => row.extend(std::iter::repeat_n(String::new(), 7)),
         }
@@ -159,7 +159,12 @@ pub fn csv(rows: impl IntoIterator<Item = Vec<String>>) -> String {
 }
 
 /// One personality's fitness curve over the finished generations, for `summary.json`.
-pub fn curve(candidates: &[Candidate], personality: &str, generations: u32, penalty: f64) -> Json {
+pub fn curve(
+    candidates: &[Candidate],
+    personality: &str,
+    generations: u32,
+    weights: &FitnessWeights,
+) -> Json {
     let mut best = Vec::new();
     let mut mean = Vec::new();
     let mut champion = Vec::new();
@@ -172,7 +177,7 @@ pub fn curve(candidates: &[Candidate], personality: &str, generations: u32, pena
             .collect();
         let fit: Vec<f64> = mine
             .iter()
-            .filter_map(|c| c.result.as_ref().ok().map(|e| e.fitness(penalty)))
+            .filter_map(|c| c.result.as_ref().ok().map(|e| e.fitness(weights)))
             .collect();
         #[allow(clippy::cast_precision_loss, reason = "populations are small")]
         let avg = if fit.is_empty() {
@@ -238,7 +243,7 @@ mod tests {
             rank: Some(1),
             champion: true,
         };
-        let line = c.row(&genes, 0.5).join(",");
+        let line = c.row(&genes, &FitnessWeights::default()).join(",");
         assert_eq!(
             Candidate::parse(&line, |_| Some(genes.clone())),
             Some(c.clone())
@@ -251,7 +256,7 @@ mod tests {
             games_digest: String::new(),
             ..c
         };
-        let line = bad.row(&genes, 0.5).join(",");
+        let line = bad.row(&genes, &FitnessWeights::default()).join(",");
         assert_eq!(Candidate::parse(&line, |_| Some(genes.clone())), Some(bad));
         assert_eq!(Candidate::parse("2,toff,5", |_| Some(genes.clone())), None);
     }

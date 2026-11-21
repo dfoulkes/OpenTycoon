@@ -212,7 +212,7 @@ impl Evolution<'_> {
             &csv_path,
             &csv(rows
                 .iter()
-                .map(|c| c.row(&self.genes[&c.personality], self.penalty()))),
+                .map(|c| c.row(&self.genes[&c.personality], self.weights()))),
         )?;
         for g in finished..self.def.generations {
             let d = self.champion_dir(g);
@@ -226,7 +226,7 @@ impl Evolution<'_> {
     fn summary(&self, rows: &[Candidate], report: &EvolveReport, finished: u32) -> Json {
         let mut personalities = serde_json::Map::new();
         for p in &self.personalities {
-            let mut c = curve(rows, p, finished, self.penalty());
+            let mut c = curve(rows, p, finished, self.weights());
             let lineup: Vec<Json> = (0..finished)
                 .map(|g| {
                     std::fs::read_to_string(self.champion_dir(g).join("lineup.json"))
@@ -329,7 +329,7 @@ pub fn run_evolution_recorded(
         let text: String = done
             .candidates
             .iter()
-            .map(|c| c.row(&evo.genes[&c.personality], evo.penalty()).join(",") + "\n")
+            .map(|c| c.row(&evo.genes[&c.personality], evo.weights()).join(",") + "\n")
             .collect();
         append(&evo.path("generations.csv"), &text)?;
         report.invalid += done.candidates.iter().filter(|c| c.result.is_err()).count() as u64;
@@ -350,7 +350,7 @@ pub fn run_evolution_recorded(
                         .iter()
                         .find(|c| c.generation == g && &c.personality == p && c.champion);
                     match champ.and_then(|c| c.result.as_ref().ok()) {
-                        Some(e) => format!("{p} {:.3}", e.fitness(evo.penalty())),
+                        Some(e) => format!("{p} {:.3}", e.fitness(evo.weights())),
                         None => format!("{p} -"),
                     }
                 })

@@ -89,6 +89,93 @@ Feature: Evolving the AI personalities
     And with equal wins, the genome further above idle ranks higher
     And with equal wins and net worth, the genome that went bankrupt ranks lower
 
+  # ---- Fitness when one personality dominates (R78) -----------------------------------------
+  # Below the low-win floor (shipped 0.10) a genome's fitness blends its win share with its
+  # median net worth over the idle seat (clamped at ±£7,000), the net-worth weight rising from
+  # 0 at the floor to 0.8 at a win share of 0. At or above the floor nothing changes.
+
+  @spec-11 @R78
+  Scenario: Two genomes that never win are ranked by the net worth they gain over idle
+    Given the shipped fitness weights
+    And these candidates' results over 24 games:
+      | genome | wins | bankruptcies | nw_vs_idle |
+      | poorer | 0    | 0            | 100000     |
+      | richer | 0    | 0            | 300000     |
+    Then they rank "richer, poorer"
+    And "richer" has a higher fitness than "poorer", and both are above 0
+
+  @spec-11 @R78
+  Scenario: A genome that never wins but builds wealth beats one lucky win that loses it
+    Given the shipped fitness weights
+    And these candidates' results over 24 games:
+      | genome  | wins | bankruptcies | nw_vs_idle |
+      | lucky   | 1    | 0            | -300000    |
+      | builder | 0    | 0            | 400000     |
+    Then they rank "builder, lucky"
+
+  @spec-11 @R78
+  Scenario: At or above the floor the ranking is unchanged from the old fitness
+    Given the shipped fitness weights
+    And these candidates' results over 24 games:
+      | genome | wins | bankruptcies | nw_vs_idle |
+      | A      | 12   | 0            | -500000    |
+      | B      | 12   | 2            | 900000     |
+      | C      | 6    | 0            | 900000     |
+      | D      | 3    | 0            | 0          |
+      | E      | 3    | 0            | 100        |
+      | F      | 13   | 4            | 0          |
+    Then they rank "A, B, F, C, E, D"
+    And they rank as the old fitness does: win share − 0.5 × bankruptcy rate, then net worth over idle
+    And each fitness is exactly win share − 0.5 × bankruptcy rate
+
+  @spec-11 @R78
+  Scenario Outline: The net-worth weight grows as win share falls below the floor
+    Given the shipped fitness weights
+    Then a genome winning <wins> of 40 games has a net-worth weight of <weight>
+
+    Examples:
+      | wins | weight |
+      | 40   | 0      |
+      | 5    | 0      |
+      | 4    | 0      |
+      | 3    | 0.2    |
+      | 2    | 0.4    |
+      | 1    | 0.6    |
+      | 0    | 0.8    |
+
+  @spec-11 @R78
+  Scenario: Bankruptcy is still penalised below the floor
+    Given the shipped fitness weights
+    And these candidates' results over 24 games:
+      | genome   | wins | bankruptcies | nw_vs_idle |
+      | reckless | 0    | 3            | 300000     |
+      | always   | 0    | 24           | 700000     |
+      | careful  | 0    | 0            | 300000     |
+    Then they rank "careful, reckless, always"
+
+  @spec-11 @R78
+  Scenario: A blended evolution is identical on any thread count
+    Given the roster is "grocer, landlord, sir_penny_sugar, idle"
+    And only "grocer" evolves
+    And the fitness weights "{ low_win_floor: 1, net_worth_scale: 50000, max_net_worth_weight: 1 }"
+    When I evolve on 1 thread
+    And I evolve on 4 threads
+    Then both evolutions wrote identical generations.csv, champions and summary.json
+    And some candidate's fitness is not win share − 0.5 × bankruptcy rate
+
+  @spec-11 @R78
+  Scenario Outline: Bad fitness weights are refused, naming the key
+    Given the fitness weights "<weights>"
+    Then the evolution refuses to start, naming "<error>"
+
+    Examples:
+      | weights                          | error                                                  |
+      | { low_win_floor: 1.2 }           | fitness.low_win_floor: must be between 0 and 1         |
+      | { low_win_floor: -0.1 }          | fitness.low_win_floor: must be between 0 and 1         |
+      | { net_worth_scale: 0 }           | fitness.net_worth_scale: must be a positive            |
+      | { max_net_worth_weight: 1.5 }    | fitness.max_net_worth_weight: must be between 0 and 1  |
+      | { bankruptcy_penalty: 0.1234567 }| fitness.bankruptcy_penalty: must have at most six      |
+
   @spec-11
   Scenario: An invalid genome is reported, not fatal
     Given the gene "toff_floor" on "ai.toff.opportunism.min_rent" from 0.5 to 8.0

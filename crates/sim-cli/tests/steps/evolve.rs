@@ -7,10 +7,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use cucumber::gherkin::Step;
 use cucumber::{given, then, when};
+use sim_cli::evolve::def::FitnessDef;
+use sim_cli::evolve::fitness::FITNESS_ONE;
 use sim_cli::evolve::genome::{self, Genome, breed, canon};
 use sim_cli::evolve::{
-    Candidate, Evaluation, EvolveDef, EvolveOptions, EvolveRecording, evaluate, rank,
-    run_evolution, run_evolution_recorded,
+    Candidate, Evaluation, EvolveDef, EvolveOptions, EvolveRecording, FitnessWeights, evaluate,
+    rank, run_evolution, run_evolution_recorded,
 };
 use sim_cli::overrides::Override;
 use sim_cli::replay::load;
@@ -47,6 +49,10 @@ pub struct EvolveState {
     pub adopted: Option<PathBuf>,
     /// Synthetic results for the fitness scenario.
     pub synthetic: Option<Synthetic>,
+    /// Fitness weights for the R78 scenarios.
+    pub weights: Option<FitnessWeights>,
+    /// Named candidates' results for the R78 scenarios, in table order.
+    pub results: Vec<(String, Evaluation)>,
 }
 
 /// Two genomes' synthetic results: names, wins, games, and how far each finishes above idle.
@@ -170,6 +176,11 @@ fn the_definition(w: &mut HarnessWorld, step: &Step) {
 #[given(expr = "only {string} evolves")]
 fn only_evolves(w: &mut HarnessWorld, p: String) {
     w.evolve.def().evolve = Some(vec![p]);
+}
+
+#[given(expr = "the roster is {string}")]
+fn roster_is(w: &mut HarnessWorld, list: String) {
+    w.evolve.def().roster = Some(list.split(", ").map(str::to_owned).collect());
 }
 
 #[given(expr = "the evolution runs {int} generation(s)")]
@@ -493,7 +504,7 @@ fn further_above(w: &mut HarnessWorld, first: String, second: String) {
 }
 
 fn ranked(first: Evaluation, second: Evaluation) -> Vec<u32> {
-    rank(&[(1, second), (0, first)], 0.5)
+    rank(&[(1, second), (0, first)], &FitnessWeights::default())
 }
 
 #[then(expr = "{string} ranks above {string}")]
@@ -527,6 +538,162 @@ fn bankrupt_lower(_w: &mut HarnessWorld) {
     let (a, b) = (evaluate(&roster, 0, &games), evaluate(&roster, 1, &games));
     assert_eq!(a.bankruptcies, 1);
     assert_eq!(ranked(a, b), vec![1, 0]);
+}
+
+// ---- R78: the fitness blend ------------------------------------------------------------------
+
+#[given("the shipped fitness weights")]
+fn shipped_weights(w: &mut HarnessWorld) {
+    let shipped = std::fs::read_to_string(super::repo_root().join("study/evolve.yaml")).unwrap();
+    let def = EvolveDef::from_yaml(&shipped).unwrap();
+    w.evolve.weights = Some(def.fitness.weights().unwrap());
+}
+
+#[given(expr = "the fitness weights {string}")]
+fn fitness_weights(w: &mut HarnessWorld, yaml: String) {
+    let fitness: FitnessDef = serde_yaml_ng::from_str(&yaml).unwrap();
+    w.evolve.def().fitness = fitness;
+}
+
+#[given(expr = "these candidates' results over {int} games:")]
+fn results_table(w: &mut HarnessWorld, games: u64, step: &Step) {
+    let table = step.table.as_ref().expect("a table");
+    let header = &table.rows[0];
+    let col = |name: &str| header.iter().position(|h| h == name).unwrap();
+    let (g, wi, b, nw) = (
+        col("genome"),
+        col("wins"),
+        col("bankruptcies"),
+        col("nw_vs_idle"),
+    );
+    w.evolve.results = table.rows[1..]
+        .iter()
+        .map(|r| {
+            (
+                r[g].clone(),
+                Evaluation {
+                    games,
+                    wins: r[wi].parse().unwrap(),
+                    bankruptcies: r[b].parse().unwrap(),
+                    nw_vs_idle: Some(r[nw].parse().unwrap()),
+                },
+            )
+        })
+        .collect();
+}
+
+fn weights(w: &HarnessWorld) -> FitnessWeights {
+    w.evolve.weights.expect("no fitness weights given")
+}
+
+fn result_of(w: &HarnessWorld, name: &str) -> Evaluation {
+    w.evolve
+        .results
+        .iter()
+        .find(|(n, _)| n == name)
+        .map(|(_, e)| *e)
+        .unwrap()
+}
+
+/// The candidates' names in rank order; ranked from reversed input so input order cannot help.
+fn ranked_names(w: &HarnessWorld, weights: &FitnessWeights) -> Vec<String> {
+    let input: Vec<(u32, Evaluation)> = (0..w.evolve.results.len())
+        .rev()
+        .map(|i| (u32::try_from(i).unwrap(), w.evolve.results[i].1))
+        .collect();
+    rank(&input, weights)
+        .into_iter()
+        .map(|i| w.evolve.results[i as usize].0.clone())
+        .collect()
+}
+
+#[then(expr = "they rank {string}")]
+fn they_rank(w: &mut HarnessWorld, order: String) {
+    let want: Vec<String> = order.split(", ").map(str::to_owned).collect();
+    assert_eq!(ranked_names(w, &weights(w)), want);
+}
+
+#[then(expr = "{string} has a higher fitness than {string}, and both are above 0")]
+fn higher_fitness(w: &mut HarnessWorld, a: String, b: String) {
+    let ws = weights(w);
+    let (a, b) = (result_of(w, &a).score(&ws), result_of(w, &b).score(&ws));
+    assert!(a > b && b > 0, "{a} {b}");
+}
+
+/// The old fitness as an exact rational over equal games: penalty ½ makes it
+/// (2·wins − bankruptcies) / (2·games); then net worth over idle, then table order.
+fn old_order(w: &HarnessWorld) -> Vec<String> {
+    let mut r: Vec<(usize, &(String, Evaluation))> = w.evolve.results.iter().enumerate().collect();
+    let key = |e: &Evaluation| {
+        2 * i64::try_from(e.wins).unwrap() - i64::try_from(e.bankruptcies).unwrap()
+    };
+    r.sort_by(|(i, (_, a)), (j, (_, b))| {
+        key(b)
+            .cmp(&key(a))
+            .then(b.nw_vs_idle.cmp(&a.nw_vs_idle))
+            .then(i.cmp(j))
+    });
+    r.into_iter().map(|(_, (n, _))| n.clone()).collect()
+}
+
+#[then(
+    "they rank as the old fitness does: win share − 0.5 × bankruptcy rate, then net worth over idle"
+)]
+fn ranks_as_old(w: &mut HarnessWorld) {
+    let ws = weights(w);
+    for (n, e) in &w.evolve.results {
+        assert!(e.wins * 10 >= e.games, "{n} is below the floor");
+    }
+    assert_eq!(ranked_names(w, &ws), old_order(w));
+    assert_eq!(
+        ranked_names(w, &ws),
+        ranked_names(w, &FitnessWeights::without_blend(ws.bankruptcy_penalty))
+    );
+}
+
+/// `win share − 0.5 × bankruptcy rate` in fitness units, rounded toward −∞.
+fn old_score(e: &Evaluation) -> i64 {
+    let num = (2 * i128::from(e.wins) - i128::from(e.bankruptcies)) * i128::from(FITNESS_ONE);
+    i64::try_from(num.div_euclid(2 * i128::from(e.games))).unwrap()
+}
+
+#[then("each fitness is exactly win share − 0.5 × bankruptcy rate")]
+fn exactly_old(w: &mut HarnessWorld) {
+    let ws = weights(w);
+    for (n, e) in &w.evolve.results {
+        assert_eq!(e.score(&ws), old_score(e), "{n}");
+    }
+}
+
+#[then(expr = "a genome winning {int} of {int} games has a net-worth weight of {float}")]
+fn net_worth_weight(w: &mut HarnessWorld, wins: u64, games: u64, weight: f64) {
+    let e = Evaluation {
+        games,
+        wins,
+        bankruptcies: 0,
+        nw_vs_idle: Some(0),
+    };
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "a table weight, six decimals at most"
+    )]
+    let want = (weight * 1e6).round() as i64 * (FITNESS_ONE / 1_000_000);
+    assert_eq!(e.net_worth_weight(&weights(w)), want);
+}
+
+#[then("some candidate's fitness is not win share − 0.5 × bankruptcy rate")]
+fn blend_was_active(w: &mut HarnessWorld) {
+    let csv = read(&w.evolve.out().join("generations.csv"));
+    let mut lines = csv.lines();
+    let header: Vec<&str> = lines.next().unwrap().split(',').collect();
+    let col = |n: &str| header.iter().position(|h| *h == n).unwrap();
+    let (ws, br, fit) = (col("win_share"), col("bankrupt_rate"), col("fitness"));
+    let blended = lines.filter(|l| l.contains(",ok,")).any(|l| {
+        let f: Vec<&str> = l.split(',').collect();
+        let old: f64 = f[ws].parse::<f64>().unwrap() - 0.5 * f[br].parse::<f64>().unwrap();
+        (f[fit].parse::<f64>().unwrap() - old).abs() > 1e-5
+    });
+    assert!(blended, "the blend never changed a fitness");
 }
 
 #[then(expr = "the evolution finishes {int} generations")]
@@ -651,6 +818,7 @@ fn curves(w: &mut HarnessWorld, points: usize, first: String, second: String) {
     let summary: serde_json::Value =
         serde_json::from_str(&read(&w.evolve.out().join("summary.json"))).unwrap();
     let cs = candidates(w);
+    let weights_of_def = w.evolve.def().fitness.weights().unwrap();
     for p in [first, second] {
         let best = summary["personalities"][&p]["best_fitness"]
             .as_array()
@@ -664,7 +832,7 @@ fn curves(w: &mut HarnessWorld, points: usize, first: String, second: String) {
                 .into_iter()
                 .find(|c| c.champion)
                 .unwrap();
-            let fitness = champ.result.as_ref().unwrap().fitness(0.5);
+            let fitness = champ.result.as_ref().unwrap().fitness(&weights_of_def);
             assert!(
                 (value.as_f64().unwrap() - fitness).abs() < 1e-9,
                 "{p} gen {gen_index}"

@@ -648,6 +648,7 @@ OpenTycoon/
 | R69 | Events act within a game day, never across whole days (a game day is a 5-year era). The 1970s three-day week becomes power cuts: shops shut for a few hours that day, with a front-page article. The locked stock order always arrives at 06:00. During a cut shoppers congregate on the streets and wait; if their window for an item ends while the lights are out, R70 applies and they move on to their next item. Demand or supply effects may span several eras (e.g. WWII rationing over 1940 and 1945); only closures are limited to within a day |
 | R70 | Each good is shopped for in a time window that depends on the shopper's age band, class and sex (e.g. young middle class buy clothes 15:00–17:00; upper-class seniors at 10:00). If the window is missed (shop dark in a power cut, sold out, closed), the shopper moves on to their next item; the missed good is not bought that day |
 | R71 | Every economy weight (the levers the balance study varies) lives in one economy.yaml; adopting an economic model means swapping that one file |
+| R78 | AI evolution runs against the balanced economy the study picks, and a personality whose win share is near zero is scored more on net worth gained (versus idle), so losers can still improve when one personality dominates |
 
 ### Open
 

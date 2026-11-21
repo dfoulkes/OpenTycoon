@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use sim_core::{Config, ConfigSources};
 
 use super::def::{EvolveDef, EvolveError, gene_personality};
+use super::fitness::FitnessWeights;
 use super::genome::{self, Genome, Origin, breed, first_population};
 use super::output::Candidate;
 use super::run::{EvolveOptions, generation_seed};
@@ -33,6 +34,8 @@ pub(super) struct Evolution<'a> {
     pub(super) seats: usize,
     /// Seed blocks per evaluation: games per evaluation / seats.
     pub(super) blocks: u32,
+    /// The fitness weights (checked when the definition was validated).
+    pub(super) weights: FitnessWeights,
 }
 
 /// The personalities that evolve: the definition's list (each must sit in the roster), in
@@ -171,6 +174,7 @@ impl<'a> Evolution<'a> {
             base_genomes,
             seats,
             blocks,
+            weights: def.fitness.weights()?,
         })
     }
 
@@ -186,8 +190,9 @@ impl<'a> Evolution<'a> {
         self.genes.get(p).cloned()
     }
 
-    pub(super) fn penalty(&self) -> f64 {
-        self.def.fitness.bankruptcy_penalty
+    /// The fitness weights, in exact integer form.
+    pub(super) fn weights(&self) -> &FitnessWeights {
+        &self.weights
     }
 
     pub(super) fn games_per_eval(&self) -> u32 {
