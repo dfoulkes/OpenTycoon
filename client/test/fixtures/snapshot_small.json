@@ -1,0 +1,551 @@
+{
+ "type": "snapshot",
+ "tick": 56,
+ "clock": {
+  "year": 1930,
+  "day": 3,
+  "time": "10:40",
+  "speed": 1
+ },
+ "board": {
+  "cols": 3,
+  "rows": 3,
+  "width_m": 140.0,
+  "depth_m": 160.0,
+  "blocks": [
+   {
+    "key": "bermondsey_street",
+    "name": "Bermondsey Street",
+    "district": "Southwark",
+    "set": "brown",
+    "col": 0,
+    "row": 0,
+    "x": 8.0,
+    "z": 8.0,
+    "w": 36.0,
+    "d": 36.0,
+    "buildable": true
+   },
+   {
+    "key": "borough_high_street",
+    "name": "Borough High Street",
+    "district": "Southwark",
+    "set": "brown",
+    "col": 1,
+    "row": 0,
+    "x": 52.0,
+    "z": 8.0,
+    "w": 36.0,
+    "d": 36.0,
+    "buildable": true
+   },
+   {
+    "key": "southwark_street",
+    "name": "Southwark Street",
+    "district": "Southwark",
+    "set": "brown",
+    "col": 2,
+    "row": 0,
+    "x": 96.0,
+    "z": 8.0,
+    "w": 36.0,
+    "d": 36.0,
+    "buildable": true
+   },
+   {
+    "key": "camden_high_street",
+    "name": "Camden High Street",
+    "district": "Camden",
+    "set": "teal",
+    "col": 0,
+    "row": 1,
+    "x": 8.0,
+    "z": 52.0,
+    "w": 36.0,
+    "d": 36.0,
+    "buildable": true
+   },
+   {
+    "key": "upper_street",
+    "name": "Upper Street",
+    "district": "Islington",
+    "set": "teal",
+    "col": 1,
+    "row": 1,
+    "x": 52.0,
+    "z": 52.0,
+    "w": 36.0,
+    "d": 36.0,
+    "buildable": true
+   },
+   {
+    "key": "kingsland_road",
+    "name": "Kingsland Road",
+    "district": "Hackney",
+    "set": "teal",
+    "col": 2,
+    "row": 1,
+    "x": 96.0,
+    "z": 52.0,
+    "w": 36.0,
+    "d": 36.0,
+    "buildable": true
+   },
+   {
+    "key": "marylebone_high_street",
+    "name": "Marylebone High Street",
+    "district": "Marylebone",
+    "set": "navy",
+    "col": 0,
+    "row": 2,
+    "x": 8.0,
+    "z": 96.0,
+    "w": 36.0,
+    "d": 36.0,
+    "buildable": true
+   },
+   {
+    "key": "sloane_street",
+    "name": "Sloane Street",
+    "district": "Chelsea",
+    "set": "navy",
+    "col": 1,
+    "row": 2,
+    "x": 52.0,
+    "z": 96.0,
+    "w": 36.0,
+    "d": 36.0,
+    "buildable": true
+   },
+   {
+    "key": "kensington_church_street",
+    "name": "Kensington Church Street",
+    "district": "Kensington",
+    "set": "navy",
+    "col": 2,
+    "row": 2,
+    "x": 96.0,
+    "z": 96.0,
+    "w": 36.0,
+    "d": 36.0,
+    "buildable": true
+   }
+  ],
+  "river": [
+   {
+    "x": 0.0,
+    "z": 140.0,
+    "w": 140.0,
+    "d": 20.0
+   }
+  ],
+  "bridges": [
+   {
+    "x": 0.0,
+    "z": 140.0,
+    "w": 8.0,
+    "d": 20.0
+   },
+   {
+    "x": 88.0,
+    "z": 140.0,
+    "w": 8.0,
+    "d": 20.0
+   }
+  ],
+  "streets": [
+   {
+    "x": 0.0,
+    "z": 0.0,
+    "w": 8.0,
+    "d": 140.0
+   },
+   {
+    "x": 0.0,
+    "z": 0.0,
+    "w": 140.0,
+    "d": 8.0
+   },
+   {
+    "x": 44.0,
+    "z": 0.0,
+    "w": 8.0,
+    "d": 140.0
+   },
+   {
+    "x": 0.0,
+    "z": 44.0,
+    "w": 140.0,
+    "d": 8.0
+   },
+   {
+    "x": 88.0,
+    "z": 0.0,
+    "w": 8.0,
+    "d": 140.0
+   },
+   {
+    "x": 0.0,
+    "z": 88.0,
+    "w": 140.0,
+    "d": 8.0
+   },
+   {
+    "x": 132.0,
+    "z": 0.0,
+    "w": 8.0,
+    "d": 140.0
+   },
+   {
+    "x": 0.0,
+    "z": 132.0,
+    "w": 140.0,
+    "d": 8.0
+   }
+  ]
+ },
+ "players": [
+  {
+   "id": "p0",
+   "name": "The Grocer",
+   "cash": 1087400,
+   "net_worth": 1412000,
+   "bankrupt": false
+  },
+  {
+   "id": "p1",
+   "name": "The Landlord",
+   "cash": 954000,
+   "net_worth": 1520500,
+   "bankrupt": false
+  }
+ ],
+ "lots": [
+  {
+   "key": "bermondsey_street",
+   "owner": "p0",
+   "land_value": 120000,
+   "lease": {
+    "years_left": 18
+   },
+   "building": {
+    "kind": "shop",
+    "name": "Corner shop",
+    "floors": 2,
+    "flats": 0
+   },
+   "business": {
+    "name": "Bermondsey Grocers",
+    "kind": "grocer",
+    "city_run": false
+   },
+   "takings_per_day": 4200,
+   "costs_per_day": 3100,
+   "profit_per_day": 1100,
+   "rent_per_day": 0,
+   "open_for_bids": false,
+   "last_sale_price": 118000
+  },
+  {
+   "key": "borough_high_street",
+   "owner": "city",
+   "land_value": 135000,
+   "lease": {
+    "years_left": 25
+   },
+   "building": {
+    "kind": "shop",
+    "name": "Market hall",
+    "floors": 1,
+    "flats": 0
+   },
+   "business": {
+    "name": "Borough Market Stalls",
+    "kind": "market",
+    "city_run": true
+   },
+   "takings_per_day": 5100,
+   "costs_per_day": 4700,
+   "profit_per_day": 400,
+   "rent_per_day": 0,
+   "open_for_bids": false,
+   "last_sale_price": null
+  },
+  {
+   "key": "southwark_street",
+   "owner": "unowned",
+   "land_value": 110000,
+   "lease": null,
+   "building": null,
+   "business": null,
+   "takings_per_day": 0,
+   "costs_per_day": 0,
+   "profit_per_day": 0,
+   "rent_per_day": 0,
+   "open_for_bids": true,
+   "last_sale_price": null
+  },
+  {
+   "key": "camden_high_street",
+   "owner": "p1",
+   "land_value": 160000,
+   "lease": {
+    "years_left": 9
+   },
+   "building": {
+    "kind": "flats",
+    "name": "Camden Mansions",
+    "floors": 4,
+    "flats": 12
+   },
+   "business": null,
+   "takings_per_day": 0,
+   "costs_per_day": 900,
+   "profit_per_day": -900,
+   "rent_per_day": 3600,
+   "open_for_bids": false,
+   "last_sale_price": 150000
+  },
+  {
+   "key": "upper_street",
+   "owner": "p1",
+   "land_value": 150000,
+   "lease": {
+    "years_left": 21
+   },
+   "building": {
+    "kind": "shop",
+    "name": "Draper's",
+    "floors": 2,
+    "flats": 2
+   },
+   "business": {
+    "name": "Upper Street Drapery",
+    "kind": "clothes",
+    "city_run": false
+   },
+   "takings_per_day": 3900,
+   "costs_per_day": 4300,
+   "profit_per_day": -400,
+   "rent_per_day": 600,
+   "open_for_bids": false,
+   "last_sale_price": 149000
+  },
+  {
+   "key": "kingsland_road",
+   "owner": "unowned",
+   "land_value": 140000,
+   "lease": null,
+   "building": null,
+   "business": null,
+   "takings_per_day": 0,
+   "costs_per_day": 0,
+   "profit_per_day": 0,
+   "rent_per_day": 0,
+   "open_for_bids": false,
+   "last_sale_price": null
+  },
+  {
+   "key": "marylebone_high_street",
+   "owner": "p0",
+   "land_value": 210000,
+   "lease": {
+    "years_left": 30
+   },
+   "building": {
+    "kind": "shop",
+    "name": "Tea rooms",
+    "floors": 2,
+    "flats": 0
+   },
+   "business": {
+    "name": "High Street Tea Rooms",
+    "kind": "cafe",
+    "city_run": false
+   },
+   "takings_per_day": 6100,
+   "costs_per_day": 4800,
+   "profit_per_day": 1300,
+   "rent_per_day": 0,
+   "open_for_bids": false,
+   "last_sale_price": 205000
+  },
+  {
+   "key": "sloane_street",
+   "owner": "unowned",
+   "land_value": 230000,
+   "lease": null,
+   "building": null,
+   "business": null,
+   "takings_per_day": 0,
+   "costs_per_day": 0,
+   "profit_per_day": 0,
+   "rent_per_day": 0,
+   "open_for_bids": false,
+   "last_sale_price": null
+  },
+  {
+   "key": "kensington_church_street",
+   "owner": "p1",
+   "land_value": 220000,
+   "lease": {
+    "years_left": 4
+   },
+   "building": null,
+   "business": null,
+   "takings_per_day": 0,
+   "costs_per_day": 0,
+   "profit_per_day": 0,
+   "rent_per_day": 0,
+   "open_for_bids": false,
+   "last_sale_price": 190000
+  }
+ ],
+ "auction": {
+  "block": "southwark_street",
+  "item": "land",
+  "high_bid": 112000,
+  "high_bidder": "p1",
+  "seconds_left": 12,
+  "round": 2
+ },
+ "bids": [
+  {
+   "tick": 40,
+   "block": "kingsland_road",
+   "player": null,
+   "amount": 140000,
+   "kind": "unsold"
+  },
+  {
+   "tick": 52,
+   "block": "southwark_street",
+   "player": "p0",
+   "amount": 105000,
+   "kind": "open"
+  },
+  {
+   "tick": 53,
+   "block": "southwark_street",
+   "player": "p1",
+   "amount": 108000,
+   "kind": "raise"
+  },
+  {
+   "tick": 54,
+   "block": "southwark_street",
+   "player": "p0",
+   "amount": 110000,
+   "kind": "raise"
+  },
+  {
+   "tick": 55,
+   "block": "southwark_street",
+   "player": "p1",
+   "amount": 112000,
+   "kind": "raise"
+  }
+ ],
+ "walkers": [
+  132.7,
+  91.16,
+  0.58,
+  75.02,
+  81.59,
+  95.28,
+  5.25,
+  47.47,
+  33.69,
+  4.41,
+  6.61,
+  17.33,
+  88.29,
+  48.66,
+  4.62,
+  55.54,
+  6.52,
+  50.87,
+  91.35,
+  75.7,
+  92.48,
+  95.48,
+  81.42,
+  5.11,
+  13.64,
+  93.7,
+  4.95,
+  69.5,
+  138.22,
+  65.18,
+  50.62,
+  133.99,
+  49.59,
+  34.17,
+  92.2,
+  122.52,
+  40.31,
+  139.84,
+  71.67,
+  1.32,
+  21.28,
+  91.91,
+  7.7,
+  10.87,
+  47.62,
+  90.8,
+  81.19,
+  135.65,
+  132.26,
+  3.79,
+  8.49,
+  5.61,
+  39.84,
+  135.09,
+  3.16,
+  91.69,
+  48.89,
+  69.12,
+  107.55,
+  45.03,
+  55.71,
+  51.33,
+  11.28,
+  135.59,
+  95.07,
+  114.7,
+  93.65,
+  138.11,
+  139.66,
+  21.13,
+  45.21,
+  92.19,
+  3.88,
+  82.48,
+  90.26,
+  20.39,
+  85.37,
+  90.55,
+  49.52,
+  72.17,
+  3.65,
+  121.94,
+  135.18,
+  55.18,
+  88.8,
+  132.5,
+  137.85,
+  3.53,
+  47.61,
+  0.42,
+  4.53,
+  75.13,
+  85.92,
+  88.56,
+  85.97,
+  45.19,
+  95.64,
+  84.32,
+  17.2,
+  138.79
+ ]
+}
