@@ -15,7 +15,7 @@
 //! midnight's figure, stock included, is the final score (R19). Utilities add nothing directly:
 //! they count through the cash they earn and save (R19).
 //!
-//! The land-value method is `game.yaml` `net_worth.land_value` (docs/economy.md "Land value");
+//! The land-value method is `economy.yaml` `land.value_method` (docs/economy.md "Land value");
 //! the spec's formula, `book_decay`, is the default. The *current* land base price is the
 //! block's land base price today times every land-value event factor fired so far (the 2008
 //! crash), so it follows desirability shifts and crashes without touching what auctions charge.
@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use super::{AccountId, Ledger, PlayerId};
 use crate::businesses::Businesses;
 use crate::config::businesses::Good;
-use crate::config::game::LandValueMethod;
+use crate::config::economy::LandValueMethod;
 use crate::land::Map;
 use crate::money::{Money, Rate};
 
@@ -123,7 +123,7 @@ pub fn market_land_price(base_price: Money, factors: &[Rate]) -> Money {
 /// far (only read by the market methods).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LandPricing<'a> {
-    /// `game.yaml` `net_worth.land_value`.
+    /// `economy.yaml` `land.value_method`.
     pub method: LandValueMethod,
     /// Every `land_value` event factor fired so far, in firing order.
     pub factors: &'a [Rate],

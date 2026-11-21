@@ -531,10 +531,6 @@
       "$ref": "#/$defs/Boards",
       "description": "Every board, keyed by name."
     },
-    "land_base_rate": {
-      "description": "Land rent per unit of building volume per day, before the tier multiplier (§5.3, R10).",
-      "type": "number"
-    },
     "map": {
       "$ref": "#/$defs/MapChoice",
       "description": "The board this game is played on: a key of `boards`."
@@ -554,7 +550,6 @@
   "required": [
     "map",
     "tiers",
-    "land_base_rate",
     "tube_lines",
     "boards"
   ],

@@ -2,12 +2,8 @@
   "$defs": {
     "BankruptcySettings": {
       "additionalProperties": false,
-      "description": "Bankruptcy and selling up (§2.3).",
+      "description": "Bankruptcy (§2.3). The sell-back ratio is `economy.yaml` `money.sell_to_city_ratio` (R71).",
       "properties": {
-        "sell_to_city_ratio": {
-          "description": "Instant sale back to the city, as a share of true value (R5, default 0.5).",
-          "type": "number"
-        },
         "solvent_at_or_above": {
           "description": "A midnight balance at or above this passes (R3, default £0).",
           "type": "number"
@@ -22,8 +18,7 @@
       },
       "required": [
         "strikes_to_bankrupt",
-        "solvent_at_or_above",
-        "sell_to_city_ratio"
+        "solvent_at_or_above"
       ],
       "type": "object"
     },
@@ -107,89 +102,9 @@
       ],
       "type": "object"
     },
-    "LandValueMethod": {
-      "description": "How a held lease's land counts towards net worth (§3). The spec's formula is\n`book_decay`; the others are balance-study candidates (docs/economy.md \"Land value\").",
-      "oneOf": [
-        {
-          "const": "book_decay",
-          "description": "`last auction price × remaining lease years / term` (§3, the default).",
-          "type": "string"
-        },
-        {
-          "const": "market",
-          "description": "`current land base price × remaining lease years / term`: the block's price today\n(moved by desirability shifts and land-value events such as the 2008 crash).",
-          "type": "string"
-        },
-        {
-          "const": "market_no_decay",
-          "description": "`current land base price` while the lease runs, nothing once it has run out.",
-          "type": "string"
-        }
-      ]
-    },
-    "LeaseSettings": {
-      "additionalProperties": false,
-      "description": "Land leases (§5.2).",
-      "properties": {
-        "term_years": {
-          "description": "Lease length in in-game years (default 30).",
-          "format": "uint32",
-          "maximum": 500,
-          "minimum": 1,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "term_years"
-      ],
-      "type": "object"
-    },
-    "NetWorthSettings": {
-      "additionalProperties": false,
-      "description": "Net worth scoring (R19, R39).",
-      "properties": {
-        "land_value": {
-          "$ref": "#/$defs/LandValueMethod",
-          "description": "How a held lease's land is valued (§3; docs/economy.md \"Land value\"). Default\n`book_decay`, the spec's `last auction price × years left / term`."
-        },
-        "lot_property_uplift": {
-          "description": "Share of every property's value credited to the lot's leaseholder (R39, default 0.2).",
-          "type": "number"
-        }
-      },
-      "required": [
-        "lot_property_uplift",
-        "land_value"
-      ],
-      "type": "object"
-    },
-    "OverdraftSettings": {
-      "additionalProperties": false,
-      "description": "Overdraft (R7, R32).",
-      "properties": {
-        "increase_per_step": {
-          "description": "Flat increase per 5-year step (default £2,500).",
-          "type": "number"
-        },
-        "interest_rate": {
-          "description": "Daily interest on overdrawn balances (default 0: R32 says none).",
-          "type": "number"
-        },
-        "start_limit": {
-          "description": "Credit limit at the start (default £10,000).",
-          "type": "number"
-        }
-      },
-      "required": [
-        "start_limit",
-        "increase_per_step",
-        "interest_rate"
-      ],
-      "type": "object"
-    },
     "PlayerSettings": {
       "additionalProperties": false,
-      "description": "Player seats (§1).",
+      "description": "Player seats (§1). Starting cash is `economy.yaml` `money.starting_cash` (R71).",
       "properties": {
         "max": {
           "description": "Most players in a game (default 6).",
@@ -204,16 +119,11 @@
           "maximum": 16,
           "minimum": 1,
           "type": "integer"
-        },
-        "starting_cash": {
-          "description": "Cash each player starts with. Not in the spec; placeholder £0 (players start on the\noverdraft, R7).",
-          "type": "number"
         }
       },
       "required": [
         "min",
-        "max",
-        "starting_cash"
+        "max"
       ],
       "type": "object"
     },
@@ -331,23 +241,11 @@
   "properties": {
     "bankruptcy": {
       "$ref": "#/$defs/BankruptcySettings",
-      "description": "Bankruptcy and selling up (§2.3; R3, R4, R5)."
+      "description": "Bankruptcy (§2.3; R3, R4)."
     },
     "clock": {
       "$ref": "#/$defs/ClockSettings",
       "description": "Game clock (R34) and trading hours (R1, R30)."
-    },
-    "leases": {
-      "$ref": "#/$defs/LeaseSettings",
-      "description": "Land leases (§5.2)."
-    },
-    "net_worth": {
-      "$ref": "#/$defs/NetWorthSettings",
-      "description": "Net worth scoring (R19, R39)."
-    },
-    "overdraft": {
-      "$ref": "#/$defs/OverdraftSettings",
-      "description": "Overdraft (R7, R32)."
     },
     "players": {
       "$ref": "#/$defs/PlayerSettings",
@@ -370,9 +268,6 @@
     "clock",
     "presets",
     "bankruptcy",
-    "overdraft",
-    "net_worth",
-    "leases",
     "players"
   ],
   "title": "GameConfig",

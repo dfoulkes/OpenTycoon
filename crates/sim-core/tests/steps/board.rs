@@ -388,7 +388,7 @@ fn names(text: &str) -> Vec<String> {
 #[given(regex = r#"^player (\d+) holds the leases on ((?:"[^"]+"(?:, | and )?)+)$"#)]
 fn holds_leases(w: &mut SimWorld, player: u8, blocks: String) {
     let year = game(w).clock().year();
-    let term = game(w).config().game.leases.term_years;
+    let term = game(w).config().economy.land.lease_term_years;
     for name in names(&blocks) {
         let id = block_named(game(w), &name);
         game_mut(w).map_mut().blocks[id.0 as usize].lease =
@@ -492,7 +492,7 @@ fn would_pay(w: &mut SimWorld, name: String, expected: String) {
     };
     let rent = land_rent_per_day(
         volume(10, fp),
-        world.config().map.land_base_rate.money(),
+        world.config().economy.land.base_rate.money(),
         world
             .config()
             .map

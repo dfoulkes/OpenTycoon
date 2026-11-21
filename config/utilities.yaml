@@ -1,13 +1,7 @@
 # yaml-language-server: $schema=schema/utilities.schema.json
-# utilities.yaml: §6, R11, R12, R24. Rates are placeholders (£ per unit of volume per day).
-base_rates:
-  electricity: 0.02             # placeholder
-  gas: 0.01                     # placeholder
-  water: 0.01                   # placeholder
-  telecoms: 0.01                # placeholder: the telephone exchange
+# utilities.yaml: §6, R11, R12, R24. The bill rates are in economy.yaml `utilities` (R71).
 internet:
-  upgrade_year: 1995            # R11: the exchange becomes the internet; every building pays it
-  base_rate: 0.02               # placeholder
+  upgrade_year: 1995            # R11: the exchange becomes the internet; every building pays economy.yaml internet_base_rate
 nationalisation:
   buyout_ratio: 1.0             # §9.1: holders bought out at book value (the price they paid)
 reserve_prices:                 # R12: minimum opening bid per utility, like land_base_price

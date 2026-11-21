@@ -271,7 +271,7 @@ fn categories_set(w: &mut HarnessWorld, name: String, key: String) {
         );
         let config = model_config(&def, &sources, m, "v1").unwrap();
         assert_eq!(
-            serde_json::to_value(config.game.net_worth.land_value).unwrap(),
+            serde_json::to_value(config.economy.land.value_method).unwrap(),
             serde_json::Value::String(label)
         );
     }
@@ -315,7 +315,7 @@ fn model_overrides(w: &mut HarnessWorld, id: u32, key: String) {
     );
     let config = model_config(&def, &base(w), &m, "v1").unwrap();
     let value = m.values.as_ref().unwrap()[0];
-    assert!((f64::from(config.game.leases.term_years) - value).abs() < 1e-9);
+    assert!((f64::from(config.economy.land.lease_term_years) - value).abs() < 1e-9);
 }
 
 #[then(expr = "model {int} overrides every year under {string} by its {string} factor")]
@@ -810,16 +810,16 @@ fn overlay_loads(w: &mut HarnessWorld) {
 // ---- R71: a model is one economy.yaml ----------------------------------------------------------
 
 #[then(regex = r#"^every parameter of "([^"]+)" varies a key in (.+)$"#)]
-fn def_varies_only(_w: &mut HarnessWorld, def: String, files: String) {
+fn def_varies_only(_w: &mut HarnessWorld, path: String, files: String) {
     let files: Vec<String> = files
         .split('"')
         .skip(1)
         .step_by(2)
         .map(|f| f.trim_end_matches(".yaml").to_owned() + ".")
         .collect();
-    let text = std::fs::read_to_string(super::repo_root().join(&def)).unwrap();
+    let text = std::fs::read_to_string(super::repo_root().join(&path)).unwrap();
     let def = StudyDef::from_yaml(&text).unwrap();
-    assert!(!def.parameters.is_empty());
+    assert!(!def.parameters.is_empty(), "{path} varies nothing");
     for p in &def.parameters {
         for key in p.all_keys() {
             assert!(

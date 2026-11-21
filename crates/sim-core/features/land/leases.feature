@@ -9,7 +9,7 @@ Feature: Leases and land rent
     # The arithmetic below is the 3×3 map's.
     Given the shipped config on the v1 map
     # Enough cash to stay solvent through the midnights these scenarios run past (§2.3).
-    And the shipped config with "game.yaml" key "/players/starting_cash" set to "20000"
+    And the shipped config with "economy.yaml" key "/money/starting_cash" set to "20000"
     And a game with 3 players
 
   @R9

@@ -46,7 +46,7 @@ struct ConfigArgs {
     /// Config directory.
     dir: PathBuf,
     /// Override one config value, `file.key.path=value` (repeatable), e.g.
-    /// `--set game.overdraft.start_limit=20000`. Validated like a hand-edited file.
+    /// `--set economy.money.overdraft.start_limit=20000`. Validated like a hand-edited file.
     #[arg(long = "set", value_name = "FILE.KEY=VALUE", value_parser = parse_override)]
     overrides: Vec<Override>,
 }

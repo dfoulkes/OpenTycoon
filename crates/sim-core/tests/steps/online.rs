@@ -152,11 +152,7 @@ fn more_online(w: &mut SimWorld, more: String, fewer: String) {
 fn within_budget(w: &mut SimWorld) {
     let config = CityState::config(w);
     for c in w.city.spawned.iter().filter(|c| c.wave == Wave::Day) {
-        let budget = wave_budget(
-            &config.customers,
-            allowance(&config.customers, c.cohort),
-            Wave::Day,
-        );
+        let budget = wave_budget(&config.customers, allowance(&config, c.cohort), Wave::Day);
         let spent: Money = w
             .city
             .reports

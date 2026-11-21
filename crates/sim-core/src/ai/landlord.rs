@@ -88,8 +88,8 @@ impl Landlord {
         let cfg = &config.ai.landlord;
         let share = kit::share_of_ceiling(world, me, cfg.aggression.rate());
         let uplift = config
-            .game
-            .net_worth
+            .economy
+            .land
             .lot_property_uplift
             .rate()
             .apply(kit::others_property_on(world, me, block));
@@ -171,8 +171,8 @@ impl Landlord {
         let config = world.config();
         let book = kit::lease_book_value(world, block).unwrap_or(Money::ZERO);
         let uplift = config
-            .game
-            .net_worth
+            .economy
+            .land
             .lot_property_uplift
             .rate()
             .apply(kit::others_property_on(world, me, block));

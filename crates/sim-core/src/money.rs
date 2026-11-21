@@ -174,6 +174,12 @@ impl Rate {
             i64::MIN
         }))
     }
+
+    /// This rate scaled by `factor` (`self × factor`), to the basis point, rounded half away
+    /// from zero like [`Rate::apply`]. `Rate::ONE` leaves it exactly as it was.
+    pub fn times(self, factor: Rate) -> Rate {
+        Rate::from_bp(factor.apply(Money::from_pence(self.0)).pence())
+    }
 }
 
 #[cfg(test)]
@@ -197,6 +203,18 @@ mod tests {
         assert_eq!(Rate::ONE.apply(Money::from_pence(7)), Money::from_pence(7));
     }
 
+    #[test]
+    fn a_rate_times_a_factor_rounds_to_the_basis_point() {
+        let births = Rate::from_bp(19_000);
+        assert_eq!(births.times(Rate::from_bp(20_000)), Rate::from_bp(38_000));
+        assert_eq!(births.times(Rate::from_bp(5_000)), Rate::from_bp(9_500));
+        assert_eq!(births.times(Rate::ZERO), Rate::ZERO);
+        assert_eq!(
+            Rate::from_bp(3).times(Rate::from_bp(5_000)),
+            Rate::from_bp(2)
+        );
+    }
+
     proptest! {
         #[test]
         fn add_then_sub_is_identity(a in -1_000_000_000i64..1_000_000_000, b in -1_000_000_000i64..1_000_000_000) {
@@ -207,6 +225,12 @@ mod tests {
         #[test]
         fn rate_one_is_identity(p in -1_000_000_000_000i64..1_000_000_000_000) {
             prop_assert_eq!(Rate::ONE.apply(Money::from_pence(p)), Money::from_pence(p));
+        }
+
+        /// A multiplier of 1 is exactly neutral (R71: the births multiplier at 1.0).
+        #[test]
+        fn times_one_is_identity(bp in -1_000_000_000i64..1_000_000_000) {
+            prop_assert_eq!(Rate::from_bp(bp).times(Rate::ONE), Rate::from_bp(bp));
         }
 
         #[test]

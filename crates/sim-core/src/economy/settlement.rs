@@ -34,13 +34,13 @@ use crate::utilities::{Utilities, UtilityKind, utility_bill};
 /// Utility base rate for `kind` in `year`: the telephone exchange's rate switches to the
 /// internet's from the upgrade year (R11).
 pub fn utility_base_rate(config: &Config, kind: UtilityKind, year: i32) -> Money {
-    let rates = &config.utilities.base_rates;
+    let rates = &config.economy.utilities.base_rates;
     match kind {
         UtilityKind::Electricity => rates.electricity.money(),
         UtilityKind::Gas => rates.gas.money(),
         UtilityKind::Water => rates.water.money(),
         UtilityKind::Telecoms if year >= config.utilities.internet.upgrade_year => {
-            config.utilities.internet.base_rate.money()
+            config.economy.utilities.internet_base_rate.money()
         }
         UtilityKind::Telecoms => rates.telecoms.money(),
     }
@@ -62,7 +62,7 @@ pub fn rent_bill(business: &Business, map: &Map, config: &Config) -> Option<Bill
     let block = map.block(business.block)?;
     let amount = land_rent_per_day(
         volume(business.height, business.footprint),
-        config.map.land_base_rate.money(),
+        config.economy.land.base_rate.money(),
         config.map.tiers.get(block.tier).desirability_mult.rate(),
     );
     let to = block.lease.as_ref().map_or(AccountId::City, |l| l.holder);
@@ -260,11 +260,11 @@ mod tests {
         let y = config.utilities.internet.upgrade_year;
         assert_eq!(
             utility_base_rate(&config, UtilityKind::Telecoms, y - 5),
-            config.utilities.base_rates.telecoms.money()
+            config.economy.utilities.base_rates.telecoms.money()
         );
         assert_eq!(
             utility_base_rate(&config, UtilityKind::Telecoms, y),
-            config.utilities.internet.base_rate.money()
+            config.economy.utilities.internet_base_rate.money()
         );
     }
 

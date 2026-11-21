@@ -78,7 +78,7 @@ fn fails_naming(w: &mut HarnessWorld, named: String) {
 fn start_limit(w: &mut HarnessWorld, pounds: i64) {
     let config = w.config.result.as_ref().unwrap().as_ref().unwrap();
     assert_eq!(
-        config.game.overdraft.start_limit.money(),
+        config.economy.money.overdraft.start_limit.money(),
         Money::from_pounds(pounds)
     );
 }

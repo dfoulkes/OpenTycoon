@@ -116,10 +116,7 @@ pub fn sell_to_city(
     if b.owner != seller {
         return Err(SellBackError::NotOwner);
     }
-    let price = sell_back_price(
-        b.build_cost,
-        config.game.bankruptcy.sell_to_city_ratio.rate(),
-    );
+    let price = sell_back_price(b.build_cost, config.economy.money.sell_to_city_ratio.rate());
     ledger.transfer(AccountId::City, seller, price);
     take_into_city_hands(b, config);
     Ok(price)
@@ -249,7 +246,7 @@ mod tests {
             ratio in 0i64..=10_000,
         ) {
             let mut config = shipped_config();
-            config.game.bankruptcy.sell_to_city_ratio = crate::config::types::Ratio(Rate::from_bp(ratio));
+            config.economy.money.sell_to_city_ratio = crate::config::types::Ratio(Rate::from_bp(ratio));
             let mut ledger = Ledger::new();
             ledger.open(AccountId::City, Money::ZERO);
             ledger.open(P0, Money::ZERO);

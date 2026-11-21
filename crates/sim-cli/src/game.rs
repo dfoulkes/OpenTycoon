@@ -101,7 +101,7 @@ pub fn player_net_worth(world: &World, player: PlayerId) -> Money {
         };
         net_worth(
             &inputs,
-            world.config().game.net_worth.lot_property_uplift.rate(),
+            world.config().economy.land.lot_property_uplift.rate(),
         )
     })
 }

@@ -8,7 +8,7 @@ Feature: Bidding round the table
   # Ceilings here are measured from a zero balance, so starting cash (R62) is pinned to £0.
   Background:
     Given the shipped config
-    And the shipped config with "game.yaml" key "/players/starting_cash" set to "0"
+    And the shipped config with "economy.yaml" key "/money/starting_cash" set to "0"
     And a game with 4 players
 
   @R8

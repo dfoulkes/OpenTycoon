@@ -23,7 +23,7 @@ Always measure with a release build (`cargo run --release -p sim-cli -- ...`, or
 
 ```sh
 cargo run --release -p sim-cli -- batch config --games 1000 --out runs/v1.csv
-cargo run --release -p sim-cli -- batch config --brain scripted --set game.overdraft.start_limit=20000 --out runs/od20k.csv
+cargo run --release -p sim-cli -- batch config --brain scripted --set economy.money.overdraft.start_limit=20000 --out runs/od20k.csv
 ```
 
 - **Seeds** `seed..seed+games` (`--seed`, default 0). Each game depends only on the config, its

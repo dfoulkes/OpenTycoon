@@ -182,6 +182,10 @@ a reason), never by bumping one number.
 - **Every constant is configurable** (R17, R45). A number in sim code is either a unit
   conversion (seconds per day) or a bug. Spec defaults go in `config/*.yaml`; placeholders are
   marked `# placeholder`.
+- **Economy weights live in `config/economy.yaml`** (R71): a number the balance study might
+  tune (a price, rate, credit level, population or demand level, a residential market rule)
+  goes there, not in the content file it acts on; the line is in `docs/economy.md` "Economy
+  weights (R71)". A study parameter that varies a key elsewhere fails a scenario.
 - Adding a key: add the field (with a doc comment, and `#[schemars(range(...))]` where it has
   bounds) to the typed struct in `src/config/<file>.rs`; add cross-field rules to
   `config/validate.rs`; set the default in `config/<file>.yaml`; run `cargo schema`; add a test

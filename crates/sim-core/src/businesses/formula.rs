@@ -56,7 +56,7 @@ pub fn daily_overheads(
 ) -> Money {
     let rent = land_rent_per_day(
         volume,
-        config.map.land_base_rate.money(),
+        config.economy.land.base_rate.money(),
         config.map.tiers.get(tier).desirability_mult.rate(),
     );
     let utilities: Money = UtilityKind::ALL
@@ -81,7 +81,7 @@ pub fn daily_target(kind: &BusinessType, config: &Config) -> Money {
     let build = build_cost(
         height,
         footprint,
-        config.businesses.build_base_rate.money(),
+        config.economy.building.base_rate.money(),
         config.map.tiers.get(Tier::Medium).desirability_mult.rate(),
         config.businesses.fit_out.medium.build_cost_mult.rate(),
     );

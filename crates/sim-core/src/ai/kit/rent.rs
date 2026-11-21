@@ -14,7 +14,7 @@ use crate::money::{Money, Rate};
 use crate::population::residential::flats;
 use crate::world::{Command, World};
 
-/// A vacancy rent rule. Rents are shares of `customers.yaml` `residential.reference_rent`;
+/// A vacancy rent rule. Rents are shares of `economy.yaml` `residential.reference_rent`;
 /// occupancy thresholds are shares of a block's flats.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct VacancyRule {
@@ -87,12 +87,13 @@ impl RentBook {
     /// moves every block's rent by its occupancy ([`rent_for_occupancy`]).
     pub fn review(&mut self, world: &World, me: PlayerId, rule: &VacancyRule) -> Vec<Command> {
         let rules = &world.config().customers.residential;
-        let reference = |share: Rate| share.apply(rules.reference_rent.money());
+        let market = &world.config().economy.residential;
+        let reference = |share: Rate| share.apply(market.reference_rent.money());
         let mine: Vec<(BusinessId, u32)> = world
             .businesses()
             .owned_by(AccountId::Player(me))
             .filter(|(_, b)| b.type_id == rules.building_type)
-            .map(|(id, b)| (id, flats(b.volume(), rules.flat_size)))
+            .map(|(id, b)| (id, flats(b.volume(), market.flat_size)))
             .collect();
         self.rents.retain(|id, _| mine.iter().any(|(m, _)| m == id));
         let mut out = Vec::new();

@@ -39,11 +39,12 @@ fn unknown_key_in_every_file_is_rejected_by_name() {
         ("game.yaml", "/clock/tick_secs"),
         ("map.yaml", "/boards/v1/grid/depth"),
         ("auctions.yaml", "/countdown"),
-        ("utilities.yaml", "/base_rates/steam"),
+        ("utilities.yaml", "/internet/speed"),
         ("businesses.yaml", "/types/bakery/staff"),
         ("customers.yaml", "/visitors/tourist_share"),
         ("events.yaml", "/elections/turnout"),
         ("ai.yaml", "/personalities/grocer/mood"),
+        ("economy.yaml", "/utilities/base_rates/steam"),
     ] {
         let key = pointer.rsplit('/').next().unwrap();
         assert_names(load_with(file, pointer, "1"), file, key);
@@ -149,23 +150,44 @@ fn yaml_syntax_errors_name_the_file_and_line() {
 }
 
 #[test]
-fn empty_sources_report_all_eight_missing_files() {
+fn empty_sources_report_all_nine_missing_files() {
     let errors = Config::load(&ConfigSources::new()).unwrap_err();
-    assert_eq!(errors.0.len(), 8, "{errors}");
+    assert_eq!(errors.0.len(), 9, "{errors}");
 }
 
 #[test]
 fn economy_keys_reject_negative_and_out_of_range_values() {
     for (pointer, value) in [
-        ("/bankruptcy/sell_to_city_ratio", "1.5"),
-        ("/bankruptcy/sell_to_city_ratio", "-0.1"),
-        ("/overdraft/start_limit", "-1"),
-        ("/overdraft/increase_per_step", "-2500"),
-        ("/overdraft/interest_rate", "-0.01"),
-        ("/net_worth/lot_property_uplift", "-0.2"),
-        ("/net_worth/land_value", "freehold"),
+        ("/money/sell_to_city_ratio", "1.5"),
+        ("/money/sell_to_city_ratio", "-0.1"),
+        ("/money/starting_cash", "-1"),
+        ("/money/overdraft/start_limit", "-1"),
+        ("/money/overdraft/increase_per_step", "-2500"),
+        ("/money/overdraft/interest_rate", "-0.01"),
+        ("/land/base_rate", "-0.05"),
+        ("/land/lease_term_years", "0"),
+        ("/land/lot_property_uplift", "-0.2"),
+        ("/land/value_method", "freehold"),
+        ("/building/base_rate", "-10"),
+        ("/utilities/base_rates/gas", "-0.01"),
+        ("/utilities/internet_base_rate", "-0.02"),
+        ("/population/births_multiplier", "-1"),
+        ("/population/migration_per_day", "-5"),
+        ("/population/price_sensitivity/working", "101"),
+        ("/residential/flat_size", "0"),
+        ("/residential/comfortable_share", "1.2"),
+        ("/residential/commute_preference", "-0.1"),
+        ("/residential/max_rent_per_flat", "-1"),
+        ("/residential/default_rent", "-3"),
+        ("/demand_multipliers/1970s", "-0.5"),
+        ("/demand_multipliers/1970s", "10.5"),
+        ("/demand_multipliers/1975s", "1.0"),
     ] {
-        assert_names(load_with("game.yaml", pointer, value), "game.yaml", pointer);
+        assert_names(
+            load_with("economy.yaml", pointer, value),
+            "economy.yaml",
+            pointer,
+        );
     }
 }
 

@@ -5,9 +5,10 @@
 //! it names, so a later, narrower rule overrides an earlier, broader one. A `scale` rule
 //! multiplies weights already set instead (capped at 1), so one rule can shift a segment in
 //! every era. The "hour" is the trading window (day or night, §8.4). The year selects the era
-//! tables (R64); on top of them a good is wanted only from its `unlock_year` and fades after its
-//! `obsolete_year` ([`availability`], §7.1). Each good is then rolled once: on the list with
-//! probability `P(good)`.
+//! tables (R64), and the decade's demand multiplier (`economy.yaml` `demand_multipliers`, R71)
+//! scales the result, capped at 1 ([`with_demand`]); on top of them a good is wanted only from
+//! its `unlock_year` and fades after its `obsolete_year` ([`availability`], §7.1). Each good is
+//! then rolled once: on the list with probability `P(good)`.
 #![allow(
     clippy::float_arithmetic,
     reason = "shopping-list probabilities are customer scoring inputs (docs/engineering.md)"
@@ -69,6 +70,13 @@ pub fn desire_weights(
     out
 }
 
+/// `P(good)` after the decade's demand multiplier (`economy.yaml` `demand_multipliers`, R71):
+/// `min(1, P × multiplier)`. A multiplier of 1 leaves `P` exactly as it was (every `P` is
+/// already at most 1).
+pub fn with_demand(p: f64, multiplier: f64) -> f64 {
+    (p * multiplier).min(1.0)
+}
+
 /// The share of the table's demand for something that exists in `year` (§7.1): 0 before
 /// `unlock_year`, 1 up to `obsolete_year`, then falling linearly to `floor` over `fade_years`
 /// and staying there.
@@ -90,8 +98,9 @@ pub fn availability(
     }
 }
 
-/// `P(good)` as shoppers act on it in `year`: the table's weight, zero before the good's
-/// unlock year and fading after its obsolete year (§7.1, §8.2).
+/// `P(good)` as shoppers act on it in `year`: the table's weight times the decade's demand
+/// multiplier ([`with_demand`]), zero before the good's unlock year and fading after its
+/// obsolete year (§7.1, §8.2, R71).
 ///
 /// Goods missing from the catalogue are dropped (config validation forbids them).
 pub fn effective_weights(
@@ -101,13 +110,15 @@ pub fn effective_weights(
     year: i32,
 ) -> BTreeMap<&str, f64> {
     let fade = &config.customers.obsolescence;
+    let demand = config.economy.demand_multiplier(year);
     desire_weights(&config.customers, cohort, window, year)
         .into_iter()
         .filter_map(|(name, p)| {
             let good = config.businesses.goods.get(name)?;
             Some((
                 name,
-                p * availability(good.unlock_year, good.obsolete_year, year, fade),
+                with_demand(p, demand)
+                    * availability(good.unlock_year, good.obsolete_year, year, fade),
             ))
         })
         .collect()
@@ -121,44 +132,47 @@ pub struct Candidates(Vec<(GoodId, f64)>);
 
 /// [`Candidates`] for a cohort, window and year.
 pub fn candidates(
-    rules: &CustomersConfig,
+    config: &Config,
     goods: &GoodsIndex,
     cohort: Cohort,
     window: Hours,
     year: i32,
 ) -> Candidates {
-    weighted_candidates(rules, goods, cohort, window, year, &BTreeMap::new())
+    weighted_candidates(config, goods, cohort, window, year, &BTreeMap::new())
 }
 
 /// [`candidates`] for a tourist: each `P(good)` times `tourists.desire_boost(good)`, capped at
 /// 1 (§7.3, R29: the Souvenir Shop's bonus from tourists).
 pub fn tourist_candidates(
-    rules: &CustomersConfig,
+    config: &Config,
     goods: &GoodsIndex,
     cohort: Cohort,
     window: Hours,
     year: i32,
 ) -> Candidates {
     weighted_candidates(
-        rules,
+        config,
         goods,
         cohort,
         window,
         year,
-        &rules.tourists.desire_boost,
+        &config.customers.tourists.desire_boost,
     )
 }
 
 fn weighted_candidates(
-    rules: &CustomersConfig,
+    config: &Config,
     goods: &GoodsIndex,
     cohort: Cohort,
     window: Hours,
     year: i32,
     boost: &BTreeMap<String, f64>,
 ) -> Candidates {
+    let rules = &config.customers;
+    let demand = config.economy.demand_multiplier(year);
     let mut out = Vec::new();
     for (name, p) in desire_weights(rules, cohort, window, year) {
+        let p = with_demand(p, demand);
         let p = (p * boost.get(name).copied().unwrap_or(1.0)).min(1.0);
         let Some(id) = goods.id(name) else {
             continue;
@@ -210,14 +224,14 @@ pub fn roll_from(candidates: &Candidates, rng: &mut SimRng) -> Vec<GoodId> {
 /// Rolls a shopping list: each good with `P > 0` is on it with probability `P`, in catalogue
 /// order. One draw per candidate good.
 pub fn roll_list(
-    rules: &CustomersConfig,
+    config: &Config,
     goods: &GoodsIndex,
     cohort: Cohort,
     window: Hours,
     year: i32,
     rng: &mut SimRng,
 ) -> Vec<GoodId> {
-    roll_from(&candidates(rules, goods, cohort, window, year), rng)
+    roll_from(&candidates(config, goods, cohort, window, year), rng)
 }
 
 #[cfg(test)]
@@ -265,5 +279,22 @@ mod tests {
             availability(Some(1950), Some(2000), 2005, &gone),
             0.0
         ));
+    }
+
+    #[test]
+    fn the_demand_multiplier_scales_and_caps_at_one() {
+        assert!(close(with_demand(0.55, 1.2), 0.66));
+        assert!(close(with_demand(0.55, 0.5), 0.275));
+        assert!(close(with_demand(0.55, 2.0), 1.0));
+        assert!(close(with_demand(0.55, 0.0), 0.0));
+    }
+
+    proptest::proptest! {
+        /// R71: a demand multiplier of 1 is exactly neutral, bit for bit, on every `P` the
+        /// tables can produce (0 to 1), so the shipped economy.yaml changes no game.
+        #[test]
+        fn a_demand_multiplier_of_one_is_neutral(p in 0.0f64..=1.0) {
+            proptest::prop_assert_eq!(with_demand(p, 1.0).to_bits(), p.to_bits());
+        }
     }
 }

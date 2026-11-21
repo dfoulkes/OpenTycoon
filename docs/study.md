@@ -11,7 +11,7 @@ rule: a model is a config overlay validated exactly like `--set`, and every game
 cargo run --release -p sim-cli -- study config                       # study/study.yaml → study-out/
 cargo run --release -p sim-cli -- study config --models 10 --games 50 --preset v1 \
     --roster grocer,idle --out study-out/smoke                        # a quick look
-cargo run --release -p sim-cli -- study config --set game.players.starting_cash=9000 # on a base change
+cargo run --release -p sim-cli -- study config --set economy.money.starting_cash=9000 # on a base change
 ```
 
 Interrupt it at any time: rerun the same command and it resumes (below). `--stop-after N` runs
@@ -19,8 +19,10 @@ N more models and stops, for chunked runs.
 
 ## The definition file
 
-`study/study.yaml` (or `--def FILE`). The shipped `study.yaml` varies the economy only and holds AI behaviour at its shipped values, so a balanced model is balanced by the economy; `study/study-with-ai.yaml` also varies the AI tunables, to measure how sensitive balance is to AI strength. It cannot live in `config/`: that directory holds exactly
-the eight game files and the loader rejects any other YAML there. Parsing is strict: an unknown
+`study/study.yaml` (or `--def FILE`). The shipped `study.yaml` varies the economy only and holds AI behaviour at its shipped values, so a balanced model is balanced by the economy; `study/study-with-ai.yaml` also varies the AI tunables, to measure how sensitive balance is to AI strength. Every economy parameter varies a key in `config/economy.yaml` (R71), so a model is
+one `economy.yaml` (a scenario checks that the shipped definitions vary nothing else, bar
+`ai.yaml` in the AI variant). The definition cannot live in `config/`: that directory holds
+exactly the nine game files and the loader rejects any other YAML there. Parsing is strict: an unknown
 key, a wrong type or a bad range fails before any game, naming the key path
 (`parameters[3].min`). Every top-level key is optional:
 
@@ -42,11 +44,12 @@ key, a wrong type or a bad range fails before any game, naming the key path
 
 ```yaml
 parameters:
-  - { name: lease_term, key: game.leases.term_years, min: 10, max: 60, kind: integer }
-  - { name: overdraft,  key: game.overdraft.start_limit, min: 2500, max: 25000,
+  - { name: lease_term,   key: economy.land.lease_term_years, min: 10, max: 60, kind: integer }
+  - { name: overdraft,    key: economy.money.overdraft.start_limit, min: 2500, max: 25000,
       distribution: log_uniform, kind: integer }
-  - { name: births,     key: customers.births_per_woman, min: 0.7, max: 1.3, mode: scale }
-  - { name: land_value, key: game.net_worth.land_value, values: [book_decay, market, market_no_decay] }
+  - { name: allowance,    key: economy.population.allowance_by_class, min: 0.6, max: 1.6, mode: scale }
+  - { name: demand_1950s, key: economy.demand_multipliers.1950s, min: 0.6, max: 1.4 }
+  - { name: land_value,   key: economy.land.value_method, values: [book_decay, market, market_no_decay] }
 ```
 
 | Field | Default | Meaning |
@@ -58,9 +61,9 @@ parameters:
 | `distribution` | `uniform` | `uniform`, or `log_uniform` (even in log space; needs `min > 0`) |
 | `kind` | `decimal` | `integer` (every whole number in range equally likely) or `decimal` |
 | `decimals` | 2 | places a decimal is rounded to. Money in the config is pence and ratios are basis points, so a value with more places than the key allows makes that model invalid |
-| `mode` | `set` | `set` replaces the value; `scale` multiplies **every number under the key** by the sampled factor (a scalar, or a whole map such as every decade of `customers.births_per_woman`). A whole-number leaf stays whole |
+| `mode` | `set` | `set` replaces the value; `scale` multiplies **every number under the key** by the sampled factor (a scalar, or a whole map such as every class of `economy.population.allowance_by_class`). A whole-number leaf stays whole |
 | `optional` | false | if the key does not exist in the base config, skip the parameter with a warning instead of failing the study: for keys that only exist once some content lands |
-| `expect` | none | guards on the base config, `{ key, equals }` or a list of them: the node at `key` must equal `equals` (mappings in any key order), or the study refuses to start, naming the parameter, the key, what it found and what it expected. For keys addressed by position, such as `customers.desires.6.goods`, so a reordered rule is never varied in its place. Skipped for an `optional` parameter whose key is missing |
+| `expect` | none | guards on the base config, `{ key, equals }` or a list of them: the node at `key` must equal `equals` (mappings in any key order), or the study refuses to start, naming the parameter, the key, what it found and what it expected. For keys addressed by position (a list index such as `customers.desires.6.goods`), so a reordered list is never varied in its place. The shipped definitions need none: demand by decade is named in `economy.yaml` (`economy.demand_multipliers.1950s`), not addressed by rule index. Skipped for an `optional` parameter whose key is missing |
 
 A non-optional key that does not exist fails the study before any game. A sampled value the
 config rejects (out of the key's range, or breaking a cross-file rule) makes that model
@@ -187,17 +190,34 @@ state_hash`, then per seat `seat<i>_entry, seat<i>_net_worth_pence, seat<i>_bank
 Written when the study is complete, for the top `top_n` balanced models (older overlays are
 removed):
 
-- every config file the model changes (e.g. `game.yaml`), the whole file with the model's
-  values. **To adopt a model, copy these over `config/`** and run `cargo validate`. They are
-  re-serialised, so the shipped comments are lost: keep the comments by applying
+- `economy.yaml`: the model's whole economy (R71). **To adopt a model, copy that one file over
+  `config/`** and run `cargo validate`:
+
+  ```sh
+  cp study-out/models/<id>/economy.yaml config/
+  ```
+
+  The copied file reproduces the model exactly: a study of the same definition on the adopted
+  config plays its model 0 with the same per-game state hashes as the model had
+  (`features/study.feature`, "copying it over config/ reproduces its games"). A model that
+  changes nothing (model 0) still gets the base `economy.yaml`, with its comments; any other
+  model's is re-serialised, so the shipped comments are lost: keep them by applying
   `overrides.txt` by hand instead if you prefer;
+- any other config file the model changes, the whole file: only `ai.yaml`, for a study that
+  varies the AI tunables (`study-with-ai.yaml`). That is AI behaviour, not an economic model;
+  copy it too to reproduce the run;
 - `overrides.txt`: the same change as `file.key=value` lines (one `--set` each);
 - `model.json`: the overrides and the model's `models.csv` row.
+
+An overlay is relative to the study's base: the config directory plus any global `--set`. A
+`--set` on `economy.yaml` is in every overlay's `economy.yaml`; one on another file is not, so
+apply it too when you adopt such a model.
 
 ## Resume
 
 `study.json` in the output directory holds a fingerprint of everything that decides the results
-and the file layout: the definition, the base config files, the preset, the roster and the
+and the file layout: the definition, the base config files (all nine, `economy.yaml`
+included), the preset, the roster and the
 `--games-csv` / wall-time options. A restart with the same fingerprint keeps every model already
 in `models.csv`, drops a line cut off mid-write and any `games.csv` rows of unfinished models,
 and runs the rest. A different study in the same directory is refused; use `--fresh` to discard

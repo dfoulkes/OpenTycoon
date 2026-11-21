@@ -8,7 +8,6 @@
 #     reference.sell_through of its stock at reference prices covers its rent and utilities at
 #     Medium tier and earns its build cost back in reference.payback_days.
 # Size class, utility profile and margin class are named in the comment on each line.
-build_base_rate: 10             # placeholder: £ per unit of building volume (§5.3)
 fit_out:                        # §7.1
   low:    { build_cost_mult: 0.8, appeal: 0.8 }   # placeholder
   medium: { build_cost_mult: 1.0, appeal: 1.0 }   # placeholder

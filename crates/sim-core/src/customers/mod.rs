@@ -583,7 +583,7 @@ pub fn spawn_wave(
         weighted_station_cells(inputs.config, inputs.map, year, geometry)
             .into_iter()
             .unzip();
-    let default_rent = rules.residential.default_rent.money();
+    let default_rent = inputs.config.economy.residential.default_rent.money();
     let pop = inputs.population;
     let mut spawned = 0;
     // Everyone who will step out, parked until their time once the wave is rolled.
@@ -613,9 +613,9 @@ pub fn spawn_wave(
         let tourist = origin == Origin::Tourist;
         let cohort_goods = candidates.entry((cohort, tourist)).or_insert_with(|| {
             let base = if tourist {
-                shopping::tourist_candidates(rules, goods, cohort, window, year)
+                shopping::tourist_candidates(inputs.config, goods, cohort, window, year)
             } else {
-                shopping::candidates(rules, goods, cohort, window, year)
+                shopping::candidates(inputs.config, goods, cohort, window, year)
             };
             base.scaled_by(inputs.modifiers, goods, cohort.class)
         });
@@ -648,7 +648,7 @@ pub fn spawn_wave(
             continue;
         };
         let rent = pop.residential.rent(r.home, default_rent);
-        let budget = wave_budget(rules, allowance(rules, r.cohort) - rent, wave);
+        let budget = wave_budget(rules, allowance(inputs.config, r.cohort) - rent, wave);
         spawn(state, r.cohort, Origin::Resident(*id), door, budget, rng);
     }
     if !stations.is_empty() {
@@ -656,7 +656,7 @@ pub fn spawn_wave(
         let unit = crate::money::BASIS_POINTS_PER_UNIT.unsigned_abs();
         for (cohort, n) in &pop.pool {
             let commuters = split_by_weights(*n, &[share, unit.saturating_sub(share)])[0];
-            let budget = wave_budget(rules, allowance(rules, *cohort), wave);
+            let budget = wave_budget(rules, allowance(inputs.config, *cohort), wave);
             for i in 0..*n {
                 let origin = if i < commuters {
                     Origin::Commuter
@@ -683,10 +683,11 @@ pub fn choose_shop(
     good: GoodId,
     offers: &[ShopOffer],
     reputation: &BTreeMap<BusinessId, Rate>,
-    rules: &CustomersConfig,
+    config: &Config,
     geometry: Geometry,
     rng: &mut SimRng,
 ) -> Option<usize> {
+    let rules = &config.customers;
     let mut index = Vec::new();
     let mut scores = Vec::new();
     for (i, o) in offers.iter().enumerate() {
@@ -695,7 +696,7 @@ pub fn choose_shop(
         }
         index.push(i);
         scores.push(scoring::shop_score(
-            rules,
+            config,
             cohort.class,
             o.affinity[cohort.class.index()],
             o.price,

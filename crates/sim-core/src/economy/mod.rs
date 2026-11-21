@@ -39,6 +39,7 @@ pub(crate) mod test_support {
             "customers.yaml",
             "events.yaml",
             "ai.yaml",
+            "economy.yaml",
         );
         Config::load(&sources).expect("shipped config is valid")
     }
@@ -54,6 +55,7 @@ pub(crate) mod test_support {
             "customers.yaml",
             "events.yaml",
             "ai.yaml",
+            "economy.yaml",
         );
         sources.insert(
             "map.yaml",
@@ -67,7 +69,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::game::OverdraftSettings;
+use crate::config::economy::OverdraftSettings;
 use crate::money::Money;
 
 pub use net_worth::{HeldLot, NetWorthBoard, NetWorthInputs, net_worth};
@@ -202,7 +204,7 @@ pub fn credit_limit(start_limit: Money, increase_per_step: Money, steps: u32) ->
 }
 
 /// Credit limit on game day `day` (day 0 is the first day; each midnight is one 5-year step)
-/// from `game.yaml`'s overdraft settings (R7).
+/// from `economy.yaml`'s overdraft settings (R7).
 pub fn credit_limit_on_day(overdraft: &OverdraftSettings, day: u32) -> Money {
     credit_limit(
         overdraft.start_limit.money(),

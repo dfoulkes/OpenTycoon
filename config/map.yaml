@@ -1,13 +1,12 @@
 # yaml-language-server: $schema=schema/map.schema.json
 # map.yaml: every board a game can be played on, and the tier multipliers and land rate they
-# share (§4, §5). `map` picks the board: `full` is the 9×9 board the game is played on (R26);
+# share (§4, §5). The land rent rate is economy.yaml land.base_rate (R71). `map` picks the board: `full` is the 9×9 board the game is played on (R26);
 # `v1` is the grey-box 3×3 test map (§10c, §11), kept for scenarios about it. Prices and rates are placeholders until the balance study tunes them.
 map: full
 tiers:                          # §5.3 desirability_mult
   low:    { desirability_mult: 0.6 }
   medium: { desirability_mult: 1.0 }
   high:   { desirability_mult: 1.8 }
-land_base_rate: 0.05            # placeholder: £ per unit of building volume per day (§5.3)
 tube_lines:                     # §4.3; footfall_weight: what each open station adds to its block
   bakerloo:     { name: "Bakerloo",           footfall_weight: 1 }
   central:      { name: "Central",            footfall_weight: 1 }

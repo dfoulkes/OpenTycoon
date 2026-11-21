@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use crate::businesses::trading::unit_price;
 use crate::businesses::{Business, BusinessId, Businesses, LeverError};
 use crate::clock::Clock;
-use crate::config::{Config, CustomersConfig};
+use crate::config::Config;
 use crate::customers::movement::{Cell, Geometry};
 use crate::customers::scoring;
 use crate::economy::AccountId;
@@ -262,10 +262,11 @@ pub fn choose_hotel(
     budget: Money,
     offers: &[HotelOffer],
     reputation: &BTreeMap<BusinessId, Rate>,
-    rules: &CustomersConfig,
+    config: &Config,
     geometry: Geometry,
     rng: &mut SimRng,
 ) -> Option<usize> {
+    let rules = &config.customers;
     let mut index = Vec::new();
     let mut scores = Vec::new();
     for (i, o) in offers.iter().enumerate() {
@@ -274,7 +275,7 @@ pub fn choose_hotel(
         }
         index.push(i);
         scores.push(scoring::shop_score(
-            rules,
+            config,
             cohort.class,
             o.affinity[cohort.class.index()],
             o.price,

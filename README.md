@@ -86,7 +86,7 @@ cargo run --release -p sim-cli -- batch config --games 1000 --out runs/v1.csv
 
 # Parameter sweep: override any config value; it is validated like a hand-edited file (R45).
 cargo run --release -p sim-cli -- batch config --brain scripted \
-    --set game.overdraft.start_limit=20000 --out runs/od20k.csv
+    --set economy.money.overdraft.start_limit=20000 --out runs/od20k.csv
 
 # Throughput as JSON: ticks/sec, ms per game day, real-time factor, tick p99.
 cargo simbench --days 4

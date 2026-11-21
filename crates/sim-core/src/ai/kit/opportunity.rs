@@ -96,7 +96,7 @@ impl LineYields {
 /// closes ([`Outlook`]).
 pub fn line_yields(world: &World, owner: Option<AccountId>) -> LineYields {
     let config = world.config();
-    let rules = &config.customers.residential;
+    let rules = &config.economy.residential;
     let year = world.clock().year();
     let occupancy = world.population().residential.occupancy();
     let mine = |account: AccountId| owner.is_none_or(|o| o == account);
@@ -133,7 +133,7 @@ pub fn line_yields(world: &World, owner: Option<AccountId>) -> LineYields {
         sum.1 += b.build_cost;
     }
     let mut land = (Money::ZERO, Money::ZERO);
-    let base = config.map.land_base_rate.money();
+    let base = config.economy.land.base_rate.money();
     for (i, block) in world.map().blocks.iter().enumerate() {
         let Some(lease) = block.lease.as_ref().filter(|l| mine(l.holder)) else {
             continue;

@@ -1,8 +1,11 @@
-//! `customers.yaml`: population, cohorts, allowances, desires, price sensitivity, residential
-//! affordability (§7.2, §8; R50, R52–R55, R59–R61).
+//! `customers.yaml`: population, cohorts, the shape of allowances, desires, shopping windows,
+//! and which building type holds flats (§7.2, §8; R50, R53–R55, R59–R61, R70).
 //!
-//! Floats appear here only for customer scoring inputs (`price_sensitivity`, desire weights,
-//! reputation, distance decay). Shares that split populations are fixed-point [`Ratio`]s.
+//! The levels are in `economy.yaml` (R71): the births multiplier, migration, allowance by
+//! class, price sensitivity, demand by decade and the residential market's numbers.
+//!
+//! Floats appear here only for customer scoring inputs (desire weights, reputation, distance
+//! decay). Shares that split populations are fixed-point [`Ratio`]s.
 
 use std::collections::BTreeMap;
 
@@ -24,16 +27,16 @@ pub struct CustomersConfig {
     /// Adult age bands (R60), youngest first.
     #[schemars(length(min = 1))]
     pub age_bands: Vec<AgeBandSettings>,
-    /// Historical births per woman, keyed by step year (R61).
+    /// Historical births per woman, keyed by step year (R61), before `economy.yaml`
+    /// `population.births_multiplier`.
     pub births_per_woman: BTreeMap<String, Ratio>,
     /// Childbearing span in years, used to turn births per woman into births per step (R61).
     #[schemars(range(min = 1, max = 60))]
     pub childbearing_years: u32,
     /// Share of each band dying per 5-year step, keyed by band id.
     pub mortality_per_step: BTreeMap<String, Ratio>,
-    /// Migrants added to each morning's arrivals.
-    pub migration_per_day: u64,
-    /// Daily allowance (R55).
+    /// Daily allowance (R55): its shape by age and sex. The base per class is `economy.yaml`
+    /// `population.allowance_by_class`.
     pub allowance: AllowanceSettings,
     /// Shopping-list weights per segment (R55).
     pub desires: Vec<DesireRule>,
@@ -43,8 +46,6 @@ pub struct CustomersConfig {
     pub obsolescence: Obsolescence,
     /// Population mix by era, keyed by year.
     pub demographics: BTreeMap<String, Demographics>,
-    /// `k_class` price sensitivity (§8.3).
-    pub price_sensitivity: ClassF64,
     /// `class_affinity(class, block_tier)` before the fit-out appeal multiplier (§8.3).
     pub class_affinity: ClassTierF64,
     /// Price sensitivity for luxury goods, which a higher price boosts mildly (§8.3).
@@ -56,8 +57,9 @@ pub struct CustomersConfig {
     pub reputation: ReputationSettings,
     /// How fast a shop's pull falls with walking distance.
     pub distance_decay: DistanceDecay,
-    /// Apartment affordability (R50, R52, R54).
-    pub residential: ResidentialSettings,
+    /// Which building holds flats (R20, R50). The residential market's numbers are
+    /// `economy.yaml` `residential`.
+    pub residential: HousingSettings,
     /// Tourists' tastes: the souvenir bonus (§7.3, R29).
     pub tourists: TouristSettings,
     /// Online demand from 1995 (§7.5; R15, R36).
@@ -125,12 +127,10 @@ pub struct AgeBandSettings {
     pub max_age: Option<u32>,
 }
 
-/// Daily allowance (R55).
+/// Daily allowance (R55): `allowance_by_class` (`economy.yaml`) × age × sex multipliers.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AllowanceSettings {
-    /// Base allowance per class.
-    pub base_by_class: ClassPounds,
     /// Multiplier per age band id.
     pub age_multiplier: BTreeMap<String, Ratio>,
     /// Multiplier per sex.
@@ -371,42 +371,13 @@ pub struct DistanceDecay {
     pub per_block: f64,
 }
 
-/// Apartment affordability (§7.2).
+/// Which building holds flats (§7.2).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct ResidentialSettings {
-    /// Units of volume per flat (R50, default 4).
-    #[schemars(range(min = 1, max = 10000))]
-    pub flat_size: u32,
-    /// Comfortable rent share of allowance (R52, default 0.2).
-    pub comfortable_share: Ratio,
-    /// Stretch rent share for desirable flats (R52, default 0.5).
-    pub stretch_share: Ratio,
-    /// Minimum in-game years between moves (R54, default 10).
-    #[schemars(range(min = 0, max = 500))]
-    pub move_interval_years: u32,
+pub struct HousingSettings {
     /// The business type id in `businesses.yaml` that is an apartment block (R20, R50).
     pub building_type: String,
-    /// Rent per flat per day until the owner sets one: the city's default (R4, R51).
-    pub default_rent: Pounds,
-    /// The reference rent for `price_factor` when people weigh flats (R51).
-    pub reference_rent: Pounds,
-    /// A flat whose desirability (class affinity × fit-out appeal) is at least this justifies
-    /// stretching to `stretch_share` (R52).
-    #[schemars(range(min = 0.0, max = 100.0))]
-    pub stretch_min_desirability: f64,
     /// Whether unhoused people already in the city look again each morning, after the
     /// arrivals, while flats stand empty (§7.2: everyone wants to live in the city).
     pub rehunt_unhoused: bool,
-    /// Study lever, off by default (`null`): the most any flat's rent can be per day. An
-    /// owner may set more, but residents see and pay `min(rent, cap)` (docs/economy.md
-    /// "Residential levers").
-    pub max_rent_per_flat: Option<Pounds>,
-    /// Study lever, off by default (0): the share of residents' rent paid to the city as tax
-    /// at the 06:00 settlement; the owner gets the rest (docs/economy.md "Residential levers").
-    pub rent_tax: Ratio,
-    /// Study lever, off by default (0): the share of the city's adults who would rather
-    /// commute than live in a flat, even one they can afford. The 05:30 house-hunt houses no
-    /// more than `⌊adults × (1 − commute_preference)⌋` (docs/economy.md "Residential levers").
-    pub commute_preference: Ratio,
 }

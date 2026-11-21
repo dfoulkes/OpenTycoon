@@ -13,7 +13,7 @@ crates/
   sim-cli/     headless harness: validate config, run, batch, bench, study (binary `sim-cli`; docs/perf.md, docs/study.md)
   client-ext/  godot-rust (gdext) extension for the Godot client  (cdylib)
 client/        Godot 4.7 project: GDScript scenes, cameras, UI, GUT tests
-config/        the eight YAML files (§10b) + generated JSON Schemas
+config/        the nine YAML files (§10b) + generated JSON Schemas
 ```
 
 Dependency direction is one way: `server`, `sim-cli` → `sim-core`; `server`, `client-ext` →
@@ -68,14 +68,15 @@ Expected merge points (small, append-only): `tests/steps/mod.rs`, `tests/bdd.rs`
 
 | Config file | Owner module |
 |---|---|
-| `game.yaml` | clock (clock, presets), economy (bankruptcy, overdraft, net worth, players), land (world, leases) |
+| `game.yaml` | clock (clock, presets), economy (bankruptcy strikes and solvency, players), land (world) |
 | `map.yaml` | land |
 | `auctions.yaml` | auctions |
 | `utilities.yaml` | utilities |
 | `businesses.yaml` | businesses |
-| `customers.yaml` | population (cohorts, births, demographics), customers (allowance, desires, scoring) |
+| `customers.yaml` | population (cohorts, births, demographics, which type holds flats), customers (allowance shape, desires, windows, scoring) |
 | `events.yaml` | events |
 | `ai.yaml` | ai |
+| `economy.yaml` | every economy weight (R71), read by the module that applies it: land (land rate, lease term), economy (net worth, starting cash, overdraft, sell-back), businesses (build rate), utilities (bill rates), population (births multiplier, migration, allowance by class, the residential market), customers (price sensitivity, demand by decade) |
 
 ## The tick
 

@@ -12,7 +12,7 @@ Feature: Study levers on residents' rent
   Scenario: A rent tax sends a share of every resident's rent to the city
     # 22 × £3.00 = £66.00 of rent; 20% (£13.20) to the city, £52.80 to the owner.
     #   £100.00 + £52.80 − £2.70 − £3.51 = £146.59
-    Given the shipped config with "customers.yaml" key "/residential/rent_tax" set to "0.2"
+    Given the shipped config with "economy.yaml" key "/residential/rent_tax" set to "0.2"
     And a new game with 2 players
     And the game has run to "01:00"
     And player 1 owns a 10-high 3x3 "apartments" on "Old Kent Road"
@@ -27,7 +27,7 @@ Feature: Study levers on residents' rent
   Scenario: A rent cap holds what residents pay below what the owner asks
     # The owner asks £3.50 a flat; the cap is £2.50: 22 × £2.50 = £55.00.
     #   £100.00 + £55.00 − £2.70 − £3.51 = £148.79
-    Given the shipped config with "customers.yaml" key "/residential/max_rent_per_flat" set to "2.50"
+    Given the shipped config with "economy.yaml" key "/residential/max_rent_per_flat" set to "2.50"
     And a new game with 2 players
     And the game has run to "01:00"
     And player 1 owns a 10-high 3x3 "apartments" on "Old Kent Road"

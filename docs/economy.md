@@ -3,7 +3,68 @@
 How the era content in `config/businesses.yaml` and `config/customers.yaml` is derived. The
 spec ([`spec.md`](spec.md) §7, §8) says what a business type and a shopping list are; this says
 where the shipped numbers come from, so they can be regenerated rather than hand-tuned one by
-one. Balance is then found by study (R64, R65): the study varies these numbers, not the formula.
+one. Balance is then found by study (R64, R65): the study varies the economy's weights in
+`config/economy.yaml`, not the formula.
+
+## Economy weights (R71)
+
+Every economy weight, every lever the balance study varies, lives in one file,
+`config/economy.yaml`. Adopting an economic model means swapping that file:
+`cp study-out/models/<id>/economy.yaml config/` ([`study.md`](study.md) "Overlays").
+
+**The line.** A number that sets the *level* of the economy's money flows goes in
+`economy.yaml`: what land, building and utilities cost, the lease term and how land is scored,
+the money players start with and can borrow, what the city pays on a sell-back, how many people
+there are and how much they spend, how sensitive they are to price, how much they want in each
+decade, and the residential market's rules. A *description of the world* stays in its own file:
+what exists and when (business types, goods, unlock and obsolete years), where (the map, block
+land prices, tiers), what happens (events), and the relative pattern of who wants what and when
+(the desire tables, segment multipliers, shopping windows, demographics, mortality, the
+allowance's age and sex multipliers, class affinity). AI tunables stay in `ai.yaml`: they are AI
+behaviour, not economy, and the main study holds them fixed. In practice: **a number the study
+might tune goes in `economy.yaml`; if a new study parameter would vary a key elsewhere, move
+the key here first** (a scenario fails if `study/study.yaml` varies anything outside it).
+
+| Group | Key in `economy.yaml` | Was | Shipped |
+|---|---|---|---|
+| land | `land.base_rate` | `map.yaml` `land_base_rate` | £0.05 per unit of volume a day |
+| land | `land.lease_term_years` | `game.yaml` `leases.term_years` | 30 |
+| land | `land.value_method` | `game.yaml` `net_worth.land_value` | `book_decay` |
+| land | `land.lot_property_uplift` | `game.yaml` `net_worth.lot_property_uplift` | 0.2 |
+| building | `building.base_rate` | `businesses.yaml` `build_base_rate` | £10 per unit of volume |
+| utilities | `utilities.base_rates.*` | `utilities.yaml` `base_rates` | 2p / 1p / 1p / 1p |
+| utilities | `utilities.internet_base_rate` | `utilities.yaml` `internet.base_rate` | 2p |
+| money | `money.starting_cash` | `game.yaml` `players.starting_cash` | £7,000 |
+| money | `money.overdraft.*` | `game.yaml` `overdraft` | £10,000, +£2,500 a step, 0% |
+| money | `money.sell_to_city_ratio` | `game.yaml` `bankruptcy.sell_to_city_ratio` | 0.5 |
+| population | `population.births_multiplier` | new: × `customers.yaml` `births_per_woman` | 1.0 |
+| population | `population.migration_per_day` | `customers.yaml` `migration_per_day` | 50 |
+| population | `population.allowance_by_class` | `customers.yaml` `allowance.base_by_class` | £20 / £45 / £120 |
+| population | `population.price_sensitivity` | `customers.yaml` `price_sensitivity` | 3.0 / 1.5 / 0.5 |
+| demand | `demand_multipliers` | new: replaces the study's index addressing of `customers.desires` | 1.0 per decade |
+| residential | `residential.*` | `customers.yaml` `residential`, all but `building_type` and `rehunt_unhoused` | as before |
+
+Two judgement calls:
+
+- **The utility rates move as they are**, four base rates and the internet rate, rather than
+  collapsing into one `utility_rate_multiplier`. They are prices in whole pence and every one
+  is a placeholder the study tunes (it scales them together today, but a model that prices
+  water against electricity is a model too); none is a fact about the world. The year the
+  exchange becomes the internet is a fact and stays in `utilities.yaml`, as do the
+  nationalisation rules and the utilities' auction reserve prices.
+- **Births and demand are multipliers**, because the tables they scale are content: the
+  historical births per woman for England and Wales, and the era desire tables that say what a
+  1930s shopper wants against a 2030s one. The study scales the level; the shape stays
+  history. The residential market moves whole (the three numbers that were not study levers,
+  `stretch_min_desirability`, `default_rent` and `reference_rent`, are market rules too), so
+  the code reads one struct; `customers.yaml` keeps only which building type holds flats and
+  whether the unhoused look again.
+
+The move was a pure refactor: the shipped defaults moved verbatim, every multiplier is exactly
+neutral at 1.0 (`P × 1.0` and `rate × 1.0000` are bit-identical), and the full shipped game
+ends in the same state as before (`sim-cli run config --seed 42 --ticks 207360`: hash
+`fd5bd3a7bcc696e4`, pinned in `crates/sim-cli/features/determinism.feature`). Scenarios:
+`crates/sim-core/features/config/economy.feature`.
 
 ## Business stats
 
@@ -22,7 +83,7 @@ money (pence) and ratios (basis points).
 | Reference height | `businesses.yaml` `reference.height` | 10 |
 | Sell-through | `businesses.yaml` `reference.sell_through` | 0.8 |
 | Payback days | `businesses.yaml` `reference.payback_days` | 10 |
-| Rent, utility and build rates | `map.yaml`, `utilities.yaml`, `businesses.yaml` | as shipped |
+| Rent, utility and build rates | `economy.yaml` `land`, `utilities`, `building` | as shipped |
 
 **Size classes** (R58: the height cap is per type and never per era, R57):
 
@@ -179,6 +240,14 @@ cheap produce, delivery) are later mechanics. The boutique hotel trades in the h
    `obsolescence.floor` (10%) and stays there. A shop whose *type* is past its obsolete year
    draws shoppers with the same fade on its pull, so a news stand loses out to a general store
    selling the same papers.
+
+4. **The decade's demand multiplier** (`economy.yaml` `demand_multipliers`, R71): one per
+   era, named by its first decade (`1930s`, `1950s`, … `2030s`), applied from that decade's
+   first year until the next decade named, so `1930s` covers the 1930–45 tables. It multiplies
+   `P(good)` after the segment rules, capped at 1, before unlock and fade
+   (`customers::shopping::with_demand`). The shipped 1.0 is the tables as written. The study
+   varies it by name, so reordering or adding desire rules never moves a study parameter onto
+   the wrong table.
 
 Allowances stay flat across eras (§8.2, R6: no inflation); what changes by decade is what
 people want, not how much they have.
@@ -397,7 +466,7 @@ shipped config.
 ## Land value
 
 Net worth (§3, R19, R39) counts a held lease's land. The spec gives one formula; how land
-*should* be valued is not ruled, so `game.yaml` `net_worth.land_value` picks the method and the
+*should* be valued is not ruled, so `economy.yaml` `land.value_method` picks the method and the
 balance study compares them (`study/study.yaml`, parameter `land_value`). The default keeps the
 spec's formula, so the shipped game and its state hashes are unchanged. The code is
 `crates/sim-core/src/economy/net_worth.rs` (`lease_land_value`, `market_land_price`); the
@@ -408,7 +477,7 @@ R23, which a desirability shift moves) after every `land_value` event fired so f
 order, each rounded to the penny (the 2008 crash: ×0.7). It is only read for net worth: what
 an auction asks is untouched.
 
-| Method | `land_value` | Character |
+| Method | `value_method` | Character |
 |---|---|---|
 | `book_decay` (default) | `last auction price × years left / term` | The spec's formula. Land is worth what was paid, running down to nothing over the lease, like a depreciating asset. A crash scales the price paid. A lease loses half to two-thirds of its value over a 20-year game, so holding land is a slow loss on the scoreboard unless the business on it outruns the decay. |
 | `market` | `current land base price × years left / term` | What the remaining years would cost today. Overpaying at auction is not rewarded in the score (the extra is gone from cash and does not reappear as land); a block that gentrifies gains, a crash loses. Still decays to nothing at the end of the lease. |
@@ -436,7 +505,7 @@ config, so the shipped game and its state hashes are unchanged. Scenarios:
 `crates/sim-core/features/population/housing.feature` (the end of the file) and
 `crates/sim-core/features/economy/rent_levers.feature`.
 
-The residential settings the study can vary, all in `customers.yaml` under `residential`:
+The residential settings the study can vary, all in `economy.yaml` under `residential` (R71):
 
 | Key | Shipped | Kind | Effect |
 |---|---|---|---|

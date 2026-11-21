@@ -9,7 +9,7 @@
     reason = "customer scoring is the one place floats are allowed (docs/engineering.md)"
 )]
 
-use crate::config::CustomersConfig;
+use crate::config::{Config, CustomersConfig, EconomyConfig};
 use crate::land::Tier;
 use crate::money::{BASIS_POINTS_PER_UNIT, Money, Rate};
 use crate::population::Class;
@@ -47,9 +47,10 @@ pub fn pence_f64(m: Money) -> f64 {
     m.pence() as f64
 }
 
-/// `k_class` price sensitivity (§8.3): working 3.0, middle 1.5, upper 0.5 by default.
-pub fn k_class(rules: &CustomersConfig, class: Class) -> f64 {
-    let k = &rules.price_sensitivity;
+/// `k_class` price sensitivity (§8.3; `economy.yaml` `population.price_sensitivity`, R71):
+/// working 3.0, middle 1.5, upper 0.5 by default.
+pub fn k_class(economy: &EconomyConfig, class: Class) -> f64 {
+    let k = &economy.population.price_sensitivity;
     match class {
         Class::Working => k.working,
         Class::Middle => k.middle,
@@ -78,16 +79,10 @@ pub fn desirability(rules: &CustomersConfig, class: Class, tier: Tier, appeal: R
 
 /// A flat's score for house-hunting: `desirability × price_factor(k_class, rent, reference)`
 /// (R51: nicer lot and building attract more, balanced by price).
-pub fn flat_score(
-    rules: &CustomersConfig,
-    class: Class,
-    tier: Tier,
-    appeal: Rate,
-    rent: Money,
-) -> f64 {
-    let reference = pence_f64(rules.residential.reference_rent.money()).max(1.0);
-    desirability(rules, class, tier, appeal)
-        * price_factor(k_class(rules, class), pence_f64(rent), reference)
+pub fn flat_score(config: &Config, class: Class, tier: Tier, appeal: Rate, rent: Money) -> f64 {
+    let reference = pence_f64(config.economy.residential.reference_rent.money()).max(1.0);
+    desirability(&config.customers, class, tier, appeal)
+        * price_factor(k_class(&config.economy, class), pence_f64(rent), reference)
 }
 
 /// A shop's score for one good (§8.3):
@@ -98,7 +93,7 @@ pub fn flat_score(
     reason = "the §8.3 formula has this many inputs"
 )]
 pub fn shop_score(
-    rules: &CustomersConfig,
+    config: &Config,
     class: Class,
     affinity: f64,
     price: Money,
@@ -107,10 +102,11 @@ pub fn shop_score(
     blocks: f64,
     reputation: Rate,
 ) -> f64 {
+    let rules = &config.customers;
     let k = if luxury {
         -rules.luxury_price_boost
     } else {
-        k_class(rules, class)
+        k_class(&config.economy, class)
     };
     affinity
         * price_factor(k, pence_f64(price), pence_f64(ref_price).max(1.0))

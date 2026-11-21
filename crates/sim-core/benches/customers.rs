@@ -137,7 +137,7 @@ fn bench_choice(c: &mut Criterion) {
                             bread,
                             &offers,
                             &reputation,
-                            &config.customers,
+                            &config,
                             geometry,
                             &mut rng,
                         ));

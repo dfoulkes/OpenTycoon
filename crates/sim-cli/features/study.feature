@@ -12,8 +12,8 @@ Feature: Balance study
   @R64
   Scenario: The same seed gives the same models, a different seed different ones
     Given a study of 10 models from seed 7
-    And the parameter "lease" on "game.leases.term_years" from 10 to 60, uniform, integer
-    And the parameter "overdraft" on "game.overdraft.start_limit" from 5000 to 50000, log-uniform, decimal
+    And the parameter "lease" on "economy.land.lease_term_years" from 10 to 60, uniform, integer
+    And the parameter "overdraft" on "economy.money.overdraft.start_limit" from 5000 to 50000, log-uniform, decimal
     When I generate the models twice
     Then both generations are identical
     And generating from seed 8 gives different models
@@ -21,7 +21,7 @@ Feature: Balance study
   @R64
   Scenario Outline: Every sampled parameter covers its range, one model per stratum
     Given a study of 11 models from seed 3
-    And the parameter "x" on "game.leases.term_years" from <min> to <max>, <distribution>, <kind>
+    And the parameter "x" on "economy.land.lease_term_years" from <min> to <max>, <distribution>, <kind>
     When I generate the models
     Then every value of "x" is between <min> and <max>
     And the 10 sampled models of "x" fall one in each of 10 equal strata
@@ -37,12 +37,12 @@ Feature: Balance study
   Scenario: Model 0 is the shipped defaults
     Given the shipped config
     And a study of 5 models from seed 1
-    And the parameter "lease" on "game.leases.term_years" from 10 to 60, uniform, integer
+    And the parameter "lease" on "economy.land.lease_term_years" from 10 to 60, uniform, integer
     When I generate the models
     Then model 0 has no overrides
     And model 0's config equals the shipped config
     And model 0's "lease" value is the shipped 30
-    And model 1 overrides "game.leases.term_years"
+    And model 1 overrides "economy.land.lease_term_years"
 
   @R64
   Scenario: A scale parameter multiplies every number under its key
@@ -56,10 +56,10 @@ Feature: Balance study
   Scenario Outline: A categorical parameter gives each value an equal share of the models
     Given the shipped config
     And a study of <models> models from seed <seed>
-    And the categorical parameter "land" on "game.net_worth.land_value" with values "book_decay, market, market_no_decay"
+    And the categorical parameter "land" on "economy.land.value_method" with values "book_decay, market, market_no_decay"
     When I generate the models
     Then the <sampled> sampled models of "land" take each value between <least> and <most> times
-    And every sampled model of "land" sets "game.net_worth.land_value" to its value
+    And every sampled model of "land" sets "economy.land.value_method" to its value
 
     Examples:
       | models | seed | sampled | least | most |
@@ -71,7 +71,7 @@ Feature: Balance study
   Scenario: Model 0 shows the shipped category, and models.csv shows value names
     Given the shipped config
     And a study of 4 models of 2 games from seed 0 with the roster "grocer, idle" on preset "v1"
-    And the categorical parameter "land" on "game.net_worth.land_value" with values "market, market_no_decay"
+    And the categorical parameter "land" on "economy.land.value_method" with values "market, market_no_decay"
     When I run the study
     Then the study finishes with 4 models
     And models.csv shows "land" as "book_decay" for model 0
@@ -192,17 +192,17 @@ Feature: Balance study
   Scenario: A model whose config is invalid is reported, not fatal
     Given the shipped config
     And a study of 3 models of 2 games from seed 0 with the roster "grocer, idle" on preset "v1"
-    And the parameter "bad" on "game.leases.term_years" from -50 to -10, uniform, integer
+    And the parameter "bad" on "economy.land.lease_term_years" from -50 to -10, uniform, integer
     When I run the study
     Then the study finishes with 3 models
     And model 0 is "ok"
-    And models 1 and 2 are "invalid" naming "/leases/term_years"
+    And models 1 and 2 are "invalid" naming "/land/lease_term_years"
 
   @R64
   Scenario: A restarted study skips the models already in models.csv
     Given the shipped config
     And a study of 4 models of 2 games from seed 0 with the roster "grocer, idle" on preset "v1"
-    And the parameter "od" on "game.overdraft.start_limit" from 5000 to 20000, uniform, integer
+    And the parameter "od" on "economy.money.overdraft.start_limit" from 5000 to 20000, uniform, integer
     When I run the study, stopping after 2 models
     Then models.csv has 2 models
     When I run the study again
@@ -214,7 +214,7 @@ Feature: Balance study
   Scenario: A study gives the same CSVs on 1 thread and on 4 threads
     Given the shipped config
     And a study of 3 models of 4 games from seed 5 with the roster "grocer, idle" on preset "v1"
-    And the parameter "od" on "game.overdraft.start_limit" from 5000 to 20000, uniform, integer
+    And the parameter "od" on "economy.money.overdraft.start_limit" from 5000 to 20000, uniform, integer
     When I run the study on 1 thread without wall time
     And I run the study on 4 threads without wall time
     Then the two runs wrote identical models.csv and games.csv

@@ -2,7 +2,7 @@
 //!
 //! # Pipeline
 //!
-//! For each of the eight files in [`ConfigFile::ALL`]:
+//! For each of the nine files in [`ConfigFile::ALL`]:
 //!
 //! 1. parse YAML (syntax errors name the file and line);
 //! 2. validate against the file's JSON Schema, generated from the Rust types in this module
@@ -25,6 +25,7 @@ pub mod ai;
 pub mod auctions;
 pub mod businesses;
 pub mod customers;
+pub mod economy;
 pub mod events;
 pub mod game;
 pub mod map;
@@ -44,13 +45,14 @@ pub use ai::AiConfig;
 pub use auctions::AuctionsConfig;
 pub use businesses::BusinessesConfig;
 pub use customers::CustomersConfig;
+pub use economy::EconomyConfig;
 pub use events::EventsConfig;
 pub use game::GameConfig;
 pub use map::{MapChoice, MapConfig, MapFile};
 pub use types::{ClockTime, Pounds, Ratio};
 pub use utilities::UtilitiesConfig;
 
-/// One of the eight config files.
+/// One of the nine config files.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ConfigFile {
     /// `game.yaml`
@@ -69,11 +71,13 @@ pub enum ConfigFile {
     Events,
     /// `ai.yaml`
     Ai,
+    /// `economy.yaml`: every economy weight (R71).
+    Economy,
 }
 
 impl ConfigFile {
     /// Every config file, in load order.
-    pub const ALL: [ConfigFile; 8] = [
+    pub const ALL: [ConfigFile; 9] = [
         ConfigFile::Game,
         ConfigFile::Map,
         ConfigFile::Auctions,
@@ -82,6 +86,7 @@ impl ConfigFile {
         ConfigFile::Customers,
         ConfigFile::Events,
         ConfigFile::Ai,
+        ConfigFile::Economy,
     ];
 
     /// The file name, e.g. `game.yaml`.
@@ -95,6 +100,7 @@ impl ConfigFile {
             ConfigFile::Customers => "customers.yaml",
             ConfigFile::Events => "events.yaml",
             ConfigFile::Ai => "ai.yaml",
+            ConfigFile::Economy => "economy.yaml",
         }
     }
 
@@ -114,6 +120,7 @@ impl ConfigFile {
             ConfigFile::Customers => schemars::schema_for!(CustomersConfig),
             ConfigFile::Events => schemars::schema_for!(EventsConfig),
             ConfigFile::Ai => schemars::schema_for!(AiConfig),
+            ConfigFile::Economy => schemars::schema_for!(EconomyConfig),
         };
         schema.to_value()
     }
@@ -211,7 +218,7 @@ impl ConfigSources {
         self.files.keys().map(String::as_str)
     }
 
-    /// Reads the eight config files from `dir`. A missing file, or any other `*.yaml`/`*.yml`
+    /// Reads the nine config files from `dir`. A missing file, or any other `*.yaml`/`*.yml`
     /// in the directory (a likely typo), is an error.
     #[cfg(feature = "fs")]
     pub fn read_dir(dir: &std::path::Path) -> Result<Self, ConfigErrors> {
@@ -229,7 +236,7 @@ impl ConfigSources {
                         errors.push(ConfigError::new(
                             name,
                             "",
-                            format!("unknown config file in {dir_label}; expected one of the eight files in §10b"),
+                            format!("unknown config file in {dir_label}; expected one of the nine files in §10b"),
                         ));
                     }
                 }
@@ -269,6 +276,8 @@ pub struct Config {
     pub events: EventsConfig,
     /// `ai.yaml`
     pub ai: AiConfig,
+    /// `economy.yaml`: every economy weight (R71).
+    pub economy: EconomyConfig,
 }
 
 impl Config {
@@ -306,6 +315,7 @@ impl Config {
         let customers = load_file::<CustomersConfig>(sources, ConfigFile::Customers, &mut errors);
         let events = load_file::<EventsConfig>(sources, ConfigFile::Events, &mut errors);
         let ai = load_file::<AiConfig>(sources, ConfigFile::Ai, &mut errors);
+        let economy = load_file::<EconomyConfig>(sources, ConfigFile::Economy, &mut errors);
 
         let (
             Some(game),
@@ -316,8 +326,9 @@ impl Config {
             Some(customers),
             Some(events),
             Some(ai),
+            Some(economy),
         ) = (
-            game, map, auctions, utilities, businesses, customers, events, ai,
+            game, map, auctions, utilities, businesses, customers, events, ai, economy,
         )
         else {
             return Err(ConfigErrors(errors));
@@ -331,6 +342,7 @@ impl Config {
             customers,
             events,
             ai,
+            economy,
         };
         errors.extend(validate::check(&config));
         // The boards not selected are checked too, so a switch of `map` never meets a stale

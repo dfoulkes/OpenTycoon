@@ -119,7 +119,7 @@ fn bench_settlement(c: &mut Criterion) {
 
 fn bench_net_worth(c: &mut Criterion) {
     let config = shipped_config();
-    let uplift = config.game.net_worth.lot_property_uplift.rate();
+    let uplift = config.economy.land.lot_property_uplift.rate();
     let mut group = c.benchmark_group("economy_net_worth");
     for (players, buildings) in [(2u8, 10u32), (6, 100), (6, 1_000)] {
         let (ledger, map, businesses) = setup(&config, players, buildings);
@@ -188,7 +188,7 @@ fn bench_resident_rent(c: &mut Criterion) {
             |b, ()| {
                 b.iter(|| {
                     let mut ledger = ledger.clone();
-                    let due = rent_due(&residential, &listings, &config.customers);
+                    let due = rent_due(&residential, &listings, &config);
                     let bills: Vec<_> = resident_rent_bills(&due).collect();
                     ledger.settle(&bills);
                     black_box(ledger.total())
