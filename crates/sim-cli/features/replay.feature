@@ -61,7 +61,7 @@ Feature: Game recorder
     When I record a batch of 2 games from seed 1 with the "idle" brain
     And I record a batch of 2 games from seed 3 with the "idle" brain into the same store
     Then the store holds 1 config snapshot
-    When I record a batch of 2 games from seed 1 with the "idle" brain and "game.overdraft.start_limit=20000" into the same store
+    When I record a batch of 2 games from seed 1 with the "idle" brain and "economy.money.overdraft.start_limit=20000" into the same store
     Then the store holds 2 config snapshots
     And every config snapshot is named by the hash of its content and loads
 
