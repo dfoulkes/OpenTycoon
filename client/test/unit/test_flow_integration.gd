@@ -60,3 +60,10 @@ func test_bid_feed_names_players_not_ids() -> void:
 	assert_false(lines.is_empty(), "feed has entries")
 	assert_false(lines.contains(" p0 ") or lines.begins_with("p0") or lines.begins_with("p1"),
 		"players resolved to names: " + lines)
+
+
+func test_money_from_json_floats_formats_as_pounds() -> void:
+	world.lot_clicked.emit("bermondsey_street")
+	var value: String = card.get_node("%LandValueValue").text
+	assert_true(value.begins_with("£"), "land value formatted: " + value)
+	assert_false(value.contains("."), "whole pounds, no float artefacts: " + value)

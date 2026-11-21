@@ -4,8 +4,8 @@ extends Control
 var calls: Array = []
 
 
-func show_lot(lot: Dictionary, players: Dictionary, board_block: Dictionary) -> void:
-	calls.append(["show_lot", [lot, players, board_block]])
+func show_lot(lot: Dictionary, players: Array, board_block: Dictionary, auction: Variant = null) -> void:
+	calls.append(["show_lot", [lot, players, board_block, auction]])
 
 
 func update_lot(lot: Dictionary) -> void:
@@ -16,7 +16,7 @@ func hide_card() -> void:
 	calls.append(["hide_card", []])
 
 
-func add_bids(bids: Array, players: Dictionary, blocks: Dictionary) -> void:
+func add_bids(bids: Array, players: Array, blocks: Dictionary) -> void:
 	calls.append(["add_bids", [bids, players, blocks]])
 
 
@@ -24,7 +24,7 @@ func update_clock(clock: Dictionary) -> void:
 	calls.append(["update_clock", [clock]])
 
 
-func update_players(players: Dictionary) -> void:
+func update_players(players: Array) -> void:
 	calls.append(["update_players", [players]])
 
 
@@ -34,3 +34,7 @@ func called(method: String) -> Array:
 		if c[0] == method:
 			out.append(c[1])
 	return out
+
+
+func update_auction(auction: Variant, _players: Array = [], _blocks: Dictionary = {}) -> void:
+	calls.append(["update_auction", [auction]])

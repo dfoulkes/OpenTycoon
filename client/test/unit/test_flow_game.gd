@@ -55,7 +55,7 @@ func test_snapshot_forwards_to_world_hud_and_feed() -> void:
 	link.snapshot_received.emit(snap)
 	assert_eq(world.called("apply_snapshot").size(), 1)
 	assert_eq(hud.called("update_clock")[0][0], snap["clock"])
-	assert_eq(hud.called("update_players")[0][0].keys(), ["p0", "p1"])
+	assert_eq(hud.called("update_players")[0][0].map(func(p: Dictionary) -> String: return p["id"]), ["p0", "p1"])
 	var bids: Array = feed.called("add_bids")
 	assert_eq(bids.size(), 1)
 	assert_eq(bids[0][0].size(), 5)

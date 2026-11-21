@@ -24,6 +24,8 @@ var bid_feed: Node
 
 var lots := {}
 var players := {}
+## The live auction from the last snapshot or delta, or null.
+var auction: Variant = null
 var blocks := {}
 var selected_lot := ""
 var speed := 1
@@ -95,7 +97,7 @@ func on_lot_clicked(key: String) -> void:
 		_call(world, "clear_highlight", [])
 		return
 	selected_lot = key
-	_call(lot_card, "show_lot", [lots[key], players, blocks.get(key, {})])
+	_call(lot_card, "show_lot", [lots[key], players.values(), blocks.get(key, {}), auction])
 	_call(world, "highlight_lot", [key])
 
 
@@ -219,9 +221,13 @@ func _forward_common(data: Dictionary) -> void:
 	if data.has("clock"):
 		_call(hud, "update_clock", [data["clock"]])
 	if data.has("players") and not data["players"].is_empty():
-		_call(hud, "update_players", [players])
+		_call(hud, "update_players", [players.values()])
 	if not data.get("bids", []).is_empty():
-		_call(bid_feed, "add_bids", [data["bids"], players, blocks])
+		_call(bid_feed, "add_bids", [data["bids"], players.values(), blocks])
+	if data.has("auction"):
+		auction = data["auction"]
+		_call(lot_card, "update_auction", [auction])
+		_call(bid_feed, "update_auction", [auction, players.values(), blocks])
 
 
 func _show_status(data: Dictionary) -> void:
