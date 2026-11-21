@@ -384,10 +384,9 @@ fn nobody_seeking(w: &mut SimWorld) {
 fn tourists_to_tube(w: &mut SimWorld) {
     let config = CityState::config(w);
     let map = CityState::map(w);
-    let [lot_w, lot_d] = config.game.world.lot_size;
-    let g = sim_core::customers::movement::Geometry { lot_w, lot_d };
+    let g = sim_core::customers::streets::Streets::for_config(&map, &config);
     let year = CityState::clock(w).year();
-    let stations = sim_core::customers::station_cells(&config, &map, year, g);
+    let stations = sim_core::customers::station_cells(&config, &map, year, &g);
     for c in w
         .city
         .customers

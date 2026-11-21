@@ -4,7 +4,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::movement::{Cell, Geometry, step_towards};
+use super::movement::Cell;
 use super::online::{self, OnlineOffer};
 use super::shops::{GoodId, GoodsIndex, ShopOffer};
 use super::{
@@ -41,7 +41,7 @@ pub fn tick(
             inputs.map,
             inputs.config,
             clock,
-            inputs.geometry(),
+            inputs.streets,
             &state.hotel_guests,
         )
     } else {
@@ -206,12 +206,13 @@ struct Step<'a, 'i> {
 }
 
 impl Step<'_, '_> {
-    fn geometry(&self) -> Geometry {
-        self.inputs.geometry()
-    }
-
     fn cells(&self) -> u32 {
         self.inputs.config.customers.movement.cells_per_tick
+    }
+
+    /// One tick's walk along the streets towards `to` (§4.1).
+    fn walk(&self, from: Cell, to: Cell) -> Cell {
+        self.inputs.streets.step(from, to, self.cells())
     }
 
     /// One agent's step. Returns false when the agent leaves the map (home, the tube, or bed).
@@ -246,7 +247,6 @@ impl Step<'_, '_> {
             Activity::WaitingForPower { .. } | Activity::Wandering => true,
             Activity::Choosing => {
                 let config = self.inputs.config;
-                let geometry = self.geometry();
                 let (next, missed) = next_errand(
                     c,
                     self.now,
@@ -254,7 +254,7 @@ impl Step<'_, '_> {
                     self.offers,
                     &self.reputation,
                     config,
-                    geometry,
+                    self.inputs.streets,
                     self.rng,
                 );
                 self.report.missed += missed;
@@ -277,14 +277,14 @@ impl Step<'_, '_> {
                 }
             }
             Activity::Walking { to, shop, good } => {
-                c.at = step_towards(c.at, to, self.cells());
+                c.at = self.walk(c.at, to);
                 if c.at == to {
                     self.at_the_door(c, shop, good);
                 }
                 true
             }
             Activity::Leaving => {
-                c.at = step_towards(c.at, c.exit, self.cells());
+                c.at = self.walk(c.at, c.exit);
                 c.at != c.exit
             }
             Activity::SeekingBed => {
@@ -295,7 +295,7 @@ impl Step<'_, '_> {
                     &self.beds,
                     &self.reputation,
                     self.inputs.config,
-                    self.geometry(),
+                    self.inputs.streets,
                     self.rng,
                 )
                 .map_or(Activity::Leaving, |i| Activity::WalkingToHotel {
@@ -305,7 +305,7 @@ impl Step<'_, '_> {
                 true
             }
             Activity::WalkingToHotel { to, hotel } => {
-                c.at = step_towards(c.at, to, self.cells());
+                c.at = self.walk(c.at, to);
                 c.at != to || !self.check_in(c, hotel)
             }
         }

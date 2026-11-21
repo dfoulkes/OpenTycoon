@@ -46,6 +46,7 @@ pub mod scoring;
 pub mod shopping;
 pub mod shops;
 mod step;
+pub mod streets;
 pub mod windows;
 
 pub use step::tick;
@@ -66,6 +67,7 @@ use crate::rng::{SimRng, below};
 
 use movement::{Cell, Geometry};
 use shops::{GoodId, GoodsIndex, ShopOffer};
+use streets::Streets;
 use windows::Span;
 
 pub use errands::errands;
@@ -366,13 +368,14 @@ pub struct PhaseInputs<'a> {
     pub population: &'a Population,
     /// Event modifiers in force (§9): demand, power cuts, price noise, footfall.
     pub modifiers: &'a Modifiers,
+    /// The board's streets: where walkers stand and the routes between (§4.1).
+    pub streets: &'a Streets,
 }
 
 impl PhaseInputs<'_> {
     /// The walking grid's shape.
     pub fn geometry(&self) -> Geometry {
-        let [lot_w, lot_d] = self.config.game.world.lot_size;
-        Geometry { lot_w, lot_d }
+        self.streets.geometry()
     }
 }
 
@@ -396,7 +399,6 @@ pub fn run_phase(
         return PhaseReport::default();
     }
     let goods = GoodsIndex::new(&inputs.config.businesses.goods);
-    let geometry = inputs.geometry();
     // The high street is only read by shoppers choosing a shop (and by a new wave). On ticks
     // when everyone about is walking, leaving or after a bed, skip building it: with shopping
     // windows (R70) someone is about all day, but few are choosing at any one tick.
@@ -407,7 +409,7 @@ pub fn run_phase(
             inputs.config,
             inputs.clock,
             &goods,
-            geometry,
+            inputs.streets,
         );
         shops::apply_modifiers(
             &mut offers,
@@ -422,7 +424,7 @@ pub fn run_phase(
         Vec::new()
     };
     let doors = if boundary {
-        front_doors(businesses, inputs.map, geometry)
+        front_doors(businesses, inputs.map, inputs.streets)
     } else {
         BTreeMap::new()
     };
@@ -453,16 +455,16 @@ fn activity(state: &Customers, now: u32) -> (bool, bool) {
     (acting, false)
 }
 
-/// Every building's front door.
+/// Every building's front door: the street cell at its frontage ([`Streets::frontage`]).
 pub fn front_doors(
     businesses: &Businesses,
     map: &Map,
-    geometry: Geometry,
+    streets: &Streets,
 ) -> BTreeMap<BusinessId, Cell> {
     businesses
         .by_id
         .iter()
-        .filter_map(|(id, b)| Some((*id, geometry.door(map.block(b.block)?, b.footprint))))
+        .filter_map(|(id, b)| Some((*id, streets.frontage(map.block(b.block)?, b.footprint))))
         .collect()
 }
 
@@ -486,23 +488,24 @@ pub fn pick_station(weights: &[u32], rng: &mut SimRng) -> Option<usize> {
     })
 }
 
-/// Tube stations open in `year`, as cells, with their footfall weights (§4.3, from
+/// Tube stations open in `year`, as the street cells at their entrances
+/// ([`Streets::entrance`]), with their footfall weights (§4.3, from
 /// [`crate::land::stations_in`]), in config order.
 pub fn weighted_station_cells(
     config: &Config,
     map: &Map,
     year: i32,
-    geometry: Geometry,
+    streets: &Streets,
 ) -> Vec<(Cell, u32)> {
     crate::land::stations_in(map, &config.map, year)
         .iter()
-        .filter_map(|s| Some((geometry.centre(map.block(s.block)?), s.weight)))
+        .filter_map(|s| Some((streets.entrance(map.block(s.block)?), s.weight)))
         .collect()
 }
 
-/// Tube stations open in `year`, as cells, in config order (§4.3).
-pub fn station_cells(config: &Config, map: &Map, year: i32, geometry: Geometry) -> Vec<Cell> {
-    weighted_station_cells(config, map, year, geometry)
+/// Tube stations open in `year`, as street cells, in config order (§4.3).
+pub fn station_cells(config: &Config, map: &Map, year: i32, streets: &Streets) -> Vec<Cell> {
+    weighted_station_cells(config, map, year, streets)
         .into_iter()
         .map(|(cell, _)| cell)
         .collect()
@@ -578,9 +581,8 @@ pub fn spawn_wave(
     };
     let tick_secs = clock_rules.tick_game_seconds.max(1);
     let spread_ticks = u64::from(rules.movement.spawn_spread_minutes * 60 / tick_secs);
-    let geometry = inputs.geometry();
     let (stations, station_weights): (Vec<Cell>, Vec<u32>) =
-        weighted_station_cells(inputs.config, inputs.map, year, geometry)
+        weighted_station_cells(inputs.config, inputs.map, year, inputs.streets)
             .into_iter()
             .unzip();
     let default_rent = inputs.config.economy.residential.default_rent.money();
@@ -684,7 +686,7 @@ pub fn choose_shop(
     offers: &[ShopOffer],
     reputation: &BTreeMap<BusinessId, Rate>,
     config: &Config,
-    geometry: Geometry,
+    streets: &Streets,
     rng: &mut SimRng,
 ) -> Option<usize> {
     let rules = &config.customers;
@@ -702,7 +704,7 @@ pub fn choose_shop(
             o.price,
             o.ref_price,
             o.luxury,
-            geometry.blocks_between(at, o.door),
+            streets.blocks_between(at, o.door),
             reputation_of(reputation, o.shop, rules),
         ));
     }

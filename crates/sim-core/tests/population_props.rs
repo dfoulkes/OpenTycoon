@@ -181,7 +181,7 @@ fn shoppers_never_drive_stock_negative_and_sales_match_the_shelf() {
             clock.advance();
             let report = run_phase(
                 &mut customers,
-                PhaseInputs { config: &config, map: &map, clock: &clock, population: &pop, modifiers: &sim_core::events::Modifiers::default() },
+                PhaseInputs { config: &config, map: &map, clock: &clock, population: &pop, modifiers: &sim_core::events::Modifiers::default(), streets: &sim_core::customers::streets::Streets::for_config(&map, &config) },
                 &mut businesses,
                 &mut rng,
             );

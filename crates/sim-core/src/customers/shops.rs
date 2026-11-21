@@ -5,9 +5,10 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::movement::{Cell, Geometry};
+use super::movement::Cell;
 use super::scoring;
 use super::shopping::availability;
+use super::streets::Streets;
 use crate::businesses::{BusinessId, Businesses, Hours};
 use crate::clock::Clock;
 use crate::config::Config;
@@ -135,7 +136,7 @@ pub fn shop_offers(
     config: &Config,
     clock: &Clock,
     goods: &GoodsIndex,
-    geometry: Geometry,
+    streets: &Streets,
 ) -> Vec<ShopOffer> {
     let mut out = Vec::new();
     for (id, b) in &businesses.by_id {
@@ -168,7 +169,7 @@ pub fn shop_offers(
                 fade,
             )
         });
-        let door = geometry.door(block, b.footprint);
+        let door = streets.frontage(block, b.footprint);
         for name in &kind.goods {
             let (Some(good), Some(catalogue)) = (goods.id(name), config.businesses.goods.get(name))
             else {
