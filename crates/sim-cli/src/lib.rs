@@ -19,6 +19,7 @@ pub mod brains;
 pub mod budget;
 pub mod game;
 pub mod overrides;
+pub mod replay;
 pub mod stats;
 pub mod study;
 pub mod timing;

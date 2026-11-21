@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use serde::Serialize;
 use sim_core::ai::Brain;
+use sim_core::clock::ClockEvents;
 use sim_core::economy::{AccountId, NetWorthInputs, PlayerId, net_worth};
 use sim_core::rng::{SimRng, seeded};
 use sim_core::world::PlayerStatus;
@@ -130,9 +131,36 @@ pub fn play(config: &Config, seed: u64, spec: &GameSpec) -> GameResult {
     play_from(World::new(config.clone(), seed, spec.players), spec)
 }
 
+/// Runs each tick of a harness game: plainly ([`Plain`]), or recording it
+/// (`replay::record`). A ticker only reads the world around `World::tick`, so it cannot change
+/// the game.
+pub trait Ticker {
+    /// Runs one tick. `external` commands were submitted for it (the last ones in the queue).
+    fn tick(&mut self, world: &mut World, external: usize) -> ClockEvents;
+}
+
+/// `World::tick`, nothing else.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Plain;
+
+impl Ticker for Plain {
+    fn tick(&mut self, world: &mut World, _external: usize) -> ClockEvents {
+        world.tick()
+    }
+}
+
 /// Plays an already-built world (e.g. one set up by a test or tool) to the final whistle
 /// (or `max_ticks`). `spec.players` is ignored: the world's seats are used.
-pub fn play_from(mut world: World, spec: &GameSpec) -> GameResult {
+pub fn play_from(world: World, spec: &GameSpec) -> GameResult {
+    play_with(world, spec, &mut Plain).0
+}
+
+/// [`play_from`] through a [`Ticker`]; also returns the finished world.
+pub fn play_with(
+    mut world: World,
+    spec: &GameSpec,
+    ticker: &mut impl Ticker,
+) -> (GameResult, World) {
     let watch = Stopwatch::start();
     let seed = world.seed();
     let ai_held: Vec<PlayerId> = world.ai_seats().iter().map(|s| s.player).collect();
@@ -160,10 +188,11 @@ pub fn play_from(mut world: World, spec: &GameSpec) -> GameResult {
                 );
             }
         }
+        let external = commands.len();
         for (player, command) in commands.drain(..) {
             world.submit(player, command);
         }
-        world.tick();
+        ticker.tick(&mut world, external);
         ticks += 1;
     }
     let players: Vec<PlayerResult> = world
@@ -174,7 +203,7 @@ pub fn play_from(mut world: World, spec: &GameSpec) -> GameResult {
             bankrupt: *status == PlayerStatus::Bankrupt,
         })
         .collect();
-    GameResult {
+    let result = GameResult {
         seed,
         winner: winner(&players),
         players,
@@ -182,7 +211,8 @@ pub fn play_from(mut world: World, spec: &GameSpec) -> GameResult {
         ticks,
         state_hash: world.state_hash(),
         wall: watch.elapsed(),
-    }
+    };
+    (result, world)
 }
 
 #[cfg(test)]

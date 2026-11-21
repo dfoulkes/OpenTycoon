@@ -233,12 +233,22 @@ pub fn load(
     preset: Option<&str>,
     overrides: &[Override],
 ) -> Result<Config, LoadError> {
+    Config::load(&resolve(sources, preset, overrides)?).map_err(LoadError::Invalid)
+}
+
+/// The effective config files [`load`] validates: `sources` with the preset and overrides
+/// applied. Replays snapshot exactly these (`replay::snapshot`).
+pub fn resolve(
+    sources: &ConfigSources,
+    preset: Option<&str>,
+    overrides: &[Override],
+) -> Result<ConfigSources, LoadError> {
     let mut edited = sources.clone();
     for ov in overrides {
         apply(&mut edited, ov)?;
     }
     let Some(name) = preset else {
-        return Config::load(&edited).map_err(LoadError::Invalid);
+        return Ok(edited);
     };
     // Read the preset table from the overridden config, so a sweep can move a preset too.
     let probe = Config::load(&edited).map_err(LoadError::Invalid)?;
@@ -267,7 +277,7 @@ pub fn load(
     for ov in overrides {
         apply(&mut with_preset, ov)?;
     }
-    Config::load(&with_preset).map_err(LoadError::Invalid)
+    Ok(with_preset)
 }
 
 #[cfg(test)]
