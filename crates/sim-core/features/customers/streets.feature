@@ -66,6 +66,7 @@ Feature: Shoppers follow the streets and never vanish
     And the city runs to "12:00:00"
     Then every shopper back out stepped out where they went away
     And no walker ever moved more than 3 cells in a tick
+    # The 30 visitors buy; the resident, with £10.80 left after rent, cannot run to a £12 coat.
     When the city runs to "17:00:00"
-    Then "Togs" sold 31 clothes
+    Then "Togs" sold 30 clothes
     And no walker ever moved more than 3 cells in a tick

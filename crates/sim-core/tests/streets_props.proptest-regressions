@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 4f8b050910f121424e10726d4d9a2a5e6a92205a316b5a09f1149a35960f83ab # shrinks to (map, g) = (Map { width: 2, height: 2, blocks: [], river: None }, Geometry { lot_w: 2, lot_d: 2 }), picks = [(Index(0), Index(0)), (Index(1), Index(1856829463705186165)), (Index(5294452566986530801), Index(7835062242157472861)), (Index(812439812537160328), Index(3534699374094875224)), (Index(4997912507768510912), Index(8911738313218322235)), (Index(13831076635209390551), Index(833245530981428951)), (Index(3068947701260710720), Index(16725967502497084953)), (Index(13895576208205842280), Index(2772100280628519778))], cells = 2

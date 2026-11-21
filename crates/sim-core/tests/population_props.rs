@@ -176,12 +176,13 @@ fn shoppers_never_drive_stock_negative_and_sales_match_the_shelf() {
         let mut customers = Customers::default();
         let mut clock = Clock::new(ClockRules::from_config(&config.game.clock));
         let mut rng = seeded(seed);
+        let streets = sim_core::customers::streets::Streets::for_config(&map, &config);
         let mut sold = 0i64;
         for _ in 0..(18 * 360) {
             clock.advance();
             let report = run_phase(
                 &mut customers,
-                PhaseInputs { config: &config, map: &map, clock: &clock, population: &pop, modifiers: &sim_core::events::Modifiers::default(), streets: &sim_core::customers::streets::Streets::for_config(&map, &config) },
+                PhaseInputs { config: &config, map: &map, clock: &clock, population: &pop, modifiers: &sim_core::events::Modifiers::default(), streets: &streets },
                 &mut businesses,
                 &mut rng,
             );

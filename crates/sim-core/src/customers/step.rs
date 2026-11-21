@@ -171,6 +171,16 @@ fn after_shopping(c: &Customer, beds_open: bool) -> Activity {
     }
 }
 
+/// Between windows (R70): off the map where they stand if that is their away spot (home, or
+/// the station they arrived at), else walking there first.
+fn away(c: &Customer, until: u32) -> Activity {
+    if c.at == c.exit {
+        Activity::Away { until }
+    } else {
+        Activity::GoingAway { until }
+    }
+}
+
 /// What a night shopper does when night trade closes: a tourist still out looks for a bed if
 /// the hotels are open (R38), or keeps walking to the one they chose; everyone else leaves.
 fn after_night_trade(c: &Customer, beds_open: bool) -> Activity {
@@ -228,9 +238,15 @@ impl Step<'_, '_> {
             let (next, missed) = plan(c, self.now, self.dark_until);
             self.report.missed += missed;
             c.activity = match next {
-                Plan::Wait { until, .. } => Activity::Away { until },
+                Plan::Wait { until, .. } => away(c, until),
                 Plan::Go | Plan::Done => Activity::Choosing,
             };
+        }
+        if let Activity::GoingAway { until } = c.activity
+            && self.now >= until
+        {
+            // The next window opened on the way: shop again from here.
+            c.activity = Activity::Choosing;
         }
         if let Activity::Away { until } | Activity::WaitingForPower { until } = c.activity {
             if self.now < until {
@@ -258,10 +274,11 @@ impl Step<'_, '_> {
                     self.rng,
                 );
                 self.report.missed += missed;
-                c.activity = next;
-                if c.activity == Activity::Leaving {
-                    c.activity = after_shopping(c, self.beds_open);
-                }
+                c.activity = match next {
+                    Activity::Leaving => after_shopping(c, self.beds_open),
+                    Activity::Away { until } => away(c, until),
+                    other => other,
+                };
                 match c.activity {
                     Activity::Wandering => {
                         // Off to wait for the hotels: out of the busy list, still on the map.
@@ -282,6 +299,16 @@ impl Step<'_, '_> {
                     self.at_the_door(c, shop, good);
                 }
                 true
+            }
+            Activity::GoingAway { until } => {
+                c.at = self.walk(c.at, c.exit);
+                if c.at != c.exit {
+                    return true;
+                }
+                // At home or back at the station: off the map until the window (R70).
+                c.activity = Activity::Away { until };
+                self.parked.push(c.clone());
+                false
             }
             Activity::Leaving => {
                 c.at = self.walk(c.at, c.exit);
