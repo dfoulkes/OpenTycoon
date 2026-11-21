@@ -104,9 +104,15 @@ impl Evaluation {
     /// low-win floor `f`; below it `ω = max_net_worth_weight × (f − win share) / f`, rising
     /// linearly to `max_net_worth_weight` at a win share of 0. Rounded toward −∞.
     pub fn net_worth_weight(&self, w: &FitnessWeights) -> i64 {
-        // Red: the blend is not implemented yet.
-        let _ = w;
-        0
+        let n = i128::from(self.games);
+        let floor = i128::from(w.low_win_floor);
+        // win share < f  ⇔  wins × 10⁶ < f_ppm × games
+        let gap = floor.saturating_mul(n) - i128::from(self.wins).saturating_mul(i128::from(PPM));
+        if n == 0 || floor <= 0 || gap <= 0 {
+            return 0;
+        }
+        let max = i128::from(w.max_net_worth_weight).saturating_mul(UNITS_PER_PPM);
+        narrow(max.saturating_mul(gap).div_euclid(floor.saturating_mul(n)))
     }
 
     /// The fixed-point fitness ([`FITNESS_ONE`] = 1), the ranking key. With `s` the win share,
@@ -188,10 +194,10 @@ pub fn evaluate(roster: &Roster, entry: usize, games: &[GameOutcome]) -> Evaluat
 /// fixed-point fitness ([`Evaluation::score`]); then (the tie-break) higher median net worth
 /// relative to idle (`None` last); then the lower candidate index. A total order on integers,
 /// so a ranking never depends on input order, thread count or platform.
-pub fn compare(a: (u32, &Evaluation), b: (u32, &Evaluation), w: &FitnessWeights) -> Ordering {
+pub fn compare(a: (u32, &Evaluation), b: (u32, &Evaluation), weights: &FitnessWeights) -> Ordering {
     (b.1.games > 0)
         .cmp(&(a.1.games > 0))
-        .then_with(|| b.1.score(w).cmp(&a.1.score(w)))
+        .then_with(|| b.1.score(weights).cmp(&a.1.score(weights)))
         .then_with(|| match (a.1.nw_vs_idle, b.1.nw_vs_idle) {
             (Some(x), Some(y)) => y.cmp(&x),
             (Some(_), None) => Ordering::Less,
@@ -203,9 +209,9 @@ pub fn compare(a: (u32, &Evaluation), b: (u32, &Evaluation), w: &FitnessWeights)
 
 /// Ranks candidates best first: `(index, evaluation)` for every valid one; invalid ones are
 /// left out by the caller. Returns the indices in rank order.
-pub fn rank(candidates: &[(u32, Evaluation)], w: &FitnessWeights) -> Vec<u32> {
+pub fn rank(candidates: &[(u32, Evaluation)], weights: &FitnessWeights) -> Vec<u32> {
     let mut order: Vec<&(u32, Evaluation)> = candidates.iter().collect();
-    order.sort_by(|a, b| compare((a.0, &a.1), (b.0, &b.1), w));
+    order.sort_by(|a, b| compare((a.0, &a.1), (b.0, &b.1), weights));
     order.into_iter().map(|(i, _)| *i).collect()
 }
 
