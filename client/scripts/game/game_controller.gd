@@ -57,7 +57,21 @@ func _ready() -> void:
 		wire(_make_link(), _optional(WORLD_SCENE), _optional(HUD_SCENE), _optional(LOT_CARD_SCENE), _optional(BID_FEED_SCENE))
 	_attach()
 	_connect_signals()
+	apply_camera_settings()
+	Settings.changed.connect(func(_key: String) -> void: apply_camera_settings())
 	link.start_single_player(_config_dir(), economy_path, game_seed)
+
+
+## Copies the camera settings onto the world's camera rig, if the world has one.
+func apply_camera_settings() -> void:
+	if world == null or not world.has_method("camera_rig"):
+		return
+	var rig: Node = world.camera_rig()
+	if rig == null:
+		return
+	rig.pan_speed = float(Settings.get_value("pan_speed"))
+	rig.edge_pan_enabled = bool(Settings.get_value("edge_pan"))
+	rig.invert_rotate = bool(Settings.get_value("invert_rotate"))
 
 
 ## "" when the Rust `SimLink` is registered, else the GDScript fake's path.
