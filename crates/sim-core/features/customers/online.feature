@@ -6,6 +6,7 @@ Feature: Online shopping from 1995
 
   Background:
     Given the shipped config
+    And shoppers shop at any hour of trade
     And the shipped config with "customers.yaml" key "/desires" set to "[{match: {window: day}, goods: {bread: 1.0}}]"
     And the shipped config with "customers.yaml" key "/online/share_by_year" set to "{1995: 0.05, 2020: 0.5}"
     And the shipped config with "customers.yaml" key "/online/good_multiplier" set to "{}"

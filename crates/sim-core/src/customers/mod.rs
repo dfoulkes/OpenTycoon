@@ -1,5 +1,6 @@
 //! Customers: walking agents, shopping lists, shop choice, movement, reputation, tourists'
-//! nights and online demand (§7.3, §7.5, §8.1–§8.4; R15, R25, R29, R38, R42, R55, R59).
+//! nights, online demand and shopping windows (§7.3, §7.5, §8.1–§8.4; R15, R25, R29, R38, R42,
+//! R55, R59, R69, R70).
 //!
 //! Owner boundary: individual shoppers on the map and the scoring that picks a shop. Counts,
 //! arrivals and homes come from [`crate::population`]; stock and prices from
@@ -10,11 +11,17 @@
 //!
 //! - **07:00** day trade opens: every adult rolls a day shopping list (R55). Residents leave
 //!   their flats; visitors (70% commuters, 30% tourists, R59) arrive at tube stations (R25).
-//!   They trickle in over `spawn_spread_minutes`.
-//! - Each shopper takes the first good on their list, scores every open shop with stock that
-//!   they can afford (§8.3), picks one by weighted random, walks there and buys. A shop that
-//!   has sold out by the time they arrive is a **lost sale**: its reputation drops and the
-//!   shopper re-scores.
+//!   Each good on the list has a **shopping window** for the shopper's segment (R70,
+//!   [`windows`]); the list is worked in window order ([`errands`]) and each shopper sets out
+//!   for their earliest window, trickling in over `spawn_spread_minutes`.
+//! - Inside a good's window, the shopper scores every open shop with stock that they can
+//!   afford (§8.3), picks one by weighted random, walks there and buys. A shop that has sold
+//!   out by the time they arrive is a **lost sale**: its reputation drops and the shopper
+//!   re-scores. A window that passes without a purchase (no shop can sell it, too late at the
+//!   door, or dark until it closes) drops the good for the day; that is not a lost sale.
+//!   Between windows shoppers are off the map ([`Activity::Away`]).
+//! - **Power cuts (R69):** shoppers wait on the street for the lights while their window is
+//!   still open when the lights return; otherwise they move on to their next item (R70).
 //! - **17:00** day trade closes: day shoppers still on the map despawn (§8.4).
 //! - **19:00** night trade: the same again for the night-out goods. While a Hotel stands in
 //!   the city every tourist comes out at night, list or no list: they need a bed.
@@ -27,17 +34,19 @@
 //!   despawn; tourists still shopping look for a bed instead.
 //! - **03:00** the hotels close: anyone still looking for a bed takes the train.
 //! - **Online (from the Internet's arrival, §7.5):** as each shopper sets out they roll once
-//!   per good on their list to buy it online instead ([`online`]); what they buy online is
-//!   off their list, so it never reaches the high street.
+//!   per good on their list to buy it online instead ([`online`]), whatever the windows; what
+//!   they buy online is off their list, so it never reaches the high street.
 //!
 //! Floats live only in [`scoring`], [`shopping`] and [`online`]; state is integers.
 
+pub mod errands;
 pub mod movement;
 pub mod online;
 pub mod scoring;
 pub mod shopping;
 pub mod shops;
 mod step;
+pub mod windows;
 
 pub use step::tick;
 
@@ -57,6 +66,10 @@ use crate::rng::{SimRng, below};
 
 use movement::{Cell, Geometry};
 use shops::{GoodId, GoodsIndex, ShopOffer};
+use windows::Span;
+
+pub use errands::errands;
+use errands::{Plan, next_errand, plan};
 
 /// A stable customer id.
 #[derive(
@@ -94,8 +107,15 @@ pub enum Activity {
     },
     /// Picking a shop for the first good on their list.
     Choosing,
+    /// Off the map between errands (at work, at home): their next item's window opens at
+    /// `until` (R70). Then they step back out where they left off and choose again.
+    Away {
+        /// Second of day they step back out.
+        until: u32,
+    },
     /// Out, but a power cut has every shop dark (R69): standing where they are until the
-    /// lights come back on, then choosing again.
+    /// lights come back on, then choosing again. Only while the window of the item they are
+    /// out for is still open when the lights return (R70).
     WaitingForPower {
         /// Second of day the lights come back on.
         until: u32,
@@ -142,10 +162,21 @@ pub struct Customer {
     pub exit: Cell,
     /// What they have left to spend in this window.
     pub budget: Money,
-    /// Goods still to buy, in order.
-    pub list: Vec<GoodId>,
+    /// Goods still to buy, each with its shopping window (R70), in window order.
+    pub list: Vec<Errand>,
     /// What they are doing.
     pub activity: Activity,
+}
+
+/// One item on a shopping list and when it is shopped for (R70).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Errand {
+    /// The good.
+    pub good: GoodId,
+    /// Second of day the window opens (inclusive).
+    pub from: u32,
+    /// Second of day the window closes (exclusive): no purchase from then on.
+    pub to: u32,
 }
 
 /// All customers on the map, and shop reputations (§8.3).
@@ -180,7 +211,7 @@ impl Customers {
     pub fn on_map(&self) -> impl Iterator<Item = &Customer> {
         self.agents
             .iter()
-            .filter(|c| !matches!(c.activity, Activity::Waiting { .. }))
+            .filter(|c| !matches!(c.activity, Activity::Waiting { .. } | Activity::Away { .. }))
             .chain(&self.wanderers)
     }
 }
@@ -237,6 +268,10 @@ pub struct PhaseReport {
     pub online_sales: Vec<Sale>,
     /// Hotel check-ins, in the order they happened (R29).
     pub check_ins: Vec<CheckIn>,
+    /// Items dropped from lists because their window passed without a purchase (R70): every
+    /// shop dark, sold out or shut, or the shopper got there too late. Not lost sales.
+    #[serde(default)]
+    pub missed: u64,
 }
 
 /// Read-only inputs for the customers phase.
@@ -306,7 +341,7 @@ pub fn run_phase(
 fn idle(state: &Customers, now: u32) -> bool {
     state.agents.iter().all(|c| match c.activity {
         Activity::Waiting { from } => now < from,
-        Activity::WaitingForPower { until } => now < until,
+        Activity::Away { until } | Activity::WaitingForPower { until } => now < until,
         _ => false,
     })
 }
@@ -395,31 +430,6 @@ fn adjust_offer(offers: &mut [ShopOffer], shop: BusinessId, good: GoodId, f: imp
     }
 }
 
-/// The shopper's next move: walk to a shop for the first good on their list that some shop can
-/// sell them, dropping goods nobody can; or leave once the list is empty.
-fn next_errand(
-    c: &mut Customer,
-    offers: &[ShopOffer],
-    reputation: &BTreeMap<BusinessId, Rate>,
-    rules: &CustomersConfig,
-    geometry: Geometry,
-    rng: &mut SimRng,
-) -> Activity {
-    while let Some(&good) = c.list.first() {
-        if let Some(i) = choose_shop(
-            c.cohort, c.at, c.budget, good, offers, reputation, rules, geometry, rng,
-        ) {
-            return Activity::Walking {
-                to: offers[i].door,
-                shop: offers[i].shop,
-                good,
-            };
-        }
-        c.list.remove(0);
-    }
-    Activity::Leaving
-}
-
 /// What a shopper brings to a window: the day share of their after-rent allowance by day,
 /// the rest at night (§8.2: rent comes out first).
 pub fn wave_budget(rules: &CustomersConfig, after_rent: Money, wave: Wave) -> Money {
@@ -451,9 +461,13 @@ pub fn spawn_wave(
     let rules = &inputs.config.customers;
     let year = inputs.clock.year();
     let clock_rules = inputs.clock.rules();
-    let (open, window) = match wave {
-        Wave::Day => (clock_rules.trading.day.0, Hours::Day),
-        Wave::Night => (clock_rules.trading.night.0, Hours::Night),
+    let ((open, close), window) = match wave {
+        Wave::Day => (clock_rules.trading.day, Hours::Day),
+        Wave::Night => (clock_rules.trading.night, Hours::Night),
+    };
+    let whole = Span {
+        from: open,
+        to: close.max(open),
     };
     let tick_secs = clock_rules.tick_game_seconds.max(1);
     let spread_ticks = u64::from(rules.movement.spawn_spread_minutes * 60 / tick_secs);
@@ -475,6 +489,8 @@ pub fn spawn_wave(
     state.agents.reserve(usize::try_from(most).unwrap_or(0));
     // Every member of a cohort rolls from the same candidates this wave; resolve them once.
     let mut candidates: BTreeMap<(Cohort, bool), shopping::Candidates> = BTreeMap::new();
+    // And shops for each good in the same window (R70).
+    let mut spans: BTreeMap<Cohort, Vec<Span>> = BTreeMap::new();
 
     let mut spawn = |state: &mut Customers,
                      cohort: Cohort,
@@ -494,11 +510,15 @@ pub fn spawn_wave(
             };
             base.scaled_by(inputs.modifiers, goods, cohort.class)
         });
-        let list = shopping::roll_from(cohort_goods, rng);
-        if list.is_empty() && !(tourist && beds) {
+        let goods_wanted = shopping::roll_from(cohort_goods, rng);
+        if goods_wanted.is_empty() && !(tourist && beds) {
             return;
         }
-        let delay = u32::try_from(below(rng, spread_ticks + 1)).unwrap_or(0) * tick_secs;
+        let table = spans
+            .entry(cohort)
+            .or_insert_with(|| windows::window_table(rules, goods, cohort, window, year, whole));
+        let list = errands(&goods_wanted, table, whole);
+        let from = errands::set_out(&list, whole, spread_ticks, tick_secs, rng);
         state.agents.push(Customer {
             id: CustomerId(state.next_id),
             cohort,
@@ -508,7 +528,7 @@ pub fn spawn_wave(
             exit: at,
             budget,
             list,
-            activity: Activity::Waiting { from: open + delay },
+            activity: Activity::Waiting { from },
         });
         state.next_id += 1;
         spawned += 1;

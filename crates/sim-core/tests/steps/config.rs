@@ -39,6 +39,20 @@ fn shipped_with(w: &mut SimWorld, file: String, pointer: String, value: String) 
     w.clock.reset();
 }
 
+/// R70 off for scenarios about something else: one window per trade, its whole opening hours,
+/// for everyone and every good. Shoppers then set out as trade opens, as before R70.
+#[given("shoppers shop at any hour of trade")]
+fn any_hour(w: &mut SimWorld) {
+    common::set_key(
+        w.config.sources_mut(),
+        "customers.yaml",
+        "/shopping_windows/rules",
+        "[{match: {trade: day}, windows: {'*': {from: '07:00', to: '17:00'}}}, \
+         {match: {trade: night}, windows: {'*': {from: '19:00', to: '23:50'}}}]",
+    );
+    w.clock.reset();
+}
+
 #[given(expr = "the shipped config without {string}")]
 fn shipped_without(w: &mut SimWorld, file: String) {
     let sources = common::without(w.config.sources_mut(), &file);

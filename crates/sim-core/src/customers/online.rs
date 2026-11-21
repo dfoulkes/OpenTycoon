@@ -212,7 +212,7 @@ pub fn shop_online(
     let mut sales = Vec::new();
     let mut i = 0;
     while i < c.list.len() {
-        let good = c.list[i];
+        let good = c.list[i].good;
         let name = goods.name(good);
         let share = if only_online.contains(&good) {
             1.0

@@ -57,7 +57,7 @@ Feature: Population and customer settings fail loudly
       | /shopping_windows/rules/0/match       | {trade: day, age: '12-17'}             | /shopping_windows/rules/0/match/age         | unknown age band            |
       | /shopping_windows/groups/food         | [bread, caviar]                        | /shopping_windows/groups/food/1             | unknown good                |
       | /shopping_windows/groups/bread        | [groceries]                            | /shopping_windows/groups/bread              | is a good                   |
-      | /shopping_windows/rules/0/windows/bread | {from: '25:00', to: '26:00'}         | /shopping_windows/rules/0/windows/bread     | HH:MM                       |
+      | /shopping_windows/rules/0/windows/bread | {from: '25:00', to: '26:00'}         | /shopping_windows/rules/0/windows/bread/from | does not match             |
 
   # Coverage: every good a segment can want, in every era it can want it, must have a window,
   # from a rule naming the good, its group or "*".

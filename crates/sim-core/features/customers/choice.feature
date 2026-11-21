@@ -92,6 +92,7 @@ Feature: Choosing a shop
   @R69
   Scenario: A shopper who reaches a shop in a power cut waits for the lights, then buys
     Given the shipped config with "customers.yaml" key "/desires/0/goods" set to "{bread: 1.0}"
+    And shoppers shop at any hour of trade
     And the shipped config with "customers.yaml" key "/movement/spawn_spread_minutes" set to "0"
     And an apartment block "Flats" on "soho" 3×3×12
     And a working woman aged "30-49" has lived in "Flats" since 1930

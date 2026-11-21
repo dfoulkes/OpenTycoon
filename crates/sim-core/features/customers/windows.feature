@@ -100,7 +100,8 @@ Feature: Shoppers buy each good in its own time window
     When the city runs to "17:00:00"
     Then "Bun" sold 1 bread
     And "Bun" lost 4 sales
-    And "Bun" has a reputation of 0.4612
+    # 0.5, up to 0.5025 for the sale, then down 2% for each of the four turned away.
+    And "Bun" has a reputation of 0.4634
 
   # Too late is missed, too: a shopper who reaches the door after their window has closed
   # doesn't buy, and nobody is turned away.
@@ -115,3 +116,20 @@ Feature: Shoppers buy each good in its own time window
     Then "Far" sold 0 bread
     And "Far" lost 0 sales
     And nobody is on the map
+
+  # The shipped windows under the shipped 1970 cuts (dark 07:00–10:00 and 13:00–15:30): a working
+  # man's morning paper (07:00–08:30) is wholly in the dark, so he goes without; his lunchtime
+  # bread (12:00–14:00) has an hour of light, so he buys it before 13:00.
+  @R70 @R69
+  Scenario: Under the 1970 cuts working men miss the morning paper and buy bread before 13:00
+    Given the shipped config with "customers.yaml" key "/desires" set to "[{match: {window: day}, goods: {bread: 1.0, newspapers: 1.0}}]"
+    And a city of 30 working men aged "30-49"
+    And a bakery "Bun" on "holborn" with 1000 bread
+    And a news_stand "Paper" on "holborn" with 1000 newspapers
+    And the lights are out today from "07:00" to "10:00"
+    And the lights are out today from "13:00" to "15:30"
+    When the city runs to "17:00:00"
+    Then "Paper" sold 0 newspapers
+    And "Paper" lost 0 sales
+    And "Bun" sold 30 bread
+    And "Bun" sold bread only between "12:00" and "13:00"

@@ -126,6 +126,7 @@ Feature: Tourists sleep in Hotels
   @R29
   Scenario: Tourists favour the Souvenir Shop
     Given the shipped config with "customers.yaml" key "/desires" set to "[{match: {window: day}, goods: {souvenirs: 0.1}}]"
+    And shoppers shop at any hour of trade
     And the shipped config with "customers.yaml" key "/tourists/desire_boost" set to "{souvenirs: 5.0}"
     And a souvenir shop "Gifts" on "holborn" with 5000 souvenirs
     And a city of 2000 working men aged "30-49"
