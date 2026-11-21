@@ -7,6 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::fitness::FitnessWeights;
 use crate::study::Parameter;
 use crate::study::def::check_parameters;
 
@@ -159,19 +160,77 @@ impl Default for Crossover {
     }
 }
 
-/// The fitness function's one weight (docs/evolve.md "Fitness").
+/// The fitness weights (docs/evolve.md "Fitness"). At or above `low_win_floor`, fitness =
+/// win share − `bankruptcy_penalty` × bankruptcy rate; below it, net worth gained relative to
+/// idle is blended in (R78). Shares and weights are converted to whole parts per million when
+/// the definition loads ([`FitnessDef::weights`]), so the ranking uses integers only.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct FitnessDef {
-    /// Fitness = win share − `bankruptcy_penalty` × bankruptcy rate (default 0.5).
+    /// Penalty per unit of bankruptcy rate (default 0.5; 0 to 1,000, at most six decimals).
     pub bankruptcy_penalty: f64,
+    /// The low-win floor, a win share (default 0.10; 0 to 1, at most six decimals; 0 turns the
+    /// blend off). Below it, the net-worth term is blended in.
+    pub low_win_floor: f64,
+    /// Pence of median margin over idle (`nw_vs_idle_median`) that make a full net-worth term:
+    /// the term is that margin over this scale, clamped to −1..1 (default 700,000: £7,000, the
+    /// starting cash, R62). Must be positive.
+    pub net_worth_scale: i64,
+    /// The net-worth weight at a win share of 0; it falls linearly to 0 at the floor (default
+    /// 0.8; 0 to 1, at most six decimals).
+    pub max_net_worth_weight: f64,
 }
 
 impl Default for FitnessDef {
     fn default() -> Self {
         FitnessDef {
             bankruptcy_penalty: 0.5,
+            low_win_floor: 0.10,
+            net_worth_scale: 700_000,
+            max_net_worth_weight: 0.8,
         }
+    }
+}
+
+/// `v` in whole parts per million, if it is finite, within `0..=max` and has at most six
+/// decimal places; otherwise a definition error naming `path`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "checked: finite, within 0..=max (at most 1,000), and whole after scaling"
+)]
+fn ppm(path: &str, v: f64, max: f64) -> Result<i64, EvolveError> {
+    if !v.is_finite() || !(0.0..=max).contains(&v) {
+        return Err(EvolveError::def(
+            path,
+            format!("must be between 0 and {max}"),
+        ));
+    }
+    let scaled = v * 1e6;
+    let whole = scaled.round();
+    if (scaled - whole).abs() > 1e-3 {
+        return Err(EvolveError::def(
+            path,
+            "must have at most six decimal places",
+        ));
+    }
+    Ok(whole as i64)
+}
+
+impl FitnessDef {
+    /// The weights in exact integer form, or a definition error naming the bad key.
+    pub fn weights(&self) -> Result<FitnessWeights, EvolveError> {
+        // Red: only the penalty is checked; the blend's keys are not validated yet.
+        let bankruptcy_penalty = ppm(
+            "fitness.bankruptcy_penalty",
+            self.bankruptcy_penalty,
+            1000.0,
+        )?;
+        Ok(FitnessWeights {
+            bankruptcy_penalty,
+            low_win_floor: 0,
+            net_worth_scale: self.net_worth_scale,
+            max_net_worth_weight: 0,
+        })
     }
 }
 
@@ -318,13 +377,7 @@ impl EvolveDef {
                 "must be above 0 and at most 1 (a share of the gene's range)",
             ));
         }
-        let p = self.fitness.bankruptcy_penalty;
-        if !p.is_finite() || p < 0.0 {
-            return Err(EvolveError::def(
-                "fitness.bankruptcy_penalty",
-                "must be 0 or more",
-            ));
-        }
+        self.fitness.weights()?;
         for (field, list) in [("evolve", &self.evolve), ("roster", &self.roster)] {
             if let Some(list) = list {
                 for (i, a) in list.iter().enumerate() {
@@ -399,6 +452,42 @@ mod tests {
         assert_eq!(d.selection.method, SelectionMethod::Tournament);
         assert_eq!(d.preset, "full");
         assert_eq!(d.children(), 14);
+        assert_eq!(
+            d.fitness.weights().unwrap(),
+            FitnessWeights {
+                bankruptcy_penalty: 500_000,
+                low_win_floor: 100_000,
+                net_worth_scale: 700_000,
+                max_net_worth_weight: 800_000,
+            }
+        );
+        assert_eq!(d.fitness.weights().unwrap(), FitnessWeights::default());
+    }
+
+    #[test]
+    fn fitness_weights_accept_their_bounds() {
+        let w = EvolveDef::from_yaml(&format!(
+            "fitness: {{ bankruptcy_penalty: 0, low_win_floor: 1, net_worth_scale: 1, \
+             max_net_worth_weight: 1 }}\n{GENE}"
+        ))
+        .unwrap()
+        .fitness
+        .weights()
+        .unwrap();
+        assert_eq!(
+            (
+                w.bankruptcy_penalty,
+                w.low_win_floor,
+                w.max_net_worth_weight
+            ),
+            (0, 1_000_000, 1_000_000)
+        );
+        let off =
+            EvolveDef::from_yaml(&format!("fitness: {{ low_win_floor: 0 }}\n{GENE}")).unwrap();
+        assert_eq!(off.fitness.weights().unwrap().low_win_floor, 0);
+        let fine = EvolveDef::from_yaml(&format!("fitness: {{ low_win_floor: 0.123456 }}\n{GENE}"))
+            .unwrap();
+        assert_eq!(fine.fitness.weights().unwrap().low_win_floor, 123_456);
     }
 
     #[test]
@@ -434,6 +523,46 @@ mod tests {
             (
                 "fitness: { bankruptcy_penalty: -1 }\n",
                 "fitness.bankruptcy_penalty",
+            ),
+            (
+                "fitness: { bankruptcy_penalty: 0.1234567 }\n",
+                "fitness.bankruptcy_penalty: must have at most six decimal places",
+            ),
+            (
+                "fitness: { low_win_floor: -0.01 }\n",
+                "fitness.low_win_floor: must be between 0 and 1",
+            ),
+            (
+                "fitness: { low_win_floor: 1.5 }\n",
+                "fitness.low_win_floor: must be between 0 and 1",
+            ),
+            (
+                "fitness: { low_win_floor: .nan }\n",
+                "fitness.low_win_floor",
+            ),
+            (
+                "fitness: { net_worth_scale: 0 }\n",
+                "fitness.net_worth_scale: must be a positive",
+            ),
+            (
+                "fitness: { net_worth_scale: -700000 }\n",
+                "fitness.net_worth_scale: must be a positive",
+            ),
+            (
+                "fitness: { net_worth_scale: 1.5 }\n",
+                "fitness.net_worth_scale",
+            ),
+            (
+                "fitness: { max_net_worth_weight: 1.01 }\n",
+                "fitness.max_net_worth_weight: must be between 0 and 1",
+            ),
+            (
+                "fitness: { max_net_worth_weight: -0.2 }\n",
+                "fitness.max_net_worth_weight: must be between 0 and 1",
+            ),
+            (
+                "fitness: { low_win_floor: 0.1, typo: 1 }\n",
+                "unknown field `typo`",
             ),
             ("evolve: []\n", "evolve"),
             ("evolve: [toff, toff]\n", "evolve[1]"),

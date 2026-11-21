@@ -25,7 +25,7 @@ pub mod output;
 pub mod run;
 
 pub use def::{EvolveDef, EvolveError, SelectionMethod};
-pub use fitness::{Evaluation, compare, evaluate, rank};
+pub use fitness::{Evaluation, FitnessWeights, compare, evaluate, rank};
 pub use genome::{Genome, Origin};
 pub use output::Candidate;
 pub use run::{

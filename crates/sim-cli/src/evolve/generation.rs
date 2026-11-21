@@ -207,7 +207,7 @@ impl Evolution<'_> {
                 .filter(|c| &c.personality == p)
                 .filter_map(|c| c.result.as_ref().ok().map(|e| (c.index, *e)))
                 .collect();
-            for (r, idx) in rank(&valid, self.penalty()).into_iter().enumerate() {
+            for (r, idx) in rank(&valid, self.weights()).into_iter().enumerate() {
                 let Some(c) = candidates
                     .iter_mut()
                     .find(|c| &c.personality == p && c.index == idx)
@@ -365,7 +365,7 @@ impl Evolution<'_> {
                     .find(|c| &c.personality == p && c.champion);
                 let fitness = row
                     .and_then(|c| c.result.as_ref().ok())
-                    .map(|e| e.fitness(self.penalty()));
+                    .map(|e| e.fitness(self.weights()));
                 (
                     p.clone(),
                     json!({
