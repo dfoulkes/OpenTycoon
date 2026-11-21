@@ -63,7 +63,8 @@ Two judgement calls:
 The move was a pure refactor: the shipped defaults moved verbatim, every multiplier is exactly
 neutral at 1.0 (`P × 1.0` and `rate × 1.0000` are bit-identical), and the full shipped game
 ends in the same state as before (`sim-cli run config --seed 42 --ticks 207360`: hash
-`fd5bd3a7bcc696e4`, pinned in `crates/sim-cli/features/determinism.feature`). Scenarios:
+`fd5bd3a7bcc696e4`, pinned in `crates/sim-cli/features/determinism.feature`; street routing has
+since moved it on purpose, see "Streets and shop distance"). Scenarios:
 `crates/sim-core/features/config/economy.feature`.
 
 ## Business stats
@@ -296,8 +297,9 @@ they name):
 **A shopper's day.** The rolled list is sorted by window (earliest opening, then earliest
 closing). The shopper sets out at their earliest window's opening, trickling in over
 `movement.spawn_spread_minutes` but never after half that window has gone. They try for a good
-only inside its window. Between windows they are off the map (at work, at home) and step back
-out where they left off when the next window opens. A window that passes without a purchase
+only inside its window. Between windows they walk home (residents) or back to their arrival
+station (visitors), wait off the map there, and step back out from that spot when the next
+window opens ("Streets and shop distance" below). A window that passes without a purchase
 drops the good:
 
 - **No shop can sell it now** (every candidate is dark, sold out, shut or too dear): dropped at
@@ -365,6 +367,47 @@ housewife's morning shop lifts the 1950s and 1960s.
 
 Balance is essentially unchanged: R70 moves retail by a point here and there, and retail was
 not what decided these games (R65 is still unmet on the shipped config).
+
+## Streets and shop distance (§4.1, R22, R25, R70)
+
+Shoppers walk the streets: the one-cell road ring around every lot. They never cut through a
+lot or a building, and they cross the Thames only on a bridge (`map.yaml` `boards.full.river`:
+south of row 5, bridges at columns 1, 3, 4, 5 and 7; the bridge for column `c` carries the road
+on that column's west side). A building's door is its frontage on the street, and a station's
+entrance is the frontage of its block. How the routes are computed is in
+[`architecture.md`](architecture.md) "Streets and walking".
+
+**Distance for shop choice is the street route.** `distance_decay` (§8.3) reads the route's
+length in blocks (cells over the block pitch), for shops and Hotels alike, instead of the
+Manhattan distance. A shop across the river from a bridge is further away than it looks, and
+so is one on the far side of a block.
+
+**Between windows (R70)** a resident walks home and a visitor walks back to the station they
+arrived at, and only then leaves the map; when their next window opens they step back out from
+that spot. Visitors use their arrival station rather than a café: it is always there, it needs
+no reading of the high street, and a commuter "at work" between errands is off the map by the
+tube. A shopper's position never changes by more than `cells_per_tick` cells from one tick to
+the next while they are on the map, so the walk mode never shows anyone appear or vanish
+mid-street. The 17:00 close still clears day shoppers wherever they stand (§8.4).
+
+The full shipped game moves on purpose: `sim-cli run config --seed 42 --ticks 207360` goes
+from `fd5bd3a7bcc696e4` to `c2b3aca13bc5ee35` (pinned in
+`crates/sim-cli/features/determinism.feature`).
+
+`sim-cli study config --models 1 --games 600` (the shipped model, seats rotated), before → after:
+
+| Seat | Win share | Median net worth | Bankrupt |
+|---|---|---|---|
+| The Grocer | 0% → 0% | £8,271 → £8,318 | 0% → 0% |
+| The Landlord | 49.0% → 49.0% | £58,333 → £58,244 | 0% → 0% |
+| The Toff | 0% → 0% | £7,753 → £7,758 | 0% → 0% |
+| The Speculator | 0% → 0% | £11,898 → £11,767 | 1.7% → 2.0% |
+| Sir Penny Sugar | 51.0% → 51.0% | £59,186 → £59,037 | 0% → 0% |
+| Idle | 0% → 0% | £7,000 → £7,000 | 0% → 0% |
+
+Balance is essentially unchanged: every median moves by under 1.2%, and the win shares not at
+all. Longer walks shift which shop a shopper picks, not how much they spend, and the property
+seats that decide these games barely feel it.
 
 ## Retail through the eras (R68)
 
