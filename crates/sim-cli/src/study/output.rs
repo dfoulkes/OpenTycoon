@@ -11,6 +11,7 @@ use sim_core::ConfigSources;
 use sim_core::config::ConfigFile;
 
 use super::def::{StudyDef, StudyError};
+use super::fun::{FunDef, FunMetrics, Playstyle, fmt_ppm, fun_score_ppm, parse_ppm};
 use super::metrics::{GameOutcome, ModelMetrics};
 use super::models::{ModelSpec, model_sources};
 use super::seats::Roster;
@@ -87,6 +88,41 @@ pub const ENTRY_METRICS: [&str; 8] = [
     "nw_p90",
 ];
 
+/// The fun columns (R79) at the end of `models.csv`: the raw metrics, written when the model
+/// finishes, then each metric's band score, the fun score and the evenness-only rank, filled
+/// when the file is finalised from the raw metrics and the definition's `fun:` bands (so
+/// retuned bands re-rank without a game).
+pub const FUN_COLUMNS: [&str; 18] = [
+    "fun_strongest",
+    "fun_upset_rate",
+    "fun_lead_changes_mean",
+    "fun_decided",
+    "fun_comeback_rate",
+    "fun_margin_median",
+    "fun_distinctness",
+    "fun_distinctness_checkpoint",
+    "fun_streak_z",
+    "fun_streak_longest",
+    "fun_upset_score",
+    "fun_lead_changes_score",
+    "fun_comeback_score",
+    "fun_margin_score",
+    "fun_distinctness_score",
+    "fun_streak_score",
+    "fun_score",
+    "evenness_rank",
+];
+
+/// The raw fun metric columns, in [`FunDef::bands`] order, and their score columns.
+const FUN_SCORED: [(&str, &str); 6] = [
+    ("fun_upset_rate", "fun_upset_score"),
+    ("fun_lead_changes_mean", "fun_lead_changes_score"),
+    ("fun_comeback_rate", "fun_comeback_score"),
+    ("fun_margin_median", "fun_margin_score"),
+    ("fun_distinctness", "fun_distinctness_score"),
+    ("fun_streak_z", "fun_streak_score"),
+];
+
 /// The header of `models.csv`. `games_per_sec` is left out without wall time, so two runs
 /// diff byte for byte.
 pub fn models_header(def: &StudyDef, roster: &Roster, wall: bool) -> Vec<String> {
@@ -104,14 +140,69 @@ pub fn models_header(def: &StudyDef, roster: &Roster, wall: bool) -> Vec<String>
     for name in roster.names() {
         h.extend(ENTRY_METRICS.iter().map(|m| format!("{name}_{m}")));
     }
+    h.extend(FUN_COLUMNS.iter().map(|s| (*s).to_owned()));
     h
+}
+
+/// The raw fun columns of a model (the score columns and `evenness_rank` empty).
+pub fn fun_fields(roster: &Roster, f: &FunMetrics) -> Vec<String> {
+    let opt = |v: Option<i64>| v.map(fmt_ppm).unwrap_or_default();
+    let mut row = vec![
+        f.strongest
+            .and_then(|i| roster.entries().get(i))
+            .map(|e| e.name().to_owned())
+            .unwrap_or_default(),
+        fmt_ppm(f.upset_ppm),
+        fmt_ppm(f.lead_changes_ppm),
+        f.decided.to_string(),
+        opt(f.comeback_ppm),
+        opt(f.margin_median_ppm),
+        opt(f.distinctness_ppm),
+        opt(f.distinctness_checkpoint_ppm),
+        opt(f.streak_z_ppm),
+        f.streak_longest.to_string(),
+    ];
+    row.extend(std::iter::repeat_n(
+        String::new(),
+        FUN_COLUMNS.len() - row.len(),
+    ));
+    row
+}
+
+/// Fills every ok row's band scores and fun score from its raw fun metrics and `fun` (R79).
+/// Distinctness is read from `fun_distinctness` or `fun_distinctness_checkpoint`, as
+/// `fun.playstyle` says. A row with no raw metrics (written before the fun columns existed)
+/// keeps them empty.
+pub fn apply_fun_scores(cols: &Columns, rows: &mut [Row], fun: &FunDef) {
+    let Some(score_col) = cols.index("fun_score") else {
+        return;
+    };
+    for r in rows.iter_mut() {
+        if !cols.is_ok(r) || cols.get(r, "fun_upset_rate").is_empty() {
+            continue;
+        }
+        let mut scores = Vec::new();
+        for ((name, band), (raw, out)) in fun.bands().iter().zip(FUN_SCORED) {
+            let raw = if *name == "distinctness" && fun.playstyle == Playstyle::Checkpoint {
+                "fun_distinctness_checkpoint"
+            } else {
+                raw
+            };
+            let s = band.score_ppm(parse_ppm(cols.get(r, raw)));
+            if let Some(i) = cols.index(out) {
+                r.fields[i] = fmt_ppm(s);
+            }
+            scores.push((s, band.weight));
+        }
+        r.fields[score_col] = fmt_ppm(fun_score_ppm(&scores));
+    }
 }
 
 /// A finished model's row: what it is and, if it ran, its metrics.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Outcome {
-    /// Ran: its metrics and its games per second (wall time).
-    Ok(ModelMetrics, f64),
+    /// Ran: its metrics, its fun metrics (R79) and its games per second (wall time).
+    Ok(ModelMetrics, Box<FunMetrics>, f64),
     /// Its config failed validation; the error names the key.
     Invalid(String),
 }
@@ -141,9 +232,12 @@ pub fn model_row(
     let entry_cols = ENTRY_METRICS.len() * roster.len();
     match outcome {
         Outcome::Invalid(_) => {
-            row.extend(std::iter::repeat_n(String::new(), metric_cols + entry_cols));
+            row.extend(std::iter::repeat_n(
+                String::new(),
+                metric_cols + entry_cols + FUN_COLUMNS.len(),
+            ));
         }
-        Outcome::Ok(m, gps) => {
+        Outcome::Ok(m, fun, gps) => {
             row.extend([
                 m.games.to_string(),
                 m.no_winner.to_string(),
@@ -181,6 +275,7 @@ pub fn model_row(
                     nw(|d| d.p90),
                 ]);
             }
+            row.extend(fun_fields(roster, fun));
         }
     }
     row
@@ -211,8 +306,33 @@ pub fn games_header(seats: usize, wall: bool) -> Vec<String> {
     if wall {
         h.push("wall_ms".to_owned());
     }
+    h.extend(
+        [
+            "lead_changes",
+            "halfway_day",
+            "halfway_leader",
+            "comeback",
+            "margin",
+        ]
+        .iter()
+        .map(|s| (*s).to_owned()),
+    );
+    for s in 0..seats {
+        h.extend(GAME_HOLDINGS.iter().map(|m| format!("seat{s}_{m}")));
+    }
     h
 }
+
+/// Per seat holdings columns of `games.csv` (R79), after the per-game fun columns.
+pub const GAME_HOLDINGS: [&str; 7] = [
+    "flats",
+    "shops",
+    "land",
+    "hotels",
+    "other",
+    "leases",
+    "businesses",
+];
 
 /// One `games.csv` row.
 pub fn game_row(model: u32, roster: &Roster, g: &GameOutcome, wall_ms: Option<f64>) -> Vec<String> {
@@ -241,6 +361,42 @@ pub fn game_row(model: u32, roster: &Roster, g: &GameOutcome, wall_ms: Option<f6
     }
     if let Some(ms) = wall_ms {
         row.push(format!("{ms:.3}"));
+    }
+    let f = &g.fun;
+    let leaders: Vec<String> = f
+        .halfway_leaders
+        .iter()
+        .filter_map(|s| g.seating.get(usize::from(*s)).map(|e| names[*e].clone()))
+        .collect();
+    row.extend([
+        f.lead_changes.to_string(),
+        f.halfway_day.to_string(),
+        leaders.join("+"),
+        f.comeback.map(|c| c.to_string()).unwrap_or_default(),
+        f.margin_ppm.map(fmt_ppm).unwrap_or_default(),
+    ]);
+    for seat in 0..g.seating.len() {
+        match f.holdings.get(seat) {
+            Some(h) => {
+                let full = |v: u32| {
+                    if f.full_holdings {
+                        v.to_string()
+                    } else {
+                        String::new()
+                    }
+                };
+                row.extend([
+                    full(h.flats),
+                    full(h.shops),
+                    full(h.land),
+                    full(h.hotels),
+                    full(h.other),
+                    h.leases.to_string(),
+                    h.businesses.to_string(),
+                ]);
+            }
+            None => row.extend(std::iter::repeat_n(String::new(), GAME_HOLDINGS.len())),
+        }
     }
     row
 }
@@ -346,37 +502,74 @@ pub fn read_models(text: &str, expected: &[String]) -> Result<Vec<Row>, Vec<Stri
     Ok(rows)
 }
 
-/// Sorts rows into the ranking: balanced first, then higher score, lower max win share, lower
-/// AI bankruptcy rate, lower id. Invalid models come last, by id. Returns the ids in rank order
-/// (ok models only) and fills each ok row's `rank`.
+/// Sorts rows into the ranking (R65, R79): models that pass R65 (`balanced`) first, then the
+/// higher fun score (an exact fixed-point comparison; a row without one counts as 0), then the
+/// evenness tie-breaks: higher score, lower max win share, lower AI bankruptcy rate, lower id.
+/// Invalid models are not ranked. Returns the ids in rank order (ok models only), fills each ok
+/// row's `rank`, and fills `evenness_rank` with the ranking R65 alone gives (no fun score).
 pub fn rank(cols: &Columns, rows: &mut [Row]) -> Vec<u32> {
-    let key = |r: &Row| {
-        (
-            !cols.is_balanced(r),
-            -cols.num(r, "score"),
-            cols.num(r, "max_win_share"),
-            cols.num(r, "ai_bankruptcy_rate"),
-            r.id,
-        )
+    let evenness = |a: &Row, b: &Row| {
+        (-cols.num(a, "score"))
+            .total_cmp(&-cols.num(b, "score"))
+            .then(
+                cols.num(a, "max_win_share")
+                    .total_cmp(&cols.num(b, "max_win_share")),
+            )
+            .then(
+                cols.num(a, "ai_bankruptcy_rate")
+                    .total_cmp(&cols.num(b, "ai_bankruptcy_rate")),
+            )
+            .then(a.id.cmp(&b.id))
     };
-    let mut ok: Vec<&Row> = rows.iter().filter(|r| cols.is_ok(r)).collect();
-    ok.sort_by(|a, b| {
-        let (ka, kb) = (key(a), key(b));
-        ka.0.cmp(&kb.0)
-            .then(ka.1.total_cmp(&kb.1))
-            .then(ka.2.total_cmp(&kb.2))
-            .then(ka.3.total_cmp(&kb.3))
-            .then(ka.4.cmp(&kb.4))
+    let ok: Vec<&Row> = rows.iter().filter(|r| cols.is_ok(r)).collect();
+    let mut by_fun = ok.clone();
+    by_fun.sort_by(|a, b| {
+        (!cols.is_balanced(a))
+            .cmp(&!cols.is_balanced(b))
+            .then(evenness(a, b)) // red: not yet implemented: the fun score does not rank yet
     });
-    let order: Vec<u32> = ok.iter().map(|r| r.id).collect();
-    if let Some(ri) = cols.index("rank") {
-        for r in rows.iter_mut() {
-            if let Some(pos) = order.iter().position(|id| *id == r.id) {
-                r.fields[ri] = (pos + 1).to_string();
+    let mut by_evenness = ok;
+    by_evenness.sort_by(|a, b| {
+        (!cols.is_balanced(a))
+            .cmp(&!cols.is_balanced(b))
+            .then(evenness(a, b))
+    });
+    let order: Vec<u32> = by_fun.iter().map(|r| r.id).collect();
+    let even: Vec<u32> = by_evenness.iter().map(|r| r.id).collect();
+    for (col, ids) in [("rank", &order), ("evenness_rank", &even)] {
+        if let Some(ci) = cols.index(col) {
+            for r in rows.iter_mut() {
+                if let Some(pos) = ids.iter().position(|id| *id == r.id) {
+                    r.fields[ci] = (pos + 1).to_string();
+                }
             }
         }
     }
     order
+}
+
+/// `summary.json`'s `ranking`: every ok model in rank order.
+pub fn ranking_json(cols: &Columns, rows: &[Row], order: &[u32]) -> Vec<Json> {
+    order
+        .iter()
+        .enumerate()
+        .filter_map(|(i, id)| {
+            let r = rows.iter().find(|r| r.id == *id)?;
+            let num = |c: &str| cols.json(r)[c].clone();
+            Some(json!({
+                "rank": i + 1,
+                "model_id": id,
+                "balanced": cols.is_balanced(r),
+                "score": num("score"),
+                "max_win_share": num("max_win_share"),
+                "ai_bankruptcy_rate": num("ai_bankruptcy_rate"),
+                "idle_last_rate": num("idle_last_rate"),
+                "idle_below_solvent_rate": num("idle_below_solvent_rate"),
+                "fun_score": num("fun_score"),
+                "evenness_rank": num("evenness_rank"),
+            }))
+        })
+        .collect()
 }
 
 /// A CSV file's text.

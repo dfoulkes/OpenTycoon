@@ -462,6 +462,7 @@ fn synthetic(
                 days: 4,
                 ticks: 0,
                 state_hash: 0,
+                fun: sim_cli::study::fun::FunGame::default(),
             }
         })
         .collect()

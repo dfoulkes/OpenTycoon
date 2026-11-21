@@ -20,18 +20,19 @@ use sim_core::hash::stable_hash;
 use sim_core::{Config, ConfigSources, World};
 
 use super::def::{StudyDef, StudyError};
+use super::fun::{Board, FunGame, FunTicker, Holdings, fun_game, fun_metrics, holdings_of};
 use super::metrics::{GameOutcome, Tally, metrics};
 use super::models::{ModelSpec, baseline_labels, generate, model_files, node_at};
 use super::output::{
-    Columns, Outcome, Row, csv_text, game_row, games_header, model_row, models_header, rank,
-    read_models, split_csv_line, write_overlays,
+    Columns, FUN_COLUMNS, Outcome, Row, apply_fun_scores, csv_text, game_row, games_header,
+    model_row, models_header, rank, ranking_json, read_models, split_csv_line, write_overlays,
 };
 use super::seats::{GamePlan, Roster, effective_games, plan, resolve_roster};
 use crate::brains::BrainKind;
-use crate::game::{GameResult, GameSpec, Winner, play_from};
+use crate::game::{GameResult, GameSpec, Plain, Winner, play_with};
 use crate::overrides::{self, LoadError};
 use crate::replay::format::Replay;
-use crate::replay::record::{RecordContext, play_recorded, seats_of};
+use crate::replay::record::{RecordContext, play_recorded_world, seats_of};
 use crate::replay::snapshot::snapshot;
 use crate::replay::writer::RunWriter;
 use crate::timing::Stopwatch;
@@ -58,6 +59,11 @@ pub struct RunOptions {
     pub stop_after: Option<u32>,
     /// Print progress (models done, ETA) to stderr.
     pub progress: bool,
+    /// Run only these model ids (`study confirm`); `None` runs every model.
+    pub only: Option<Vec<u32>>,
+    /// Seed the games from this instead of the definition's `seed` (`study confirm`). The
+    /// models are still generated from the definition's seed, so they are the same models.
+    pub game_seed: Option<u64>,
 }
 
 /// What a run did.
@@ -81,6 +87,8 @@ pub struct StudyReport {
     pub games_per_model: u32,
     /// Wall time of this call.
     pub wall: Duration,
+    /// The recording's run id, when the study is recorded.
+    pub run_id: Option<String>,
 }
 
 /// The preset to run: `wanted` if `game.yaml` has it, else the longest (latest end on a tie,
@@ -113,33 +121,69 @@ pub fn fingerprint(
         .iter()
         .map(|f| (f.file_name(), base.get(f.file_name()).unwrap_or("")))
         .collect();
-    let def_json = serde_json::to_string(def).unwrap_or_default();
-    format!(
-        "{:016x}",
-        stable_hash(&(
-            def_json,
-            files,
-            preset,
-            roster.names(),
-            opts.games_csv,
-            opts.wall_time
-        ))
-    )
+    // The fun bands only score games, so they are left out: retuning them resumes the study.
+    let def_json = serde_json::to_string(&def.games_identity()).unwrap_or_default();
+    let base = (
+        def_json,
+        files,
+        preset,
+        roster.names(),
+        opts.games_csv,
+        opts.wall_time,
+    );
+    if opts.only.is_none() && opts.game_seed.is_none() {
+        format!("{:016x}", stable_hash(&base))
+    } else {
+        format!(
+            "{:016x}",
+            stable_hash(&(base, opts.only.clone(), opts.game_seed))
+        )
+    }
 }
 
-/// Plays one game of a model.
-pub(crate) fn play_one(config: &Config, roster: &Roster, g: &GamePlan) -> (GameOutcome, Duration) {
+/// Plays one game of a model, measuring its fun (R79) from the midnight boards and the final
+/// holdings. The measurement only reads the world: the game is unchanged.
+pub fn play_one(config: &Config, roster: &Roster, g: &GamePlan) -> (GameOutcome, Duration) {
     let seats = u8::try_from(roster.len()).unwrap_or(u8::MAX);
     let world = World::seated(config.clone(), g.seed, seats, &roster.ai_seats(&g.seating));
-    let result = play_from(
+    let mut ticker = FunTicker::new(Plain);
+    let (result, world) = play_with(
         world,
         &GameSpec {
             players: seats,
             brain: BrainKind::Idle,
             ..GameSpec::default()
         },
+        &mut ticker,
     );
-    outcome_of(g, &result)
+    let (boards, _) = ticker.into_parts();
+    let (mut outcome, wall) = outcome_of(g, &result);
+    outcome.fun = fun_game(&boards, winner_seat(&result), final_holdings(&world), true);
+    (outcome, wall)
+}
+
+fn winner_seat(result: &GameResult) -> Option<u8> {
+    match result.winner {
+        Winner::Player(p) => Some(p),
+        Winner::Tie | Winner::Nobody => None,
+    }
+}
+
+fn final_holdings(world: &World) -> Vec<Holdings> {
+    world
+        .players()
+        .iter()
+        .map(|(p, _)| holdings_of(world, *p))
+        .collect()
+}
+
+/// A recorded game's midnight boards: its checkpoints' net worths and bankruptcies.
+pub(crate) fn boards_of(replay: &Replay) -> Vec<Board> {
+    replay
+        .checkpoints
+        .iter()
+        .map(|c| c.seats.iter().map(|s| (s.net_worth, s.bankrupt)).collect())
+        .collect()
 }
 
 /// A game's study outcome from its harness result.
@@ -161,6 +205,7 @@ pub(crate) fn outcome_of(g: &GamePlan, result: &GameResult) -> (GameOutcome, Dur
         days: result.days_played,
         ticks: result.ticks,
         state_hash: result.state_hash,
+        fun: FunGame::default(),
     };
     (outcome, result.wall)
 }
@@ -181,8 +226,14 @@ pub(crate) fn play_one_recorded(
         brain: BrainKind::Idle,
         ..GameSpec::default()
     };
-    let (result, replay) = play_recorded(world, &spec, ctx, game_id, seat_info);
-    let (outcome, wall) = outcome_of(g, &result);
+    let (result, replay, world) = play_recorded_world(world, &spec, ctx, game_id, seat_info);
+    let (mut outcome, wall) = outcome_of(g, &result);
+    outcome.fun = fun_game(
+        &boards_of(&replay),
+        winner_seat(&result),
+        final_holdings(&world),
+        true,
+    );
     (outcome, wall, replay)
 }
 
@@ -331,10 +382,27 @@ impl<'a> Study<'a> {
         let roster = resolve_roster(def, &base_config)?;
         check_keys(def, base)?;
         check_expectations(def, base)?;
+        let mut models = generate(def)?;
+        if let Some(only) = &opts.only {
+            if let Some(bad) = only.iter().find(|id| **id >= def.models) {
+                return Err(StudyError::def(
+                    "models",
+                    format!(
+                        "model {bad} is not in this study (models 0 to {})",
+                        def.models - 1
+                    ),
+                ));
+            }
+            models.retain(|m| only.contains(&m.id));
+        }
         Ok(Study {
-            models: generate(def)?,
+            models,
             baseline: baseline_labels(def, base),
-            plans: plan(def.games_per_model, roster.len(), def.seed),
+            plans: plan(
+                def.games_per_model,
+                roster.len(),
+                opts.game_seed.unwrap_or(def.seed),
+            ),
             header: models_header(def, &roster, opts.wall_time),
             games_header: games_header(roster.len(), opts.wall_time),
             def,
@@ -399,10 +467,10 @@ impl<'a> Study<'a> {
             &(serde_json::to_string_pretty(&state).unwrap_or_default() + "\n"),
         )?;
         let mut rows: Vec<Row> = match read_opt(&models_path)? {
-            Some(text) => read_models(&text, &self.header).map_err(|h| mismatch(h.join(",")))?,
+            Some(text) => self.read_rows(&text).map_err(|h| mismatch(h.join(",")))?,
             None => Vec::new(),
         };
-        rows.retain(|r| r.id < self.def.models);
+        rows.retain(|r| self.models.iter().any(|m| m.id == r.id));
         write(
             &models_path,
             &csv_text(&self.header, rows.iter().map(|r| r.fields.clone())),
@@ -428,6 +496,36 @@ impl<'a> Study<'a> {
             write(&games_path, &text)?;
         }
         Ok(rows)
+    }
+
+    /// Reads `models.csv` rows. A file written before the fun columns existed (the same
+    /// header without them) is read too, its rows padded with empty fun columns: the study
+    /// resumes, and `study rescore` fills them from the recordings.
+    fn read_rows(&self, text: &str) -> Result<Vec<Row>, Vec<String>> {
+        match read_models(text, &self.header) {
+            Ok(rows) => Ok(rows),
+            Err(found) => {
+                let legacy: Vec<String> = self
+                    .header
+                    .iter()
+                    .filter(|h| !FUN_COLUMNS.contains(&h.as_str()))
+                    .cloned()
+                    .collect();
+                if found != legacy {
+                    return Err(found);
+                }
+                eprintln!(
+                    "study: models.csv predates the fun columns (R79); its finished models keep \
+                     empty fun columns: run `sim-cli study rescore` on the recordings to fill them"
+                );
+                let mut rows = read_models(text, &legacy)?;
+                for r in &mut rows {
+                    r.fields
+                        .extend(std::iter::repeat_n(String::new(), FUN_COLUMNS.len()));
+                }
+                Ok(rows)
+            }
+        }
     }
 
     /// Plays one model's games (unless its config is invalid) and appends them to
@@ -504,7 +602,9 @@ impl<'a> Study<'a> {
             0.0
         };
         let m = metrics(&self.roster, &tally, &self.def.criteria);
-        Ok((Outcome::Ok(m, gps), games.len() as u64))
+        let played: Vec<GameOutcome> = games.into_iter().map(|(g, _)| g).collect();
+        let fun = fun_metrics(&self.roster, &played);
+        Ok((Outcome::Ok(m, Box::new(fun), gps), played.len() as u64))
     }
 
     /// One progress line on stderr: this model, how far the run is, and the ETA.
@@ -519,7 +619,7 @@ impl<'a> Study<'a> {
         let done = report.ran;
         let left = u32::try_from(todo).unwrap_or(u32::MAX).saturating_sub(done);
         let status = match outcome {
-            Outcome::Ok(m, gps) => format!(
+            Outcome::Ok(m, _, gps) => format!(
                 "ok, {}balanced, max win share {:.1}%, {gps:.0} games/s",
                 if m.balanced { "" } else { "not " },
                 m.max_win_share * 100.0
@@ -539,6 +639,7 @@ impl<'a> Study<'a> {
     fn finish(&self, mut rows: Vec<Row>, report: &mut StudyReport) -> Result<(), StudyError> {
         rows.sort_by_key(|r| r.id);
         let cols = Columns::new(self.header.clone());
+        apply_fun_scores(&cols, &mut rows, &self.def.fun);
         let order = rank(&cols, &mut rows);
         write(
             &self.path("models.csv"),
@@ -605,6 +706,7 @@ pub fn run_study_recorded(
 ) -> Result<StudyReport, StudyError> {
     let watch = Stopwatch::start();
     let study = Study::prepare(def, base, opts)?;
+    let run_id = rec.as_ref().map(|r| r.ctx.run_id.clone());
     let mut rows = study.open()?;
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(opts.threads.unwrap_or(0))
@@ -618,6 +720,7 @@ pub fn run_study_recorded(
         skipped: u32::try_from(rows.len()).unwrap_or(u32::MAX),
         preset: study.preset.clone(),
         games_per_model: effective_games(def.games_per_model, study.roster.len()),
+        run_id,
         ..StudyReport::default()
     };
     let run_watch = Stopwatch::start();
@@ -661,24 +764,15 @@ fn summary(
 ) -> serde_json::Value {
     let (def, roster, opts, games_header) =
         (study.def, &study.roster, study.opts, &study.games_header);
-    let ranking: Vec<serde_json::Value> = order
-        .iter()
-        .enumerate()
-        .filter_map(|(i, id)| {
-            let r = rows.iter().find(|r| r.id == *id)?;
-            let num = |c: &str| cols.json(r)[c].clone();
-            Some(json!({
-                "rank": i + 1,
-                "model_id": id,
-                "balanced": cols.is_balanced(r),
-                "score": num("score"),
-                "max_win_share": num("max_win_share"),
-                "ai_bankruptcy_rate": num("ai_bankruptcy_rate"),
-                "idle_last_rate": num("idle_last_rate"),
-                "idle_below_solvent_rate": num("idle_below_solvent_rate"),
-            }))
-        })
-        .collect();
+    let ranking = ranking_json(cols, rows, order);
+    let first = opts.game_seed.unwrap_or(def.seed);
+    let seeds = format!(
+        "{}..{}",
+        first,
+        first.saturating_add(u64::from(
+            report.games_per_model / u32::try_from(roster.len().max(1)).unwrap_or(1)
+        ))
+    );
     let invalid: Vec<serde_json::Value> = rows
         .iter()
         .filter(|r| !cols.is_ok(r))
@@ -691,7 +785,7 @@ fn summary(
             "roster": roster.names(),
             "seats": roster.len(),
             "games_per_model": report.games_per_model,
-            "seeds": format!("{}..{}", def.seed, def.seed.saturating_add(u64::from(report.games_per_model / u32::try_from(roster.len().max(1)).unwrap_or(1)))),
+            "seeds": seeds,
         },
         "models": {
             "total": def.models,
@@ -709,7 +803,14 @@ fn summary(
             "models.csv": cols.header(),
             "games.csv": if opts.games_csv { json!(games_header) } else { json!(null) },
         },
+        "fun": { "definition": def.fun, "playstyle_used": def.fun.playstyle },
     });
+    if let Some(run_id) = &report.run_id {
+        s["recording"] = json!({ "run_id": run_id });
+    }
+    if let Some(only) = &opts.only {
+        s["study"]["only"] = json!(only);
+    }
     if opts.wall_time {
         let secs = report.wall.as_secs_f64();
         #[allow(clippy::cast_precision_loss, reason = "game counts are small")]

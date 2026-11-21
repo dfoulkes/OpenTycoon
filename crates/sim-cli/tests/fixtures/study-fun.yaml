@@ -1,0 +1,23 @@
+# A tiny study for the fun-score scenarios (R79): two AIs and the idle seat, criteria loosened
+# so models are balanced and ranked by fun, playstyle measured on what checkpoints hold so a
+# rescore from the recordings reproduces every column. Not a balance study.
+models: 3
+games_per_model: 6
+preset: v1
+seed: 0
+roster: [grocer, landlord, idle]
+top_n: 2
+criteria:
+  min_win_share: 0.0
+  max_win_share: 1.0
+  max_bankruptcy_rate: 1.0
+  min_idle_below_solvent_rate: 0.0
+parameters:
+  - name: overdraft
+    key: economy.money.overdraft.start_limit
+    min: 5000
+    max: 20000
+    distribution: uniform
+    kind: integer
+fun:
+  playstyle: checkpoint

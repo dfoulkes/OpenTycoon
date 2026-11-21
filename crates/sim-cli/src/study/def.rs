@@ -6,6 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 
+pub use super::fun::FunDef;
+
 /// Why a study could not be defined or run. Models whose config is invalid are *not* errors:
 /// they are reported in `models.csv` (`status = invalid`).
 #[derive(Debug, thiserror::Error)]
@@ -316,6 +318,11 @@ pub struct StudyDef {
     pub criteria: Criteria,
     /// The varied parameters.
     pub parameters: Vec<Parameter>,
+    /// The fun score's bands, falloffs and weights (R79). They only score games, never decide
+    /// them: the resume fingerprint and the recording's run id leave them out, so retuning
+    /// them and rerunning (or `study rescore`) re-ranks without playing a game.
+    #[serde(skip_serializing_if = "FunDef::is_default")]
+    pub fun: FunDef,
 }
 
 impl Default for StudyDef {
@@ -329,6 +336,7 @@ impl Default for StudyDef {
             top_n: 10,
             criteria: Criteria::default(),
             parameters: Vec::new(),
+            fun: FunDef::default(),
         }
     }
 }
@@ -393,7 +401,19 @@ impl StudyDef {
                 "must not exceed max_win_share",
             ));
         }
-        check_parameters(&self.parameters, "parameters")
+        check_parameters(&self.parameters, "parameters")?;
+        self.fun.validate()
+    }
+
+    /// The definition as far as it decides the games: everything but `fun`. Its JSON is what
+    /// the resume fingerprint and the recording's run id hash, so a definition without `fun:`
+    /// hashes exactly as it did before the fun score existed.
+    #[must_use]
+    pub fn games_identity(&self) -> StudyDef {
+        StudyDef {
+            fun: FunDef::default(),
+            ..self.clone()
+        }
     }
 }
 
@@ -536,6 +556,46 @@ mod tests {
         assert_eq!(d.preset, "full");
         assert_eq!(d.criteria, Criteria::default());
         assert!((d.criteria.max_bankruptcy_rate - 0.15).abs() < 1e-12);
+    }
+
+    /// The fun bands only score games: a definition's identity (what the resume fingerprint
+    /// and the recording's run id hash) is the same with or without a `fun:` block, and the
+    /// same as before the block existed, so a running study resumes and keeps its run id.
+    #[test]
+    fn the_fun_block_does_not_change_the_identity() {
+        let plain = StudyDef::from_yaml("models: 3\nseed: 4\n").unwrap();
+        let tuned = StudyDef::from_yaml(
+            "models: 3\nseed: 4\nfun:\n  playstyle: checkpoint\n  margin: { max: 0.3, falloff: 0.1, weight: 2 }\n",
+        )
+        .unwrap();
+        assert_ne!(plain, tuned);
+        let id = |d: &StudyDef| serde_json::to_string(&d.games_identity()).unwrap();
+        assert_eq!(id(&plain), id(&tuned));
+        assert_eq!(serde_json::to_string(&plain).unwrap(), id(&plain));
+        assert!(!id(&plain).contains("fun"));
+        let shipped = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../study/study.yaml"
+        ))
+        .unwrap();
+        let shipped = StudyDef::from_yaml(&shipped).unwrap();
+        assert!(
+            shipped.fun.is_default(),
+            "the shipped bands are the defaults"
+        );
+        assert!(!serde_json::to_string(&shipped).unwrap().contains("\"fun\""));
+    }
+
+    #[test]
+    fn a_bad_fun_band_names_its_key() {
+        let e = StudyDef::from_yaml("fun:\n  upset: { min: 0.8, max: 0.5, falloff: 0.1 }\n")
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("fun.upset.min"), "{e}");
+        let e = StudyDef::from_yaml("fun:\n  upset: { min: 0.5, falloff: 0.1, wieght: 1 }\n")
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("fun.upset"), "{e}");
     }
 
     #[test]

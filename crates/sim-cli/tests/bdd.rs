@@ -1,5 +1,5 @@
 //! BDD harness for sim-cli: runs every `.feature` under `crates/sim-cli/features/` (batch,
-//! bench, overrides, determinism, perf budget, study, replay, evolve). Scenarios drive the library directly, or the
+//! bench, overrides, determinism, perf budget, study, fun, replay, evolve). Scenarios drive the library directly, or the
 //! built `sim-cli` binary when the behaviour is the command line itself (exit codes, files).
 //! Undefined or skipped steps fail the run.
 #![allow(
@@ -30,6 +30,8 @@ pub struct HarnessWorld {
     pub replay: steps::replay::ReplayState,
     /// Evolutions (`steps::evolve`).
     pub evolve: steps::evolve::EvolveState,
+    /// The fun score (`steps::fun`).
+    pub fun: steps::fun::FunState,
 }
 
 fn main() {

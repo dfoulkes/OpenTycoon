@@ -511,6 +511,7 @@ fn a_finished_game(
         days: 0,
         ticks: 0,
         state_hash: 0,
+        fun: sim_cli::study::fun::FunGame::default(),
     });
 }
 

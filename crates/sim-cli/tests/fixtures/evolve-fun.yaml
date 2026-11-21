@@ -1,0 +1,11 @@
+# A tiny evolution for the lineup_fun.json scenario (R79). Not an evolution worth running.
+population: 3
+generations: 2
+games_per_eval: 3
+elitism: 1
+preset: v1
+seed: 5
+roster: [grocer, toff, idle]
+genes:
+  - { name: grocer_bid, key: ai.grocer.max_bid_share, min: 0.1, max: 0.6 }
+  - { name: toff_aggression, key: ai.toff.aggression, min: 0.3, max: 1.0 }
