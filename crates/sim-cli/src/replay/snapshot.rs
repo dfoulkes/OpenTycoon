@@ -111,13 +111,11 @@ mod tests {
     fn equal_configs_share_a_hash_and_any_edit_changes_it() {
         let files = sources();
         assert_eq!(snapshot(&files), snapshot(&files.clone()));
-        let mut edited = files.clone();
-        let game = edited
-            .get("game.yaml")
-            .unwrap()
-            .replace("start_limit: 10000", "start_limit: 10001");
-        edited.insert("game.yaml", game);
-        assert_ne!(config_hash(&edited), config_hash(&files));
+        for name in files.file_names() {
+            let mut edited = files.clone();
+            edited.insert(name, format!("{}\n# edited\n", files.get(name).unwrap()));
+            assert_ne!(config_hash(&edited), config_hash(&files), "{name}");
+        }
     }
 
     #[test]
@@ -129,6 +127,19 @@ mod tests {
             parse("- a list", &snap.hash).unwrap_err(),
             SnapshotError::Yaml(_)
         ));
+    }
+
+    #[test]
+    fn a_snapshot_holds_every_config_file() {
+        let snap = snapshot(&sources());
+        let files: BTreeMap<String, String> = serde_yaml_ng::from_str(&snap.yaml).unwrap();
+        let names: Vec<&str> = files.keys().map(String::as_str).collect();
+        let mut all: Vec<&str> = sim_core::config::ConfigFile::ALL
+            .iter()
+            .map(|f| f.file_name())
+            .collect();
+        all.sort_unstable();
+        assert_eq!(names, all);
     }
 
     #[test]

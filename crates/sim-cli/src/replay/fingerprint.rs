@@ -32,6 +32,7 @@ pub fn shipped_sources() -> ConfigSources {
         ConfigFile::Customers => include_str!("../../../../config/customers.yaml"),
         ConfigFile::Events => include_str!("../../../../config/events.yaml"),
         ConfigFile::Ai => include_str!("../../../../config/ai.yaml"),
+        ConfigFile::Economy => include_str!("../../../../config/economy.yaml"),
     };
     let mut sources = ConfigSources::new();
     for f in ConfigFile::ALL {
