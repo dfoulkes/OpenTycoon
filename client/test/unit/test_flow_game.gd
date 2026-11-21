@@ -28,6 +28,7 @@ func before_each() -> void:
 	game.exit_handler = func(to_menu: bool) -> void: exits.append(to_menu)
 	game.game_seed = 77
 	game.economy_path = "/tmp/econ.yaml"
+	game.link_mode = "real"
 	game.wire(link, world, hud, card, feed)
 	add_child_autofree(game)
 

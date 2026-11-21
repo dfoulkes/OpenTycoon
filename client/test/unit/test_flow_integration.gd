@@ -26,6 +26,7 @@ func before_each() -> void:
 	card = LotCard.instantiate()
 	feed = BidFeed.instantiate()
 	game.exit_handler = func(_to_menu: bool) -> void: pass
+	game.link_mode = "real"
 	game.wire(link, world, hud, card, feed)
 	add_child_autofree(game)
 	link.snapshot_received.emit(JSON.parse_string(FileAccess.get_file_as_string(FIXTURE)))

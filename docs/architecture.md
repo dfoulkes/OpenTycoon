@@ -183,3 +183,9 @@ to basis points; times are `"HH:MM"`. A value that would lose precision fails th
 (`crates/client-ext`, registered by `client/opentycoon.gdextension`) will own the network client
 and walker interpolation. GUT is vendored under `client/addons/gut`; tests live in
 `client/test/`.
+
+The game scene talks to the real server through `SimLink`. It never falls back to sample data on
+its own: with no `SimLink` built it says so and starts nothing. The fake link, a made-up 3×3
+board from `client/test/fixtures/snapshot_small.json`, runs only when asked for
+(`godot --path client -- --sample-data`, or `OPENTYCOON_SAMPLE_DATA=1`), and a SAMPLE DATA banner
+shows while it does.

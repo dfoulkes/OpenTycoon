@@ -17,6 +17,7 @@ func before_each() -> void:
 	game = GameScene.instantiate()
 	world = World.instantiate()
 	game.exit_handler = func(_to_menu: bool) -> void: pass
+	game.link_mode = "real"
 	game.wire(SpyLink.new(), world, null, null, null)
 	add_child_autofree(game)
 

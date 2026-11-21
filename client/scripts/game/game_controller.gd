@@ -13,6 +13,7 @@ const FAKE_LINK := "res://scripts/net/fake_sim_link.gd"
 ## "real" (the Rust SimLink), "fake" (sample data, asked for) or "missing" (no server built).
 ## Empty until _ready picks it; tests set it before adding the scene.
 var link_mode := ""
+var _banner: Label
 const THEME_PATH := "res://theme/inspector_theme.tres"
 
 var economy_path := ""
@@ -57,12 +58,20 @@ func wire(p_link: Node, p_world: Node, p_hud: Node, p_card: Node, p_feed: Node) 
 func _ready() -> void:
 	if ResourceLoader.exists(THEME_PATH):
 		(%UiRoot as Control).theme = load(THEME_PATH)
+	if link_mode == "":
+		link_mode = choose_link_mode(ClassDB.class_exists("SimLink"), samples_requested())
 	if not _wired:
 		wire(_make_link(), _optional(WORLD_SCENE), _optional(HUD_SCENE), _optional(LOT_CARD_SCENE), _optional(BID_FEED_SCENE))
 	_attach()
 	_connect_signals()
 	apply_camera_settings()
 	Settings.changed.connect(func(_key: String) -> void: apply_camera_settings())
+	if link_mode == "fake":
+		_show_sample_banner()
+	if link_mode == "missing":
+		_status.text = ("The game server isn't built, so there is nothing real to show.\n"
+			+ "Build it with: cargo build -p client-ext  (or run with -- --sample-data for a demo)")
+		return
 	link.start_single_player(_config_dir(), economy_path, game_seed)
 
 
@@ -78,19 +87,42 @@ func apply_camera_settings() -> void:
 	rig.invert_rotate = bool(Settings.get_value("invert_rotate"))
 
 
-## Which link to use. Stub.
-static func choose_link_mode(_has_simlink: bool, _want_samples: bool) -> String:
-	return "fake"
+## Which link to use: sample data only when asked for, else the real server, else "missing".
+## There is no silent fallback to the fake (it would pass made-up numbers off as the game).
+static func choose_link_mode(has_simlink: bool, want_samples: bool) -> String:
+	if want_samples:
+		return "fake"
+	return "real" if has_simlink else "missing"
 
 
-## True when the SAMPLE DATA banner is showing. Stub.
+## True when sample data was asked for: `--sample-data` after `--`, or OPENTYCOON_SAMPLE_DATA=1.
+static func samples_requested() -> bool:
+	return OS.get_cmdline_user_args().has("--sample-data") \
+		or OS.get_environment("OPENTYCOON_SAMPLE_DATA") == "1"
+
+
+## True when the SAMPLE DATA banner is showing.
 func sample_banner_visible() -> bool:
-	return false
+	return _banner != null and _banner.visible
+
+
+func _show_sample_banner() -> void:
+	_banner = Label.new()
+	_banner.name = "SampleBanner"
+	_banner.text = "SAMPLE DATA: a made-up 3×3 board, not the real game"
+	_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_banner.add_theme_color_override("font_color", Color(1, 0.85, 0.2))
+	_banner.add_theme_color_override("font_outline_color", Color.BLACK)
+	_banner.add_theme_constant_override("outline_size", 6)
+	_banner.add_theme_font_size_override("font_size", 22)
+	_banner.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_banner.offset_top = 48
+	(%UiRoot as Control).add_child(_banner)
 
 
 ## "" when the Rust `SimLink` is registered, else the GDScript fake's path.
 func link_script_path() -> String:
-	return "" if ClassDB.class_exists("SimLink") else FAKE_LINK
+	return "" if link_mode == "real" else FAKE_LINK
 
 
 func on_snapshot(data: Dictionary) -> void:
