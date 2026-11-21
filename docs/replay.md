@@ -115,15 +115,16 @@ game is a segment of one.
 
 ### Size
 
-Measured on the shipped config, scripted brain in the free seat:
+Measured on the shipped config, scripted brain in the free seat, mean of 20 games:
 
-| Game | Commands | Midnights | Bytes |
+| Game | Commands per game | Midnights | Bytes per game |
 |---|---|---|---|
-| `v1` preset (1930-1950), 2 seats (AI only) | 152 | 4 | 618 |
-| `v1`, 6 seats (5 AI + scripted) | 556 | 4 | 1,171 |
-| `full` preset (1930-2050), 2 seats | 720 | 24 | 2,440 |
-| `full`, 6 seats | 3,192 | 24 | 5,499 |
+| `v1` preset (1930-1950), 2 seats (AI only) | 151 | 4 | 682 |
+| `v1`, 6 seats (5 AI + scripted) | 535 | 4 | 1,199 |
+| `full` preset (1930-2050), 2 seats | 719 | 24 | 2,537 |
+| `full`, 6 seats | 3,471 | 24 | 5,547 |
 
+A config snapshot is about 100 KB, stored once per distinct config (once per study model).
 zstd shrinks postcard's output 3-6x. That puts a 600,000-game study at a few GB.
 
 ## Storage layout
