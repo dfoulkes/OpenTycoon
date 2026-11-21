@@ -18,8 +18,8 @@ use sim_core::businesses::{BuildRequest, Business, BusinessId, Businesses, FitOu
 use sim_core::clock::{Clock, ClockRules};
 use sim_core::config::ConfigFile;
 use sim_core::config::businesses::Channel;
-use sim_core::customers::movement::Geometry;
 use sim_core::customers::shops::{GoodsIndex, shop_offers};
+use sim_core::customers::streets::Streets;
 use sim_core::customers::{Customers, PhaseInputs, choose_shop, run_phase};
 use sim_core::economy::AccountId;
 use sim_core::land::{BlockId, Footprint, Map};
@@ -104,15 +104,14 @@ fn population(adults: u64) -> Population {
 fn bench_choice(c: &mut Criterion) {
     let config = shipped_config();
     let map = Map::from_config(&config.map);
-    let [lot_w, lot_d] = config.game.world.lot_size;
-    let geometry = Geometry { lot_w, lot_d };
+    let streets = Streets::for_config(&map, &config);
     let goods = GoodsIndex::new(&config.businesses.goods);
     let bread = goods.id("bread").unwrap();
     let mut clock = Clock::new(ClockRules::from_config(&config.game.clock));
     while clock.second_of_day() != 12 * 3600 {
         clock.advance();
     }
-    let at = geometry.centre(&map.blocks[4]);
+    let at = streets.entrance(&map.blocks[4]);
     let who = Cohort {
         band: AgeBand(1),
         sex: Sex::Female,
@@ -121,7 +120,7 @@ fn bench_choice(c: &mut Criterion) {
     let mut group = c.benchmark_group("shop_choice");
     for per_block in [1u32, 4] {
         let businesses = high_street(&config, per_block, 1_000);
-        let offers = shop_offers(&businesses, &map, &config, &clock, &goods, geometry);
+        let offers = shop_offers(&businesses, &map, &config, &clock, &goods, &streets);
         let bakeries = offers.iter().filter(|o| o.good == bread).count();
         let reputation = BTreeMap::new();
         group.bench_function(
@@ -138,7 +137,7 @@ fn bench_choice(c: &mut Criterion) {
                             &offers,
                             &reputation,
                             &config,
-                            geometry,
+                            &streets,
                             &mut rng,
                         ));
                     }
@@ -152,6 +151,7 @@ fn bench_choice(c: &mut Criterion) {
 fn bench_day(c: &mut Criterion) {
     let config = shipped_config();
     let map = Map::from_config(&config.map);
+    let streets = Streets::for_config(&map, &config);
     let mut group = c.benchmark_group("customers_day");
     group.sample_size(10);
     for adults in [1_000u64, 10_000] {
@@ -173,6 +173,7 @@ fn bench_day(c: &mut Criterion) {
                             clock: &clock,
                             population: &pop,
                             modifiers: &sim_core::events::Modifiers::default(),
+                            streets: &streets,
                         },
                         &mut businesses,
                         &mut rng,
@@ -188,6 +189,7 @@ fn bench_day(c: &mut Criterion) {
 
 /// One day of the customers phase over `businesses`, returning sales + check-ins.
 fn one_day(config: &Config, map: &Map, pop: &Population, mut businesses: Businesses) -> usize {
+    let streets = Streets::for_config(map, config);
     let mut customers = Customers::default();
     let mut clock = Clock::new(ClockRules::from_config(&config.game.clock));
     let mut rng = seeded(42);
@@ -202,6 +204,7 @@ fn one_day(config: &Config, map: &Map, pop: &Population, mut businesses: Busines
                 clock: &clock,
                 population: pop,
                 modifiers: &sim_core::events::Modifiers::default(),
+                streets: &streets,
             },
             &mut businesses,
             &mut rng,

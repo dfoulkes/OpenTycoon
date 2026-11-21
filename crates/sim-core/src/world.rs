@@ -35,6 +35,7 @@ use crate::businesses::{BuildRequest, Business, BusinessId, Businesses, FitOutLe
 use crate::clock::{Clock, ClockEvents, ClockRules};
 use crate::config::Config;
 use crate::config::economy::LandValueMethod;
+use crate::customers::streets::Streets;
 use crate::customers::{Customers, PhaseInputs};
 use crate::economy::{
     self, AccountId, Ledger, NetWorthBoard, PlayerId, Solvency, SolvencyTracker,
@@ -247,6 +248,9 @@ pub struct World {
     solvency: SolvencyTracker,
     players: Vec<(PlayerId, PlayerStatus)>,
     map: Map,
+    /// The board's streets and routes, derived from the map and the lot size once (§4.1).
+    #[serde(skip)]
+    streets: Streets,
     auctions: AuctionHouse,
     businesses: Businesses,
     utilities: Utilities,
@@ -286,6 +290,7 @@ impl World {
         let auctions =
             AuctionHouse::new(AuctionRules::from_config(&config.auctions, clock.rules()));
         let businesses = city_apartments(&map, &config);
+        let streets = Streets::for_config(&map, &config);
         let mut ledger = Ledger::new();
         ledger.open(AccountId::City, Money::ZERO);
         let seats: Vec<(PlayerId, PlayerStatus)> = (0..players)
@@ -309,6 +314,7 @@ impl World {
             solvency: SolvencyTracker::default(),
             players: seats,
             map,
+            streets,
             auctions,
             businesses,
             utilities: Utilities::default(),
@@ -853,6 +859,7 @@ impl World {
                 clock: &self.clock,
                 population: &self.population,
                 modifiers: &self.events.modifiers,
+                streets: &self.streets,
             },
             &mut self.businesses,
             &mut self.rng,

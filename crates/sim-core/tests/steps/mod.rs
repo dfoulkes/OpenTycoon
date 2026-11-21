@@ -15,6 +15,7 @@ pub mod online;
 pub mod board;
 pub mod population;
 pub mod retail;
+pub mod streets;
 // events and utilities
 pub mod events;
 pub mod roster;

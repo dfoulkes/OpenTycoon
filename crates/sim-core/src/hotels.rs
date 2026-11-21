@@ -22,8 +22,9 @@ use crate::businesses::trading::unit_price;
 use crate::businesses::{Business, BusinessId, Businesses, LeverError};
 use crate::clock::Clock;
 use crate::config::Config;
-use crate::customers::movement::{Cell, Geometry};
+use crate::customers::movement::Cell;
 use crate::customers::scoring;
+use crate::customers::streets::Streets;
 use crate::economy::AccountId;
 use crate::land::{BlockId, Map};
 use crate::money::{Money, Rate};
@@ -188,7 +189,7 @@ pub fn hotel_offers(
     map: &Map,
     config: &Config,
     clock: &Clock,
-    geometry: Geometry,
+    streets: &Streets,
     guests: &BTreeMap<BusinessId, u32>,
 ) -> Vec<HotelOffer> {
     let mut out = Vec::new();
@@ -206,7 +207,7 @@ pub fn hotel_offers(
         let appeal = fit_out_appeal(config, b.fit_out);
         out.push(HotelOffer {
             hotel: *id,
-            door: geometry.door(block, b.footprint),
+            door: streets.frontage(block, b.footprint),
             price,
             ref_price,
             affinity: Class::ALL
@@ -263,7 +264,7 @@ pub fn choose_hotel(
     offers: &[HotelOffer],
     reputation: &BTreeMap<BusinessId, Rate>,
     config: &Config,
-    geometry: Geometry,
+    streets: &Streets,
     rng: &mut SimRng,
 ) -> Option<usize> {
     let rules = &config.customers;
@@ -281,7 +282,7 @@ pub fn choose_hotel(
             o.price,
             o.ref_price,
             false,
-            geometry.blocks_between(at, o.door),
+            streets.blocks_between(at, o.door),
             reputation
                 .get(&o.hotel)
                 .copied()

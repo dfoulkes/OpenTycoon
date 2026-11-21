@@ -5,8 +5,8 @@
 
 use std::collections::BTreeMap;
 
-use super::movement::Geometry;
 use super::shops::{GoodId, ShopOffer};
+use super::streets::Streets;
 use super::windows::Span;
 use super::{Activity, Customer, Errand, choose_shop};
 use crate::businesses::BusinessId;
@@ -110,7 +110,7 @@ pub(crate) fn next_errand(
     offers: &[ShopOffer],
     reputation: &BTreeMap<BusinessId, Rate>,
     config: &Config,
-    geometry: Geometry,
+    streets: &Streets,
     rng: &mut SimRng,
 ) -> (Activity, u64) {
     let mut missed = 0;
@@ -126,7 +126,7 @@ pub(crate) fn next_errand(
             Plan::Go => c.list[0].good,
         };
         if let Some(i) = choose_shop(
-            c.cohort, c.at, c.budget, good, offers, reputation, config, geometry, rng,
+            c.cohort, c.at, c.budget, good, offers, reputation, config, streets, rng,
         ) {
             let to = offers[i].door;
             return (

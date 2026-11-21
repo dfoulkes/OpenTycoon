@@ -27,7 +27,7 @@ impl Cell {
 }
 
 /// The walking grid's shape.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub struct Geometry {
     /// Lot width in cells.
     pub lot_w: u32,

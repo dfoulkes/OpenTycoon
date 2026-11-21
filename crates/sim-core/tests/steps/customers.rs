@@ -9,8 +9,8 @@ use std::collections::BTreeSet;
 use cucumber::{given, then, when};
 use sim_core::businesses::{Hours, formula};
 use sim_core::config::businesses::Channel;
-use sim_core::customers::movement::Geometry;
 use sim_core::customers::shops::{GoodsIndex, shop_offers};
+use sim_core::customers::streets::Streets;
 use sim_core::customers::{
     Activity, Origin, PhaseInputs, Wave, choose_shop, front_doors, run_phase, scoring, shopping,
     station_cells,
@@ -23,16 +23,17 @@ use sim_core::population::{AgeBand, Class, Cohort, Sex, allowance};
 use super::population::{CityState, class, cohort, pounds};
 use crate::SimWorld;
 
-fn geometry(w: &mut SimWorld) -> Geometry {
+fn streets(w: &mut SimWorld) -> Streets {
     let config = CityState::config(w);
-    let [lot_w, lot_d] = config.game.world.lot_size;
-    Geometry { lot_w, lot_d }
+    let map = CityState::map(w);
+    Streets::for_config(&map, &config)
 }
 
 /// Runs the customers phase for one tick.
 fn tick(w: &mut SimWorld) {
     let config = CityState::config(w);
     let map = CityState::map(w);
+    let streets = streets(w);
     CityState::clock(w).advance();
     let clock = w.city.clock.clone().unwrap();
     let mut rng = w.city.rng().clone();
@@ -45,6 +46,7 @@ fn tick(w: &mut SimWorld) {
             clock: &clock,
             population: &city.population,
             modifiers: &city.modifiers,
+            streets: &streets,
         },
         &mut city.businesses,
         &mut rng,
@@ -61,6 +63,7 @@ fn tick(w: &mut SimWorld) {
     }
     city.reports.push(report);
     city.report_times.push(now);
+    super::streets::observe(w);
 }
 
 fn parse_hms(text: &str) -> u32 {
@@ -408,10 +411,10 @@ fn commuters_tourists(w: &mut SimWorld, commuters: usize, tourists: usize) {
 fn check_exits(w: &mut SimWorld, which: &[sim_core::customers::Customer]) {
     let config = CityState::config(w);
     let map = CityState::map(w);
-    let g = geometry(w);
+    let g = streets(w);
     let year = CityState::clock(w).year();
-    let stations: BTreeSet<_> = station_cells(&config, &map, year, g).into_iter().collect();
-    let doors = front_doors(&w.city.businesses, &map, g);
+    let stations: BTreeSet<_> = station_cells(&config, &map, year, &g).into_iter().collect();
+    let doors = front_doors(&w.city.businesses, &map, &g);
     assert!(!which.is_empty(), "no shoppers to check");
     for c in which {
         match c.origin {
@@ -490,7 +493,7 @@ fn price_factor(w: &mut SimWorld, c: String, pct: f64, expected: f64) {
 fn choose(w: &mut SimWorld, n: u32, c: String, block: String, good: String) {
     let config = CityState::config(w);
     let map = CityState::map(w);
-    let g = geometry(w);
+    let g = streets(w);
     let goods = GoodsIndex::new(&config.businesses.goods);
     let good = goods.id(&good).unwrap();
     // Choose at midday so day shops are open.
@@ -498,9 +501,9 @@ fn choose(w: &mut SimWorld, n: u32, c: String, block: String, good: String) {
     while clock.second_of_day() != 12 * 3600 {
         clock.advance();
     }
-    let offers = shop_offers(&w.city.businesses, &map, &config, &clock, &goods, g);
+    let offers = shop_offers(&w.city.businesses, &map, &config, &clock, &goods, &g);
     let at_block = CityState::block(w, &block);
-    let at = g.centre(map.block(at_block).unwrap());
+    let at = g.entrance(map.block(at_block).unwrap());
     let who = cohort(w, &c, "men", "30-49");
     w.city.picks.clear();
     w.city.pick_total = n;
@@ -514,7 +517,7 @@ fn choose(w: &mut SimWorld, n: u32, c: String, block: String, good: String) {
             &offers,
             &w.city.customers.reputation,
             &config,
-            g,
+            &g,
             &mut rng,
         ) {
             *w.city.picks.entry(offers[i].shop).or_insert(0) += 1;
