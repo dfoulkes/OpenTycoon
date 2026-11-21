@@ -131,7 +131,9 @@ proptest! {
             prop_assert!(*n <= rooms[hotel]);
         }
         prop_assert!(
-            customers.agents.is_empty() && customers.wanderers.is_empty(),
+            customers.agents.is_empty()
+                && customers.wanderers.is_empty()
+                && customers.parked.is_empty(),
             "everyone is in bed or gone by 04:00"
         );
     }

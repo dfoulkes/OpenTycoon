@@ -193,6 +193,12 @@ pub struct Customers {
     /// in `agents`, which keeps the ticks before 23:30 as cheap as an empty street.
     #[serde(default)]
     pub wanderers: Vec<Customer>,
+    /// Shoppers off the map until a set second: not out yet ([`Activity::Waiting`]) or away
+    /// between windows ([`Activity::Away`], R70), by the second they wake, in the order they
+    /// were parked. Kept out of `agents` so a tick only steps those who can act. They rejoin
+    /// `agents` in id order as they wake, so every tick still steps shoppers in id order.
+    #[serde(default)]
+    pub parked: BTreeMap<u32, Vec<Customer>>,
     /// Rooms taken tonight per Hotel (R30); cleared when the hotels open.
     #[serde(default)]
     pub hotel_guests: BTreeMap<BusinessId, u32>,
@@ -205,6 +211,79 @@ impl Customers {
     /// A shop's reputation (§8.3).
     pub fn reputation(&self, shop: BusinessId, rules: &CustomersConfig) -> Rate {
         reputation_of(&self.reputation, shop, rules)
+    }
+
+    /// Parks a shopper who is off the map until a set second ([`Activity::Waiting`] or
+    /// [`Activity::Away`]); anyone else is due at once.
+    pub fn park(&mut self, c: Customer) {
+        let at = match c.activity {
+            Activity::Waiting { from: t } | Activity::Away { until: t } => t,
+            _ => 0,
+        };
+        self.parked.entry(at).or_default().push(c);
+    }
+
+    /// Parks many shoppers.
+    pub fn park_all(&mut self, cs: Vec<Customer>) {
+        for c in cs {
+            self.park(c);
+        }
+    }
+
+    /// When the next parked shopper wakes, if anyone is parked.
+    pub fn next_wake(&self) -> Option<u32> {
+        self.parked.first_key_value().map(|(t, _)| *t)
+    }
+
+    /// How many shoppers are parked.
+    pub fn parked_len(&self) -> usize {
+        self.parked.values().map(Vec::len).sum()
+    }
+
+    /// Keeps only the parked shoppers `keep` says to; returns how many went.
+    pub fn retain_parked(&mut self, mut keep: impl FnMut(&Customer) -> bool) -> usize {
+        let mut gone = 0;
+        self.parked.retain(|_, cs| {
+            let before = cs.len();
+            cs.retain(&mut keep);
+            gone += before - cs.len();
+            !cs.is_empty()
+        });
+        gone
+    }
+
+    /// Moves every parked shopper due by `now` back into `agents`, keeping `agents` in id order
+    /// (one linear merge).
+    pub fn wake(&mut self, now: u32) {
+        let mut woken = Vec::new();
+        while self.next_wake().is_some_and(|t| t <= now) {
+            if let Some((_, cs)) = self.parked.pop_first() {
+                woken.extend(cs);
+            }
+        }
+        if woken.is_empty() {
+            return;
+        }
+        woken.sort_by_key(|c| c.id);
+        let after_all = self
+            .agents
+            .last()
+            .is_none_or(|last| woken.first().is_some_and(|w| w.id > last.id));
+        if after_all {
+            self.agents.append(&mut woken);
+            return;
+        }
+        let agents = std::mem::take(&mut self.agents);
+        let mut merged = Vec::with_capacity(agents.len() + woken.len());
+        let mut woken = woken.into_iter().peekable();
+        for a in agents {
+            while let Some(w) = woken.next_if(|w| w.id < a.id) {
+                merged.push(w);
+            }
+            merged.push(a);
+        }
+        merged.extend(woken);
+        self.agents = merged;
     }
 
     /// Agents on the map (not waiting to appear), wanderers last.
@@ -310,40 +389,68 @@ pub fn run_phase(
     let boundary = [trading.day, trading.night, trading.hotel]
         .iter()
         .any(|(open, close)| now == *open || now == *close);
-    if !boundary && idle(state, now) {
+    let (acting, choosing) = activity(state, now);
+    if !boundary && !acting {
         // Nobody about who can act and no window opening or closing: nothing to score (keeps
         // idle ticks cheap; wandering tourists only wait for the hotels).
         return PhaseReport::default();
     }
     let goods = GoodsIndex::new(&inputs.config.businesses.goods);
     let geometry = inputs.geometry();
-    let mut offers = shops::shop_offers(
-        businesses,
-        inputs.map,
-        inputs.config,
-        inputs.clock,
-        &goods,
-        geometry,
-    );
-    shops::apply_modifiers(
-        &mut offers,
-        inputs.map,
-        businesses,
-        inputs.modifiers,
-        now,
-        &goods,
-    );
-    let doors = front_doors(businesses, inputs.map, geometry);
+    // The high street is only read by shoppers choosing a shop (and by a new wave). On ticks
+    // when everyone about is walking, leaving or after a bed, skip building it: with shopping
+    // windows (R70) someone is about all day, but few are choosing at any one tick.
+    let mut offers = if boundary || choosing {
+        let mut offers = shops::shop_offers(
+            businesses,
+            inputs.map,
+            inputs.config,
+            inputs.clock,
+            &goods,
+            geometry,
+        );
+        shops::apply_modifiers(
+            &mut offers,
+            inputs.map,
+            businesses,
+            inputs.modifiers,
+            now,
+            &goods,
+        );
+        offers
+    } else {
+        Vec::new()
+    };
+    let doors = if boundary {
+        front_doors(businesses, inputs.map, geometry)
+    } else {
+        BTreeMap::new()
+    };
     tick(state, inputs, &mut offers, &doors, &goods, businesses, rng)
 }
 
-/// True if no agent can act this tick: everyone is wandering or not out yet.
-fn idle(state: &Customers, now: u32) -> bool {
-    state.agents.iter().all(|c| match c.activity {
-        Activity::Waiting { from } => now < from,
-        Activity::Away { until } | Activity::WaitingForPower { until } => now < until,
-        _ => false,
-    })
+/// Whether any agent can act this tick (not everyone is wandering, away or not out yet), and
+/// whether any will choose a shop: already choosing, or stepping out, back from between
+/// windows or seeing the lights come on this tick.
+fn activity(state: &Customers, now: u32) -> (bool, bool) {
+    if state.next_wake().is_some_and(|t| t <= now) {
+        return (true, true);
+    }
+    let mut acting = false;
+    for c in &state.agents {
+        let (acts, chooses) = match c.activity {
+            Activity::Waiting { from: t }
+            | Activity::Away { until: t }
+            | Activity::WaitingForPower { until: t } => (now >= t, now >= t),
+            Activity::Choosing => (true, true),
+            _ => (true, false),
+        };
+        if chooses {
+            return (true, true);
+        }
+        acting |= acts;
+    }
+    (acting, false)
 }
 
 /// Every building's front door.
@@ -479,6 +586,8 @@ pub fn spawn_wave(
     let default_rent = rules.residential.default_rent.money();
     let pop = inputs.population;
     let mut spawned = 0;
+    // Everyone who will step out, parked until their time once the wave is rolled.
+    let mut fresh: Vec<Customer> = Vec::new();
     // At most everyone steps out: reserve once rather than regrow the vector mid-wave.
     let visitors: u64 = if stations.is_empty() {
         0
@@ -486,7 +595,7 @@ pub fn spawn_wave(
         pop.pool.values().sum()
     };
     let most = u64::try_from(pop.residential.residents.len()).map_or(0, |r| r + visitors);
-    state.agents.reserve(usize::try_from(most).unwrap_or(0));
+    fresh.reserve(usize::try_from(most).unwrap_or(0));
     // Every member of a cohort rolls from the same candidates this wave; resolve them once.
     let mut candidates: BTreeMap<(Cohort, bool), shopping::Candidates> = BTreeMap::new();
     // And shops for each good in the same window (R70).
@@ -519,7 +628,7 @@ pub fn spawn_wave(
             .or_insert_with(|| windows::window_table(rules, goods, cohort, window, year, whole));
         let list = errands(&goods_wanted, table, whole);
         let from = errands::set_out(&list, whole, spread_ticks, tick_secs, rng);
-        state.agents.push(Customer {
+        fresh.push(Customer {
             id: CustomerId(state.next_id),
             cohort,
             origin,
@@ -559,6 +668,7 @@ pub fn spawn_wave(
             }
         }
     }
+    state.park_all(fresh);
     spawned
 }
 
