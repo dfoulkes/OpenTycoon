@@ -9,6 +9,7 @@
 //! - [`budget`]: perf budgets and the regression check.
 //! - [`stats`]: nearest-rank percentiles.
 //! - [`study`]: the balance study (R64, R65): sampled models, rotated seats, balance metrics.
+//! - [`evolve`]: evolving each AI personality's settings over generations of games.
 //!
 //! Nothing here implements a game rule: the harness drives `sim_core::World` and measures
 //! whatever it does.
@@ -17,6 +18,7 @@ pub mod batch;
 pub mod bench;
 pub mod brains;
 pub mod budget;
+pub mod evolve;
 pub mod game;
 pub mod overrides;
 pub mod replay;

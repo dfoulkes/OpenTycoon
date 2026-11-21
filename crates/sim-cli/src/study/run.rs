@@ -128,7 +128,7 @@ pub fn fingerprint(
 }
 
 /// Plays one game of a model.
-fn play_one(config: &Config, roster: &Roster, g: &GamePlan) -> (GameOutcome, Duration) {
+pub(crate) fn play_one(config: &Config, roster: &Roster, g: &GamePlan) -> (GameOutcome, Duration) {
     let seats = u8::try_from(roster.len()).unwrap_or(u8::MAX);
     let world = World::seated(config.clone(), g.seed, seats, &roster.ai_seats(&g.seating));
     let result = play_from(
@@ -143,7 +143,7 @@ fn play_one(config: &Config, roster: &Roster, g: &GamePlan) -> (GameOutcome, Dur
 }
 
 /// A game's study outcome from its harness result.
-fn outcome_of(g: &GamePlan, result: &GameResult) -> (GameOutcome, Duration) {
+pub(crate) fn outcome_of(g: &GamePlan, result: &GameResult) -> (GameOutcome, Duration) {
     let (winner, tie) = match result.winner {
         Winner::Player(p) => (g.seating.get(usize::from(p)).copied(), false),
         Winner::Tie => (None, true),
@@ -165,13 +165,13 @@ fn outcome_of(g: &GamePlan, result: &GameResult) -> (GameOutcome, Duration) {
     (outcome, result.wall)
 }
 
-/// Plays one game of a model, recording it.
-fn play_one_recorded(
+/// Plays one game of a model, recording it as `game_id`.
+pub(crate) fn play_one_recorded(
     config: &Config,
     roster: &Roster,
     g: &GamePlan,
     ctx: &RecordContext,
-    model: u32,
+    game_id: &str,
 ) -> (GameOutcome, Duration, Replay) {
     let seats = u8::try_from(roster.len()).unwrap_or(u8::MAX);
     let world = World::seated(config.clone(), g.seed, seats, &roster.ai_seats(&g.seating));
@@ -181,13 +181,12 @@ fn play_one_recorded(
         brain: BrainKind::Idle,
         ..GameSpec::default()
     };
-    let game_id = format!("m{model:05}-g{:06}", g.index);
-    let (result, replay) = play_recorded(world, &spec, ctx, &game_id, seat_info);
+    let (result, replay) = play_recorded(world, &spec, ctx, game_id, seat_info);
     let (outcome, wall) = outcome_of(g, &result);
     (outcome, wall, replay)
 }
 
-fn read_opt(path: &Path) -> Result<Option<String>, StudyError> {
+pub(crate) fn read_opt(path: &Path) -> Result<Option<String>, StudyError> {
     match std::fs::read_to_string(path) {
         Ok(s) => Ok(Some(s)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
@@ -195,11 +194,11 @@ fn read_opt(path: &Path) -> Result<Option<String>, StudyError> {
     }
 }
 
-fn write(path: &Path, text: &str) -> Result<(), StudyError> {
+pub(crate) fn write(path: &Path, text: &str) -> Result<(), StudyError> {
     std::fs::write(path, text).map_err(|e| StudyError::io(path, e))
 }
 
-fn append(path: &Path, lines: &str) -> Result<(), StudyError> {
+pub(crate) fn append(path: &Path, lines: &str) -> Result<(), StudyError> {
     let mut f = OpenOptions::new()
         .append(true)
         .create(true)
@@ -210,7 +209,7 @@ fn append(path: &Path, lines: &str) -> Result<(), StudyError> {
         .map_err(|e| StudyError::io(path, e))
 }
 
-fn fmt_duration(d: Duration) -> String {
+pub(crate) fn fmt_duration(d: Duration) -> String {
     let s = d.as_secs();
     if s >= 3600 {
         format!("{}h{:02}m", s / 3600, (s % 3600) / 60)
@@ -460,7 +459,10 @@ impl<'a> Study<'a> {
                 let played: Vec<(GameOutcome, Duration, Replay)> = pool.install(|| {
                     self.plans
                         .par_iter()
-                        .map(|g| play_one_recorded(&config, &self.roster, g, &ctx, model.id))
+                        .map(|g| {
+                            let game_id = format!("m{:05}-g{:06}", model.id, g.index);
+                            play_one_recorded(&config, &self.roster, g, &ctx, &game_id)
+                        })
                         .collect()
                 });
                 let replays: Vec<Replay> = played.iter().map(|(_, _, r)| r.clone()).collect();

@@ -18,6 +18,8 @@
 //!   every midnight; exit 1 on a mismatch, 2 if they were recorded under other rules.
 //! - `sim-cli extract <manifest|segment> --out <file>`: the stub feature extractor.
 //! - `sim-cli rules-fingerprint`: this build's rules fingerprint.
+//! - `sim-cli evolve <dir>`: evolve each AI personality's settings over generations of games
+//!   → `generations.csv`, `champions/<gen>/ai.yaml`, `summary.json` (docs/evolve.md).
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -33,6 +35,9 @@ use sim_cli::bench::{BenchSpec, bench};
 use sim_cli::brains::BrainKind;
 use sim_cli::budget::{
     Budget, Budgets, MeasureSpec, Metric, all_pass, check, consistency, measure, table,
+};
+use sim_cli::evolve::{
+    EvolveDef, EvolveOptions, EvolveRecording, base_sources, run_evolution_recorded,
 };
 use sim_cli::game::GameSpec;
 use sim_cli::overrides::{self, LoadError, Override};
@@ -129,6 +134,9 @@ enum Command {
     /// Balance study (R64, R65): sample economic models, play each over many games with the
     /// seats rotated, and rank the balanced ones. Resumes an interrupted study in `--out`.
     Study(StudyArgs),
+    /// Evolve each AI personality's settings over generations of games (docs/evolve.md).
+    /// Resumes an interrupted evolution in `--out`.
+    Evolve(EvolveArgs),
     /// Play N games of a preset and record every one (docs/replay.md).
     Record(RecordCmdArgs),
     /// Re-simulate recorded games and compare every midnight with the recording.
@@ -275,6 +283,66 @@ struct StudyArgs {
     #[arg(long)]
     quiet: bool,
     /// Record every game: `s3` (from `OPENTYCOON_S3_*`) or a local directory.
+    #[arg(long)]
+    record: Option<String>,
+    #[command(flatten)]
+    record_opts: RecordOpts,
+}
+
+#[derive(Args, Debug)]
+struct EvolveArgs {
+    #[command(flatten)]
+    config: ConfigArgs,
+    /// Evolution definition file (docs/evolve.md).
+    #[arg(long = "def", default_value = "study/evolve.yaml")]
+    def: PathBuf,
+    /// Output directory: generations.csv, champions/<gen>/, summary.json.
+    #[arg(long, default_value = "evolve-out")]
+    out: PathBuf,
+    /// Override the definition's generations.
+    #[arg(long)]
+    generations: Option<u32>,
+    /// Override the definition's population per personality.
+    #[arg(long)]
+    population: Option<u32>,
+    /// Override the definition's games per evaluation.
+    #[arg(long)]
+    games: Option<u32>,
+    /// Override the definition's elitism.
+    #[arg(long)]
+    elitism: Option<u32>,
+    /// Override the definition's preset.
+    #[arg(long)]
+    preset: Option<String>,
+    /// Override the definition's seed.
+    #[arg(long)]
+    seed: Option<u64>,
+    /// Override which personalities evolve: comma-separated ids.
+    #[arg(long, value_delimiter = ',')]
+    evolve: Option<Vec<String>>,
+    /// Override the definition's roster: comma-separated personality ids and `idle`.
+    #[arg(long, value_delimiter = ',')]
+    roster: Option<Vec<String>>,
+    /// Override the definition's adopted economy.yaml.
+    #[arg(long)]
+    economy: Option<String>,
+    /// Worker threads (default: every core). Outputs are identical for any value.
+    #[arg(long)]
+    threads: Option<usize>,
+    /// Leave wall time out of summary.json so two runs diff byte for byte.
+    #[arg(long)]
+    no_wall_time: bool,
+    /// Discard any evolution already in --out and start over.
+    #[arg(long)]
+    fresh: bool,
+    /// Stop after running this many generations (resume later with the same command).
+    #[arg(long)]
+    stop_after: Option<u32>,
+    /// No progress lines on stderr.
+    #[arg(long)]
+    quiet: bool,
+    /// Record every game: `s3` (from `OPENTYCOON_S3_*`) or a local directory. Overrides the
+    /// definition's `record`.
     #[arg(long)]
     record: Option<String>,
     #[command(flatten)]
@@ -468,6 +536,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
         Command::Bench(args) => bench_cmd(args),
         Command::PerfBudget(args) => perf_budget_cmd(args),
         Command::Study(args) => study_cmd(args),
+        Command::Evolve(args) => evolve_cmd(&args),
         Command::Record(args) => record_cmd(args),
         Command::Replay(args) => replay_cmd(&args),
         Command::Extract(args) => extract_cmd(&args),
@@ -839,6 +908,121 @@ fn study_cmd(args: StudyArgs) -> Result<ExitCode> {
                 "; incomplete, {} models left: rerun to resume",
                 def.models.saturating_sub(report.ran + report.skipped)
             )
+        }
+    );
+    println!("wrote {}", args.out.display());
+    Ok(ExitCode::SUCCESS)
+}
+
+/// The command line's overrides of an evolution definition.
+fn apply_evolve_args(def: &mut EvolveDef, args: &EvolveArgs) {
+    if let Some(v) = args.generations {
+        def.generations = v;
+    }
+    if let Some(v) = args.population {
+        def.population = v;
+    }
+    if let Some(v) = args.games {
+        def.games_per_eval = v;
+    }
+    if let Some(v) = args.elitism {
+        def.elitism = v;
+    }
+    if let Some(v) = args.preset.clone() {
+        def.preset = v;
+    }
+    if let Some(v) = args.seed {
+        def.seed = v;
+    }
+    if let Some(v) = args.evolve.clone() {
+        def.evolve = Some(v.into_iter().map(|s| s.trim().to_owned()).collect());
+    }
+    if let Some(v) = args.roster.clone() {
+        def.roster = Some(v.into_iter().map(|s| s.trim().to_owned()).collect());
+    }
+    if let Some(v) = args.economy.clone() {
+        def.economy = Some(v);
+    }
+    if let Some(v) = args.record.clone() {
+        def.record = Some(v);
+    }
+}
+
+fn evolve_cmd(args: &EvolveArgs) -> Result<ExitCode> {
+    let text = std::fs::read_to_string(&args.def)
+        .with_context(|| format!("reading {}", args.def.display()))?;
+    let mut def = match EvolveDef::from_yaml(&text) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("error: {}: {e}", args.def.display());
+            return Ok(ExitCode::FAILURE);
+        }
+    };
+    apply_evolve_args(&mut def, args);
+    if let Err(e) = def.validate() {
+        eprintln!("error: {e}");
+        return Ok(ExitCode::FAILURE);
+    }
+    let base = match base_sources(&args.config.dir, &def, &args.config.overrides) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return Ok(ExitCode::FAILURE);
+        }
+    };
+    let opts = EvolveOptions {
+        out: args.out.clone(),
+        threads: args.threads,
+        wall_time: !args.no_wall_time,
+        fresh: args.fresh,
+        stop_after: args.stop_after,
+        progress: !args.quiet,
+    };
+    let watch = Stopwatch::start();
+    let result = match def.record.clone() {
+        None => run_evolution_recorded(&def, &base, &opts, None),
+        Some(dest) => {
+            let base_hash = snapshot(&base).hash;
+            let def_json = serde_json::to_string(&EvolveDef {
+                record: None,
+                ..def.clone()
+            })?;
+            let run_id = default_run_id("evolve", &(def_json, base_hash));
+            let rec = Recording::open(&dest, &args.record_opts, run_id)?;
+            let mut writer = RunWriter::new(rec.store.as_ref(), &rec.run_id, rec.opts);
+            let mut recording = EvolveRecording {
+                ctx: rec.ctx.clone(),
+                writer: &mut writer,
+            };
+            let r = run_evolution_recorded(&def, &base, &opts, Some(&mut recording));
+            eprintln!("{}", rec.report(&writer.stats(), watch.elapsed()));
+            r
+        }
+    };
+    let report = match result {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return Ok(ExitCode::FAILURE);
+        }
+    };
+    println!(
+        "evolve: {}/{} generations ({} run now, {} resumed) evolving {}; {} invalid genomes; \
+         preset {}, {} games per evaluation; {} games in {:.1}s{}",
+        report.ran + report.skipped,
+        def.generations,
+        report.ran,
+        report.skipped,
+        report.personalities.join(", "),
+        report.invalid,
+        report.preset,
+        report.games_per_eval,
+        report.games,
+        report.wall.as_secs_f64(),
+        if report.complete {
+            String::new()
+        } else {
+            "; incomplete: rerun to resume".to_owned()
         }
     );
     println!("wrote {}", args.out.display());
