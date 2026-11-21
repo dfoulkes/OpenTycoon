@@ -160,6 +160,7 @@ proptest! {
             let dist = oracle.bfs(to);
             let Some(&want) = dist.get(&from) else { continue };
             prop_assert_eq!(streets.route_len(from, to), want, "{:?} to {:?}", from, to);
+            prop_assert_eq!(streets.from(from).route_len(to), want, "measured once from {:?}", from);
             let mut at = from;
             let mut walked = 0;
             while at != to {

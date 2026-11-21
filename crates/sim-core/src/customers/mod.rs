@@ -706,6 +706,8 @@ pub fn choose_shop(
     let rules = &config.customers;
     let mut index = Vec::new();
     let mut scores = Vec::new();
+    // The shopper's end of every route, once.
+    let here = streets.from(at);
     for (i, o) in offers.iter().enumerate() {
         if o.good != good || o.stock <= 0 || o.price > budget {
             continue;
@@ -718,7 +720,7 @@ pub fn choose_shop(
             o.price,
             o.ref_price,
             o.luxury,
-            streets.blocks_between(at, o.door),
+            here.blocks_to(o.door),
             reputation_of(reputation, o.shop, rules),
         ));
     }

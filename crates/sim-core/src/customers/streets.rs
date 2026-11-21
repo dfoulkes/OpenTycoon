@@ -203,7 +203,23 @@ impl Streets {
         reason = "distance in blocks feeds customer scoring, the one float module"
     )]
     pub fn blocks_between(&self, a: Cell, b: Cell) -> f64 {
-        f64::from(self.route_len(a, b)) / f64::from(self.geometry.lot_w + 1)
+        self.from(a).blocks_to(b)
+    }
+
+    /// `a`'s end of a route, worked out once, to measure from `a` to many places (a shopper
+    /// scoring every shop, §8.3). Gives the same answers as [`Streets::route_len`].
+    pub fn from(&self, a: Cell) -> RouteFrom<'_> {
+        let on_street = self.is_street(a);
+        RouteFrom {
+            streets: self,
+            at: a,
+            on_street,
+            ends: if on_street {
+                self.anchors(a)
+            } else {
+                [None, None]
+            },
+        }
     }
 
     /// Moves `from` up to `cells` cells along a shortest street route towards `to`. Returns the
@@ -275,9 +291,17 @@ impl Streets {
     /// `a`'s segment by and the one it joins `b`'s segment at. Ties go to the first found (the
     /// north or west end before the south or east end). `None` if `b` is unreachable.
     fn via(&self, a: Cell, b: Cell) -> Option<(u32, usize, usize)> {
+        self.via_ends(self.anchors(a), self.anchors(b))
+    }
+
+    /// [`Streets::via`] from already-found segment ends.
+    fn via_ends(
+        &self,
+        starts: [Option<(usize, u32)>; 2],
+        ends: [Option<(usize, u32)>; 2],
+    ) -> Option<(u32, usize, usize)> {
         let mut best: Option<(u32, usize, usize)> = None;
-        let ends = self.anchors(b);
-        for (start, out) in self.anchors(a).into_iter().flatten() {
+        for (start, out) in starts.into_iter().flatten() {
             for (end, into) in ends.into_iter().flatten() {
                 let between = self
                     .dist
@@ -318,10 +342,9 @@ impl Streets {
             return None;
         }
         let (px, py) = (self.geometry.pitch_x(), self.geometry.pitch_y());
-        if !self.is_street(Cell {
-            x: i * px,
-            y: j * py,
-        }) {
+        // In bounds, a junction is always road: it is water only on the river away from a
+        // bridge.
+        if self.river_y == Some(j * py) && !self.bridges_x.contains(&(i * px)) {
             return None;
         }
         usize::try_from(j * self.cols + i).ok()
@@ -407,5 +430,36 @@ impl Streets {
         }
         self.dist = dist;
         self.next = next;
+    }
+}
+
+/// One end of a route, worked out once ([`Streets::from`]), to measure to many places.
+#[derive(Debug, Clone, Copy)]
+pub struct RouteFrom<'a> {
+    streets: &'a Streets,
+    at: Cell,
+    on_street: bool,
+    ends: [Option<(usize, u32)>; 2],
+}
+
+impl RouteFrom<'_> {
+    /// [`Streets::route_len`] from this end to `b`.
+    pub fn route_len(&self, b: Cell) -> u32 {
+        let s = self.streets;
+        if !self.on_street || !s.is_street(b) || s.straight(self.at, b) {
+            return self.at.manhattan(b);
+        }
+        s.via_ends(self.ends, s.anchors(b))
+            .map_or(FAR, |(cells, _, _)| cells)
+    }
+
+    /// Street distance in blocks to `b`, for `distance_decay` (§8.3): route cells over the
+    /// block pitch.
+    #[allow(
+        clippy::float_arithmetic,
+        reason = "distance in blocks feeds customer scoring, the one float module"
+    )]
+    pub fn blocks_to(&self, b: Cell) -> f64 {
+        f64::from(self.route_len(b)) / f64::from(self.streets.geometry.lot_w + 1)
     }
 }
