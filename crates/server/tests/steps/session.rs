@@ -115,13 +115,16 @@ fn refused(w: &mut ServerWorld, text: String) {
 
 #[then(expr = "there are {int} players")]
 fn n_players(w: &mut ServerWorld, n: usize) {
-    assert_eq!(view::players(w.session.world()).len(), n);
+    assert_eq!(
+        view::players(w.session.world(), &view::DayTakings::default()).len(),
+        n
+    );
 }
 
 #[then("every seat is played by an AI opponent named after its personality")]
 fn all_ai(w: &mut ServerWorld) {
     let world = w.session.world();
-    let players = view::players(world);
+    let players = view::players(world, &view::DayTakings::default());
     for (i, p) in players.iter().enumerate() {
         let seat = PlayerId(u8::try_from(i).unwrap());
         let ai = world
@@ -342,14 +345,20 @@ fn bid_event(w: &mut ServerWorld, kind: String) {
     );
 }
 
+/// A bid kind by its wire name.
+fn kind(name: &str) -> BidKind {
+    serde_json::from_value(serde_json::Value::String(name.to_owned())).unwrap()
+}
+
 #[then(expr = "a bid event {string} or {string} names that block")]
-fn bid_result(w: &mut ServerWorld, _a: String, _b: String) {
+fn bid_result(w: &mut ServerWorld, a: String, b: String) {
     let block = w.session.auction_block.clone().unwrap();
+    let kinds = [kind(&a), kind(&b)];
     assert!(
         w.session
             .bids
             .iter()
-            .any(|b| matches!(b.kind, BidKind::Won | BidKind::Unsold) && b.block == block),
+            .any(|bid| kinds.contains(&bid.kind) && bid.block == block),
         "{:?}",
         w.session.bids
     );
@@ -460,4 +469,93 @@ fn over(w: &mut ServerWorld) {
 fn once(w: &mut ServerWorld) {
     assert_eq!(w.session.over.len(), 1);
     assert!(w.session.session().game_over().is_none());
+}
+
+#[then("every business's goods table matches the world")]
+fn goods_match(w: &mut ServerWorld) {
+    let world = w.session.world();
+    let snap = w.session.snapshot.as_ref().unwrap();
+    let goods = &world.config().businesses.goods;
+    let mut rows = 0;
+    for (i, lot) in snap.lots.iter().enumerate() {
+        let Some(business) = &lot.business else {
+            continue;
+        };
+        // The lot card shows the largest building, the lowest id on a tie.
+        let (_, b) = world
+            .businesses()
+            .by_id
+            .iter()
+            .filter(|(_, b)| b.block.0 as usize == i)
+            .max_by_key(|(id, b)| (b.volume(), std::cmp::Reverse(**id)))
+            .unwrap();
+        assert_eq!(b.type_id, business.kind, "{}", lot.key);
+        let wire: Vec<&String> = business.goods.iter().map(|g| &g.good).collect();
+        let sim: Vec<&String> = b.prices.keys().collect();
+        assert_eq!(wire, sim, "{}", lot.key);
+        assert_eq!(
+            business.capacity,
+            b.capacity_per_good * i64::try_from(b.prices.len()).unwrap()
+        );
+        for row in &business.goods {
+            let g = &goods[&row.good];
+            assert_eq!(row.cost, g.purchase_price.money().pence(), "{}", row.good);
+            assert_eq!(
+                row.price,
+                b.prices[&row.good].apply(g.ref_price.money()).pence()
+            );
+            assert_eq!(row.stock, b.stock_of(&row.good));
+            assert_eq!(
+                row.order,
+                b.standing_order.get(&row.good).copied().unwrap_or(0)
+            );
+            assert_eq!(
+                row.sold_today,
+                b.sold_today.get(&row.good).copied().unwrap_or(0)
+            );
+            rows += 1;
+        }
+    }
+    assert!(rows > 0, "after 3 days some shop sells something");
+}
+
+#[when("I play through the session until bidding starts")]
+fn until_bidding(w: &mut ServerWorld) {
+    let limit = 3 * w.session.ticks_per_day();
+    for _ in 0..limit {
+        w.session.step();
+        let bidding =
+            w.session.world().auctions().current().is_some_and(|a| {
+                matches!(a.phase, sim_core::auctions::AuctionPhase::Bidding { .. })
+            });
+        if bidding {
+            w.session.take_delta();
+            return;
+        }
+    }
+    panic!("bidding did not start in 3 game days");
+}
+
+#[then("the auction room has one seat per player and only the seat whose turn it is is to act")]
+fn auction_room(w: &mut ServerWorld) {
+    let a = w
+        .session
+        .delta
+        .as_ref()
+        .unwrap()
+        .auction
+        .clone()
+        .expect("a live auction");
+    let ids: Vec<String> = a.seats.iter().map(|s| s.player.clone()).collect();
+    let want: Vec<String> = (0..w.session.players).map(|p| format!("p{p}")).collect();
+    assert_eq!(ids, want);
+    let turn = a.turn.clone().expect("someone's turn");
+    for s in &a.seats {
+        assert_eq!(
+            s.status == protocol::SeatStatus::ToAct,
+            s.player == turn,
+            "{s:?}"
+        );
+    }
+    assert!(a.round >= 1);
 }

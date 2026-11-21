@@ -19,7 +19,7 @@ use sim_core::economy::PlayerId;
 use sim_core::{Config, Money, World};
 
 use crate::config::ServerConfig;
-use crate::view::{self, DayTakings};
+use crate::view::{self, AuctionMemo, DayTakings};
 
 /// Why a game could not start.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -36,12 +36,14 @@ pub enum SessionError {
     },
 }
 
-/// Counts bidding rounds and turns the auction house's state changes into [`Bid`] events.
+/// Counts bidding rounds, remembers who passed and bid what in the live auction, and turns the
+/// auction house's state changes into [`Bid`] events. The house keeps only the live auction
+/// and the outcomes, so this is the inspector's record of the room.
 #[derive(Debug, Clone, Default)]
 pub struct AuctionWatch {
     last: Option<SimAuction>,
     outcomes_seen: usize,
-    round: u32,
+    memo: AuctionMemo,
 }
 
 impl AuctionWatch {
@@ -50,13 +52,13 @@ impl AuctionWatch {
         AuctionWatch {
             last: world.auctions().current().cloned(),
             outcomes_seen: world.auctions().history().len(),
-            round: 0,
+            memo: AuctionMemo::default(),
         }
     }
 
-    /// The bidding round of the live auction (0 in the countdown).
-    pub fn round(&self) -> u32 {
-        self.round
+    /// What has happened in the live auction's room so far.
+    pub fn memo(&self) -> &AuctionMemo {
+        &self.memo
     }
 
     /// Compares the auction house with what it was after the last call and pushes what
@@ -76,6 +78,10 @@ impl AuctionWatch {
             if let Some(now) = current.filter(|_| still_live(prev)) {
                 let block = block_of(now.item);
                 if now.high_bid != prev.high_bid || now.leader != prev.leader {
+                    if let Some(p) = now.leader {
+                        self.memo.last_bid.insert(p.0, now.high_bid);
+                        self.memo.passed.remove(&p.0);
+                    }
                     out.push(Bid {
                         tick,
                         block,
@@ -85,7 +91,10 @@ impl AuctionWatch {
                     });
                 } else if now.passes_in_a_row > prev.passes_in_a_row {
                     let who = match prev.phase {
-                        AuctionPhase::Bidding { turn, .. } => player(turn),
+                        AuctionPhase::Bidding { turn, .. } => {
+                            self.memo.passed.insert(turn.0);
+                            player(turn)
+                        }
                         AuctionPhase::Countdown { .. } => None,
                     };
                     out.push(Bid {
@@ -96,48 +105,37 @@ impl AuctionWatch {
                         kind: BidKind::Pass,
                     });
                 }
-                self.round = next_round(self.round, prev, now);
+                let round = next_round(self.memo.round, prev, now);
+                if round != self.memo.round {
+                    // Passing counts for one round only (R8).
+                    self.memo.passed.clear();
+                    self.memo.round = round;
+                }
             }
         }
-        for outcome in closed {
-            let (item, who, amount, kind) = match *outcome {
-                AuctionOutcome::Sold {
-                    item,
-                    winner,
-                    price,
-                    ..
-                } => (item, player(winner), price, BidKind::Won),
-                AuctionOutcome::Defaulted {
-                    item,
-                    winner,
-                    price,
-                    ..
-                } => (item, player(winner), price, BidKind::Unsold),
-                AuctionOutcome::Unsold { item, .. } => (
-                    item,
-                    None,
-                    self.last.as_ref().map_or(Money::ZERO, |a| a.high_bid),
-                    BidKind::Unsold,
-                ),
-            };
-            out.push(Bid {
-                tick,
-                block: block_of(item),
-                player: who,
-                amount: amount.pence(),
-                kind,
-            });
-        }
+        let unsold_at = self.last.as_ref().map_or(Money::ZERO, |a| a.high_bid);
+        out.extend(
+            closed
+                .iter()
+                .map(|o| closing_bid(world, tick, *o, unsold_at)),
+        );
         let opened = match (self.last.as_ref(), current) {
             (_, None) => false,
             (None, Some(_)) => true,
             (Some(prev), Some(_)) => !still_live(prev),
         };
         if let Some(now) = current.filter(|_| opened) {
-            self.round = match now.phase {
-                AuctionPhase::Countdown { .. } => 0,
-                AuctionPhase::Bidding { .. } => 1,
+            self.memo = AuctionMemo {
+                round: match now.phase {
+                    AuctionPhase::Countdown { .. } => 0,
+                    AuctionPhase::Bidding { .. } => 1,
+                },
+                opening_bid: now.high_bid,
+                ..AuctionMemo::default()
             };
+            if let Some(p) = now.opener {
+                self.memo.last_bid.insert(p.0, now.high_bid);
+            }
             out.push(Bid {
                 tick,
                 block: block_of(now.item),
@@ -147,10 +145,37 @@ impl AuctionWatch {
             });
         }
         if current.is_none() {
-            self.round = 0;
+            self.memo = AuctionMemo::default();
         }
         self.outcomes_seen = history.len();
         self.last = current.cloned();
+    }
+}
+
+/// The bid event for how an auction closed. `unsold_at` is the last high bid (the reserve).
+fn closing_bid(world: &World, tick: u64, outcome: AuctionOutcome, unsold_at: Money) -> Bid {
+    let player = |p: PlayerId| Some(protocol::player_id(p.0));
+    let (item, who, amount, kind) = match outcome {
+        AuctionOutcome::Sold {
+            item,
+            winner,
+            price,
+            ..
+        } => (item, player(winner), price, BidKind::Won),
+        AuctionOutcome::Defaulted {
+            item,
+            winner,
+            price,
+            ..
+        } => (item, player(winner), price, BidKind::Unsold),
+        AuctionOutcome::Unsold { item, .. } => (item, None, unsold_at, BidKind::Unsold),
+    };
+    Bid {
+        tick,
+        block: view::block_key(world, view::item_block(world, item)),
+        player: who,
+        amount: amount.pence(),
+        kind,
     }
 }
 
@@ -168,7 +193,7 @@ fn next_round(round: u32, prev: &SimAuction, now: &SimAuction) -> u32 {
     }
 }
 
-/// Each business's takings over the last completed game day.
+/// Each business's takings and units sold over the last completed game day.
 #[derive(Debug, Clone, Default)]
 struct TakingsBook {
     last_day: DayTakings,
@@ -180,12 +205,14 @@ impl TakingsBook {
     fn before_tick(&mut self, world: &World) {
         let per_day = u64::from(world.clock().rules().ticks_per_day()).max(1);
         if (world.clock().tick() + 1) % per_day == 0 {
-            self.last_day = world
-                .businesses()
-                .by_id
-                .iter()
-                .map(|(id, b)| (*id, b.takings_today))
-                .collect();
+            let by_id = &world.businesses().by_id;
+            self.last_day = DayTakings {
+                takings: by_id.iter().map(|(id, b)| (*id, b.takings_today)).collect(),
+                sold: by_id
+                    .iter()
+                    .map(|(id, b)| (*id, b.sold_today.clone()))
+                    .collect(),
+            };
         }
     }
 }
@@ -299,7 +326,7 @@ impl Session {
     /// The whole visible game. It becomes what the next delta is compared against.
     pub fn snapshot(&mut self) -> Snapshot {
         let lots = view::lots(&self.world, &self.takings.last_day);
-        let players = view::players(&self.world);
+        let players = view::players(&self.world, &self.takings.last_day);
         self.pending.clear();
         self.sent_lots.clone_from(&lots);
         self.sent_players.clone_from(&players);
@@ -309,7 +336,7 @@ impl Session {
             board: view::board(&self.world),
             players,
             lots,
-            auction: view::auction(&self.world, self.watch.round()),
+            auction: view::auction(&self.world, self.watch.memo()),
             bids: self.recent.iter().cloned().collect(),
             walkers: view::walkers(&self.world, self.max_walkers),
         }
@@ -319,7 +346,7 @@ impl Session {
     /// the live auction and walkers in full.
     pub fn delta(&mut self) -> Delta {
         let lots = view::lots(&self.world, &self.takings.last_day);
-        let players = view::players(&self.world);
+        let players = view::players(&self.world, &self.takings.last_day);
         let changed_lots = changed(&self.sent_lots, &lots);
         let changed_players = changed(&self.sent_players, &players);
         self.sent_lots = lots;
@@ -329,7 +356,7 @@ impl Session {
             clock: view::clock(&self.world, self.speed),
             players: changed_players,
             lots: changed_lots,
-            auction: view::auction(&self.world, self.watch.round()),
+            auction: view::auction(&self.world, self.watch.memo()),
             bids: std::mem::take(&mut self.pending),
             walkers: view::walkers(&self.world, self.max_walkers),
         }
@@ -341,7 +368,7 @@ impl Session {
             return None;
         }
         self.over_sent = true;
-        let players = view::players(&self.world);
+        let players = view::players(&self.world, &self.takings.last_day);
         Some(GameOver {
             winner: view::winner(&players),
             players,

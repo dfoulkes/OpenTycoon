@@ -159,6 +159,12 @@ pub struct Player {
     pub net_worth: i64,
     /// Out of the game (R4).
     pub bankrupt: bool,
+    /// The daily running cost (land rent, utilities, standing order) of every building the
+    /// player owns: what the 06:00 settlement bills them for those buildings, pence.
+    pub costs_yesterday: i64,
+    /// Over the player's buildings: takings over the last completed game day plus residents'
+    /// rent, less `costs_yesterday`, pence.
+    pub profit_yesterday: i64,
 }
 
 /// A lease on a lot.
@@ -190,6 +196,31 @@ pub struct LotBusiness {
     pub kind: String,
     /// Owned and run by the city.
     pub city_run: bool,
+    /// Units sold since midnight, every good.
+    pub sold_today: i64,
+    /// Units of stock it can hold, every good (`capacity_per_good × goods`).
+    pub capacity: i64,
+    /// Its shop table: one row per good it sells (empty for flats).
+    pub goods: Vec<GoodRow>,
+}
+
+/// One good a business sells.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GoodRow {
+    /// Good id from `businesses.yaml`.
+    pub good: String,
+    /// Wholesale cost per unit (`purchase_price`), pence.
+    pub cost: i64,
+    /// Selling price per unit (the shop's share of `ref_price`), pence.
+    pub price: i64,
+    /// Units sold over the last completed game day.
+    pub sold_yesterday: i64,
+    /// The standing order: units delivered each 06:00 (locked into tomorrow's at midnight).
+    pub order: i64,
+    /// Units on hand now.
+    pub stock: i64,
+    /// Units sold since midnight.
+    pub sold_today: i64,
 }
 
 /// One lot's state for the lot card.
@@ -250,6 +281,41 @@ pub struct Auction {
     pub seconds_left: u32,
     /// `0` in the countdown, then the round of bidding, from 1.
     pub round: u32,
+    /// Whose go it is, round the table (R8); `None` in the countdown.
+    pub turn: Option<String>,
+    /// The player who opened it, or the seller (`"city"`, …) when the game put it up.
+    pub opener: String,
+    /// The opening bid, or the reserve when it opened without one, pence.
+    pub opening_bid: i64,
+    /// The room: one seat per player, in seat order.
+    pub seats: Vec<AuctionSeat>,
+}
+
+/// Where a player stands in the live auction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SeatStatus {
+    /// In, not their turn, has not passed this round.
+    Waiting,
+    /// Their turn.
+    ToAct,
+    /// Holds the high bid.
+    Raised,
+    /// Passed this round (a pass counts for one round, R8).
+    Passed,
+    /// Cannot bid: bankrupt, or the seller.
+    Out,
+}
+
+/// One seat at the live auction.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuctionSeat {
+    /// `"p0"`, …
+    pub player: String,
+    /// Where they stand.
+    pub status: SeatStatus,
+    /// Their last bid in this auction, pence.
+    pub last_bid: Option<i64>,
 }
 
 /// What a bid event is.
@@ -405,6 +471,17 @@ mod tests {
                 name: "Grocery".into(),
                 kind: "grocery".into(),
                 city_run: false,
+                sold_today: 3,
+                capacity: 40,
+                goods: vec![GoodRow {
+                    good: "bread".into(),
+                    cost: 10,
+                    price: 25,
+                    sold_yesterday: 4,
+                    order: 20,
+                    stock: 17,
+                    sold_today: 3,
+                }],
             }),
             buildings: 1,
             takings_per_day: 500,
@@ -417,6 +494,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines, reason = "one literal of every server shape")]
     fn server_messages_round_trip_with_the_documented_fields() {
         let snapshot = ServerMessage::Snapshot(Snapshot {
             tick: 0,
@@ -459,6 +537,8 @@ mod tests {
                 cash: 1,
                 net_worth: 2,
                 bankrupt: false,
+                costs_yesterday: 5,
+                profit_yesterday: -5,
             }],
             lots: vec![sample_lot()],
             auction: Some(Auction {
@@ -468,6 +548,14 @@ mod tests {
                 high_bidder: None,
                 seconds_left: 120,
                 round: 0,
+                turn: None,
+                opener: "p1".into(),
+                opening_bid: 100,
+                seats: vec![AuctionSeat {
+                    player: "p0".into(),
+                    status: SeatStatus::ToAct,
+                    last_bid: None,
+                }],
             }),
             bids: vec![Bid {
                 tick: 3,

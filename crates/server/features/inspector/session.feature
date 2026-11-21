@@ -41,6 +41,7 @@ Feature: The inspector session
     And I take a snapshot
     Then every lot's owner, lease, land value and building match the world
     And every lot's profit per day is its takings plus its rent less its costs
+    And every business's goods table matches the world
 
   @R88
   Scenario: City-run buildings are marked
@@ -65,6 +66,8 @@ Feature: The inspector session
     Then the live auction names a block of the board
     And a bid event "open" names that block
     And that lot is open for bids
+    When I play through the session until bidding starts
+    Then the auction room has one seat per player and only the seat whose turn it is is to act
     When I play through the session until that auction closes
     Then a bid event "won" or "unsold" names that block
     And the snapshot's recent bids include that result

@@ -189,7 +189,10 @@ impl Connection {
                             return self.close();
                         }
                     }
-                    Ok(Message::Close(_)) => return self.drain(),
+                    Ok(Message::Close(_)) => {
+                        self.drain();
+                        return Ok(());
+                    }
                     Ok(_) => {}
                     Err(tungstenite::Error::Io(e)) if e.kind() == ErrorKind::WouldBlock => break,
                     Err(
@@ -340,11 +343,12 @@ impl Connection {
             }
             Err(e) => return Err(e.into()),
         }
-        self.drain()
+        self.drain();
+        Ok(())
     }
 
     /// Reads until the connection is closed, for at most a second.
-    fn drain(mut self) -> Result<(), ServerError> {
+    fn drain(mut self) {
         let deadline = now() + Duration::from_secs(1);
         while now() < deadline {
             match self.ws.read() {
@@ -353,10 +357,9 @@ impl Connection {
                     let _ = self.ws.flush();
                     std::thread::sleep(Duration::from_millis(5));
                 }
-                Err(_) => return Ok(()),
+                Err(_) => return,
             }
         }
-        Ok(())
     }
 }
 
