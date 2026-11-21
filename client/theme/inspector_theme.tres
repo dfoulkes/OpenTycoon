@@ -1,0 +1,202 @@
+[gd_resource type="Theme" load_steps=12 format=3]
+
+; OpenTycoon inspector theme (R89): a cream "property card" on dark ink, original to this game.
+; Palette: cream #F6EFDC, ink #262420, felt green #2E6B3F, loss red #B3261E, brass #D9A441,
+; night navy #1C2633. Shared by the in-game UI and the menus.
+; Type variations: CardHeader, CardTitle, Caption, Badge, MoneyPositive, MoneyNegative,
+; HudPanel, HudLabel, HudPaused, HudBankrupt, FeedEntry, FeedResult, FeedMuted, AuctionStrip,
+; SectionTitle.
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
+content_margin_left = 14.0
+content_margin_top = 12.0
+content_margin_right = 14.0
+content_margin_bottom = 12.0
+bg_color = Color(0.965, 0.937, 0.863, 1)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.149, 0.141, 0.125, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+shadow_color = Color(0, 0, 0, 0.35)
+shadow_size = 6
+shadow_offset = Vector2(3, 4)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_header"]
+content_margin_left = 10.0
+content_margin_top = 8.0
+content_margin_right = 10.0
+content_margin_bottom = 8.0
+bg_color = Color(0.18, 0.42, 0.247, 1)
+border_width_bottom = 2
+border_color = Color(0.149, 0.141, 0.125, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_badge"]
+content_margin_left = 6.0
+content_margin_top = 1.0
+content_margin_right = 6.0
+content_margin_bottom = 1.0
+bg_color = Color(0.851, 0.643, 0.255, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hud"]
+content_margin_left = 12.0
+content_margin_top = 6.0
+content_margin_right = 12.0
+content_margin_bottom = 6.0
+bg_color = Color(0.11, 0.149, 0.2, 0.92)
+border_width_bottom = 2
+border_color = Color(0.851, 0.643, 0.255, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_strip"]
+content_margin_left = 8.0
+content_margin_top = 4.0
+content_margin_right = 8.0
+content_margin_bottom = 4.0
+bg_color = Color(0.851, 0.643, 0.255, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button"]
+content_margin_left = 12.0
+content_margin_top = 5.0
+content_margin_right = 12.0
+content_margin_bottom = 5.0
+bg_color = Color(0.149, 0.141, 0.125, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.851, 0.643, 0.255, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_hover"]
+content_margin_left = 12.0
+content_margin_top = 5.0
+content_margin_right = 12.0
+content_margin_bottom = 5.0
+bg_color = Color(0.243, 0.231, 0.208, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.961, 0.773, 0.392, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_pressed"]
+content_margin_left = 12.0
+content_margin_top = 6.0
+content_margin_right = 12.0
+content_margin_bottom = 4.0
+bg_color = Color(0.851, 0.643, 0.255, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.149, 0.141, 0.125, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_disabled"]
+content_margin_left = 12.0
+content_margin_top = 5.0
+content_margin_right = 12.0
+content_margin_bottom = 5.0
+bg_color = Color(0.4, 0.388, 0.361, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_focus"]
+draw_center = false
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.961, 0.773, 0.392, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxLine" id="StyleBoxLine_sep"]
+color = Color(0.149, 0.141, 0.125, 0.35)
+thickness = 2
+
+[resource]
+default_font_size = 15
+AuctionStrip/base_type = &"PanelContainer"
+AuctionStrip/styles/panel = SubResource("StyleBoxFlat_strip")
+Badge/base_type = &"Label"
+Badge/colors/font_color = Color(0.149, 0.141, 0.125, 1)
+Badge/font_sizes/font_size = 11
+Badge/styles/normal = SubResource("StyleBoxFlat_badge")
+Button/colors/font_color = Color(0.965, 0.937, 0.863, 1)
+Button/colors/font_disabled_color = Color(0.8, 0.78, 0.72, 1)
+Button/colors/font_focus_color = Color(0.965, 0.937, 0.863, 1)
+Button/colors/font_hover_color = Color(1, 0.98, 0.92, 1)
+Button/colors/font_pressed_color = Color(0.149, 0.141, 0.125, 1)
+Button/styles/disabled = SubResource("StyleBoxFlat_button_disabled")
+Button/styles/focus = SubResource("StyleBoxFlat_focus")
+Button/styles/hover = SubResource("StyleBoxFlat_button_hover")
+Button/styles/normal = SubResource("StyleBoxFlat_button")
+Button/styles/pressed = SubResource("StyleBoxFlat_button_pressed")
+Caption/base_type = &"Label"
+Caption/colors/font_color = Color(0.36, 0.345, 0.314, 1)
+Caption/font_sizes/font_size = 13
+CardHeader/base_type = &"PanelContainer"
+CardHeader/styles/panel = SubResource("StyleBoxFlat_header")
+CardTitle/base_type = &"Label"
+CardTitle/colors/font_color = Color(0.988, 0.976, 0.941, 1)
+CardTitle/colors/font_outline_color = Color(0.149, 0.141, 0.125, 1)
+CardTitle/constants/outline_size = 4
+CardTitle/font_sizes/font_size = 22
+FeedEntry/base_type = &"Label"
+FeedEntry/colors/font_color = Color(0.93, 0.92, 0.88, 1)
+FeedEntry/font_sizes/font_size = 13
+FeedMuted/base_type = &"Label"
+FeedMuted/colors/font_color = Color(0.6, 0.62, 0.66, 1)
+FeedMuted/font_sizes/font_size = 12
+FeedResult/base_type = &"Label"
+FeedResult/colors/font_color = Color(0.961, 0.773, 0.392, 1)
+FeedResult/font_sizes/font_size = 14
+HSeparator/styles/separator = SubResource("StyleBoxLine_sep")
+HudBankrupt/base_type = &"Label"
+HudBankrupt/colors/font_color = Color(0.937, 0.451, 0.4, 1)
+HudLabel/base_type = &"Label"
+HudLabel/colors/font_color = Color(0.965, 0.937, 0.863, 1)
+HudLabel/font_sizes/font_size = 14
+HudPanel/base_type = &"PanelContainer"
+HudPanel/styles/panel = SubResource("StyleBoxFlat_hud")
+HudPaused/base_type = &"Label"
+HudPaused/colors/font_color = Color(0.961, 0.773, 0.392, 1)
+HudPaused/font_sizes/font_size = 14
+Label/colors/font_color = Color(0.149, 0.141, 0.125, 1)
+MoneyNegative/base_type = &"Label"
+MoneyNegative/colors/font_color = Color(0.702, 0.149, 0.118, 1)
+MoneyPositive/base_type = &"Label"
+MoneyPositive/colors/font_color = Color(0.18, 0.42, 0.247, 1)
+PanelContainer/styles/panel = SubResource("StyleBoxFlat_card")
+SectionTitle/base_type = &"Label"
+SectionTitle/colors/font_color = Color(0.961, 0.773, 0.392, 1)
+SectionTitle/font_sizes/font_size = 13
