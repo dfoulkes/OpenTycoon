@@ -1,0 +1,88 @@
+{
+  "$defs": {
+    "TokenRules": {
+      "additionalProperties": false,
+      "description": "The single-player token (`hello.token`): the embedded server only talks to the client that\nstarted it.",
+      "properties": {
+        "length": {
+          "description": "Hex characters in the token. The client makes one of exactly this length; the server\nrefuses to start with any other.",
+          "format": "uint32",
+          "maximum": 128,
+          "minimum": 16,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "length"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "`server.yaml`.",
+  "properties": {
+    "deltas_per_second": {
+      "description": "Deltas sent per real second, at most. Each delta carries every tick since the last.",
+      "format": "double",
+      "maximum": 120,
+      "minimum": 0.1,
+      "type": "number"
+    },
+    "max_catch_up_seconds": {
+      "description": "If the server falls more than this many real seconds behind its speed (a stall), it\ndrops the backlog instead of racing to catch up.",
+      "format": "double",
+      "maximum": 60,
+      "minimum": 0.1,
+      "type": "number"
+    },
+    "max_walkers": {
+      "description": "Walker positions sent per message, at most.",
+      "format": "uint32",
+      "maximum": 100000,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "recent_bids": {
+      "description": "Bid events kept for the snapshot's recent history.",
+      "format": "uint32",
+      "maximum": 10000,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "start_speed": {
+      "description": "The speed step a new game starts at (`0` = paused).",
+      "format": "uint8",
+      "maximum": 4,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "ticks_per_second": {
+      "description": "Ticks per real second for speed steps 1, 2, 3 and 4, in that order. Each step must be\nfaster than the one before.",
+      "items": {
+        "format": "double",
+        "maximum": 100000,
+        "minimum": 0.01,
+        "type": "number"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "type": "array"
+    },
+    "token": {
+      "$ref": "#/$defs/TokenRules",
+      "description": "The one-time token rules."
+    }
+  },
+  "required": [
+    "ticks_per_second",
+    "start_speed",
+    "deltas_per_second",
+    "max_catch_up_seconds",
+    "max_walkers",
+    "recent_bids",
+    "token"
+  ],
+  "title": "ServerConfig",
+  "type": "object"
+}
