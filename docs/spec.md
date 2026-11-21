@@ -473,15 +473,20 @@ Every tunable lives in YAML. The server loads it at game start, and a game's sav
 
 ```
 config/
-  game.yaml        # clock, presets, bankruptcy, overdraft, net worth weights
+  game.yaml        # world scale, clock, presets, bankruptcy strikes and solvency line, player seats
   map.yaml         # 9×9 grid, districts, tiers, sets, land base prices, tube stations + line opening years
   auctions.yaml    # countdown, turn timer, increments
-  utilities.yaml   # base rates, nationalisation rules
+  utilities.yaml   # the internet upgrade year, nationalisation rules, reserve prices
   businesses.yaml  # every business type: footprint, stock density, hours, goods, utility factors, unlock/obsolete years
-  customers.yaml   # population curve, class split by era, budgets, price sensitivity, shopping-list probabilities
+  customers.yaml   # population curve, class split by era, allowance shape, shopping-list probabilities, windows
   events.yaml      # history + random events, elections
   ai.yaml          # AI personalities and weights
+  economy.yaml     # every economy weight (R71): land, building and utility rates, leases, net worth,
+                   # starting cash, overdraft, sell-back, births and migration, allowances, price
+                   # sensitivity, demand by decade, the residential market
 ```
+
+Content (what exists, where and when, and who wants what) stays in its own file; every lever the balance study varies is in `economy.yaml`, so adopting an economic model is one file copy (R71; the line is drawn in `docs/economy.md` "Economy weights (R71)").
 
 Example:
 
@@ -503,15 +508,20 @@ clock:
 bankruptcy:
   strikes_to_bankrupt: 2
   solvent_at_or_above: 0
-  sell_to_city_ratio: 0.5
-overdraft:
-  start_limit: 10000
-  increase_per_step: 2500
-  interest_rate: 0.0
-net_worth:
+```
+
+```yaml
+# economy.yaml (excerpt)
+land:
+  base_rate: 0.05
+  lease_term_years: 30
+  value_method: book_decay
   lot_property_uplift: 0.2
-leases:
-  term_years: 30
+money:
+  starting_cash: 7000
+  overdraft: { start_limit: 10000, increase_per_step: 2500, interest_rate: 0.0 }
+  sell_to_city_ratio: 0.5
+demand_multipliers: { 1930s: 1.0, 1950s: 1.0, 1970s: 1.0, 1990s: 1.0, 2010s: 1.0, 2030s: 1.0 }
 ```
 
 - **Validation:** a JSON Schema for each file. The server refuses to start on an invalid config and names the bad key, so nothing fails silently.
@@ -637,6 +647,7 @@ OpenTycoon/
 | R68 | A competently run shop must be profitable in every era: retail is fixed in the economy, not by loosening the balance rule |
 | R69 | Events act within a game day, never across whole days (a game day is a 5-year era). The 1970s three-day week becomes power cuts: shops shut for a few hours that day, with a front-page article. The locked stock order always arrives at 06:00. During a cut shoppers congregate on the streets and wait; if their window for an item ends while the lights are out, R70 applies and they move on to their next item. Demand or supply effects may span several eras (e.g. WWII rationing over 1940 and 1945); only closures are limited to within a day |
 | R70 | Each good is shopped for in a time window that depends on the shopper's age band, class and sex (e.g. young middle class buy clothes 15:00–17:00; upper-class seniors at 10:00). If the window is missed (shop dark in a power cut, sold out, closed), the shopper moves on to their next item; the missed good is not bought that day |
+| R71 | Every economy weight (the levers the balance study varies) lives in one economy.yaml; adopting an economic model means swapping that one file |
 
 ### Open
 

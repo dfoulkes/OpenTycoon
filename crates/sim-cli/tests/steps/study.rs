@@ -44,6 +44,8 @@ pub struct StudyState {
     pub reports: Vec<StudyReport>,
     /// The error of the last run that refused to start.
     pub refused: Option<String>,
+    /// The model adopted by copying its economy.yaml (R71).
+    pub adopted: Option<u64>,
 }
 
 impl StudyState {
@@ -803,4 +805,118 @@ fn overlay_loads(w: &mut HarnessWorld) {
         sim_cli::overrides::load(&ConfigSources::read_dir(&shipped).unwrap(), None, &parsed)
             .unwrap();
     assert_eq!(adopted, expected);
+}
+
+// ---- R71: a model is one economy.yaml ----------------------------------------------------------
+
+#[then(regex = r#"^every parameter of "([^"]+)" varies a key in (.+)$"#)]
+fn def_varies_only(_w: &mut HarnessWorld, def: String, files: String) {
+    let files: Vec<String> = files
+        .split('"')
+        .skip(1)
+        .step_by(2)
+        .map(|f| f.trim_end_matches(".yaml").to_owned() + ".")
+        .collect();
+    let text = std::fs::read_to_string(super::repo_root().join(&def)).unwrap();
+    let def = StudyDef::from_yaml(&text).unwrap();
+    assert!(!def.parameters.is_empty());
+    for p in &def.parameters {
+        for key in p.all_keys() {
+            assert!(
+                files.iter().any(|f| key.starts_with(f.as_str())),
+                "parameter {} varies {key}, outside {files:?}",
+                p.name
+            );
+        }
+    }
+}
+
+fn read_json(path: &std::path::Path) -> serde_json::Value {
+    serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+}
+
+fn top_ids(out: &std::path::Path) -> Vec<u64> {
+    read_json(&out.join("summary.json"))["top"]
+        .as_array()
+        .expect("summary.json lists the top models")
+        .iter()
+        .map(|v| v.as_u64().unwrap())
+        .collect()
+}
+
+#[then(regex = r#"^every top model's overlay holds exactly "([^"]+)", "([^"]+)" and "([^"]+)"$"#)]
+fn overlay_files(w: &mut HarnessWorld, a: String, b: String, c: String) {
+    let out = w.cli.tmp_dir().join("out");
+    let ids = top_ids(&out);
+    assert!(!ids.is_empty(), "no top models");
+    let mut want = vec![a, b, c];
+    want.sort();
+    for id in ids {
+        let dir = out.join("models").join(id.to_string());
+        let mut got: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        got.sort();
+        assert_eq!(got, want, "model {id}'s overlay");
+    }
+}
+
+#[when(
+    regex = r#"^I adopt the best sampled model of "([^"]+)" by copying its economy.yaml over the shipped config in "([^"]+)"$"#
+)]
+fn adopt_model(w: &mut HarnessWorld, out: String, adopted: String) {
+    let tmp = w.cli.tmp_dir();
+    let out = tmp.join(out);
+    // The best model that is not the baseline: copying model 0 would prove nothing.
+    let id = top_ids(&out)
+        .into_iter()
+        .find(|id| *id != 0)
+        .expect("a sampled model among the top models");
+    let overlay = out.join("models").join(id.to_string());
+    let overrides = std::fs::read_to_string(overlay.join("overrides.txt")).unwrap();
+    assert!(
+        overrides.lines().any(|l| l.starts_with("economy.")),
+        "model {id} changes no economy lever:\n{overrides}"
+    );
+    let target = tmp.join(adopted);
+    std::fs::create_dir_all(&target).unwrap();
+    for entry in std::fs::read_dir(super::repo_root().join("config"))
+        .unwrap()
+        .flatten()
+    {
+        if entry.path().is_file() {
+            std::fs::copy(entry.path(), target.join(entry.file_name())).unwrap();
+        }
+    }
+    std::fs::copy(overlay.join("economy.yaml"), target.join("economy.yaml")).unwrap();
+    w.study.adopted = Some(id);
+}
+
+/// `games.csv` rows of one model, without the model id: game, seed, rotation, winner, days,
+/// ticks, state hash and every seat's result.
+fn games_of(path: &std::path::Path, model: u64) -> Vec<String> {
+    let text = std::fs::read_to_string(path).unwrap();
+    text.lines()
+        .skip(1)
+        .filter_map(|l| l.split_once(','))
+        .filter(|(id, _)| id.parse::<u64>().ok() == Some(model))
+        .map(|(_, rest)| rest.to_owned())
+        .collect()
+}
+
+#[then(
+    regex = r#"^model 0 of "([^"]+)" played the adopted model's games of "([^"]+)" with the same state hashes$"#
+)]
+fn replay_matches(w: &mut HarnessWorld, replay: String, out: String) {
+    let tmp = w.cli.tmp_dir();
+    let id = w.study.adopted.expect("no model adopted");
+    let original = games_of(&tmp.join(out).join("games.csv"), id);
+    let replayed = games_of(&tmp.join(replay).join("games.csv"), 0);
+    assert!(!original.is_empty(), "model {id} played no games");
+    assert_eq!(
+        replayed, original,
+        "model {id} replayed from its economy.yaml"
+    );
 }

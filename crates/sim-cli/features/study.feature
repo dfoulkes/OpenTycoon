@@ -227,3 +227,24 @@ Feature: Balance study
     And the file "out/games.csv" has 7 lines
     And "out/summary.json" lists 3 models ranked
     And the overlay of the top model loads when copied over the shipped config
+
+  # ---- R71: a model is one economy.yaml ------------------------------------------------------
+
+  @R71
+  Scenario Outline: The shipped study definitions vary only the economy's weights
+    Then every parameter of "<def>" varies a key in <files>
+
+    Examples:
+      | def                       | files                     |
+      | study/study.yaml          | "economy.yaml"            |
+      | study/study-with-ai.yaml  | "economy.yaml" or "ai.yaml" |
+
+  @R64 @R71
+  Scenario: A top model is one economy.yaml, and copying it over config/ reproduces its games
+    When I run sim-cli "study config --def crates/sim-cli/tests/fixtures/study-adopt.yaml --out {tmp}/out --threads 2 --no-wall-time --games-csv"
+    Then sim-cli succeeds
+    And every top model's overlay holds exactly "economy.yaml", "model.json" and "overrides.txt"
+    When I adopt the best sampled model of "out" by copying its economy.yaml over the shipped config in "adopted"
+    And I run sim-cli "study {tmp}/adopted --def crates/sim-cli/tests/fixtures/study-adopt.yaml --models 1 --out {tmp}/replay --threads 2 --no-wall-time --games-csv"
+    Then sim-cli succeeds
+    And model 0 of "replay" played the adopted model's games of "out" with the same state hashes
