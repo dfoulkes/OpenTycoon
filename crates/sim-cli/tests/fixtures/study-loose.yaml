@@ -13,7 +13,7 @@ criteria:
   min_idle_below_solvent_rate: 0.0
 parameters:
   - name: overdraft
-    key: game.overdraft.start_limit
+    key: economy.money.overdraft.start_limit
     min: 5000
     max: 20000
     distribution: uniform

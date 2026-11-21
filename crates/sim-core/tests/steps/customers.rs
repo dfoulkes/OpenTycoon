@@ -697,6 +697,32 @@ fn fade_leaves(w: &mut SimWorld, pct: f64, good: String, win: String, year: i32)
     );
 }
 
+/// `P(good)` as shoppers act on it, including the decade's demand multiplier (R71).
+#[then(
+    regex = r#"^an? (working|middle|upper) (man|woman) aged "([^"]+)" acts on P\((\w+)\) = ([\d.]+) by (day|night) in (\d{4})$"#
+)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "one capture per term of P(good | ...)"
+)]
+fn acts_on(
+    w: &mut SimWorld,
+    c: String,
+    s: String,
+    b: String,
+    good: String,
+    p: f64,
+    win: String,
+    year: i32,
+) {
+    let who = cohort(w, &c, &s, &b);
+    let got = effective_p(w, who, &good, window(&win), year);
+    assert!(
+        (got - p).abs() < 1e-9,
+        "P({good}) in {year} = {got}, expected {p}"
+    );
+}
+
 #[then("every good a walk-in shop type sells is wanted by some shopper in every step it trades")]
 fn every_good_wanted(w: &mut SimWorld) {
     let config = CityState::config(w);

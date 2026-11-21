@@ -1,7 +1,11 @@
 //! Steps for `features/config/`.
 
 use cucumber::{given, then, when};
+use sim_core::businesses::formula;
+use sim_core::land::Tier;
 use sim_core::{Config, ConfigErrors, ConfigSources};
+
+use super::population::pounds;
 
 use crate::SimWorld;
 use crate::common;
@@ -100,4 +104,37 @@ fn error_names(w: &mut SimWorld, file: String, text: String) {
         .iter()
         .any(|e| e.file == file && e.to_string().contains(&text));
     assert!(hit, "no error names {file:?} and {text:?}; got:\n{errors}");
+}
+
+// ---- R71: economy.yaml's levers take effect -------------------------------------------------
+
+fn business_type(config: &Config, name: &str) -> sim_core::config::businesses::BusinessType {
+    config
+        .businesses
+        .types
+        .get(name)
+        .unwrap_or_else(|| panic!("no business type {name}"))
+        .clone()
+}
+
+/// The reference shop's rent and utilities on a Medium block in `year` (docs/economy.md).
+#[then(regex = r#"^a reference "([^"]+)" pays £([\d.]+) a day in rent and utilities in (\d{4})$"#)]
+fn reference_overheads(w: &mut SimWorld, name: String, amount: String, year: i32) {
+    let config = w.config.load_ok();
+    let kind = business_type(&config, &name);
+    let volume = formula::reference_volume(&kind, &config);
+    let got = formula::daily_overheads(&kind, &config, volume, Tier::Medium, year);
+    assert_eq!(got, pounds(&amount), "{name}'s overheads in {year}");
+}
+
+/// What the reference shop must make a day: overheads plus its build cost over the payback.
+#[then(regex = r#"^a reference "([^"]+)" must make £([\d.]+) a day$"#)]
+fn reference_target(w: &mut SimWorld, name: String, amount: String) {
+    let config = w.config.load_ok();
+    let kind = business_type(&config, &name);
+    assert_eq!(
+        formula::daily_target(&kind, &config),
+        pounds(&amount),
+        "{name}'s daily target"
+    );
 }
