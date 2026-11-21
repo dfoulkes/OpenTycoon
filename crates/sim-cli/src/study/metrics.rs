@@ -11,6 +11,7 @@
 use std::cmp::Ordering;
 
 use super::def::Criteria;
+use super::fun::FunGame;
 use super::seats::{Entry, Roster};
 use crate::stats::{Distribution, distribution};
 
@@ -98,6 +99,8 @@ pub struct GameOutcome {
     pub ticks: u64,
     /// Final state hash.
     pub state_hash: u64,
+    /// What the game contributes to the fun score (R79); empty if it was not measured.
+    pub fun: FunGame,
 }
 
 impl GameOutcome {
@@ -352,6 +355,7 @@ mod tests {
             days: 0,
             ticks: 0,
             state_hash: 0,
+            fun: FunGame::default(),
         }
     }
 

@@ -12,6 +12,8 @@
 //! - [`genome`]: genomes, the first population, mutation, crossover and selection.
 //! - [`fitness`]: what a candidate's games are worth, and the ranking.
 //! - [`output`]: `generations.csv` rows and the fitness curves.
+//! - [`lineup_fun`]: `lineup_fun.json`, each generation's champion line-up scored by the
+//!   study's fun metrics (R79).
 //! - [`run`]: the run: resume, the generation loop, `summary.json`; with `evolution` (the
 //!   fixed context: roster, genes, configs, populations) and `generation` (one generation's
 //!   games, ranking, champions and lineup).
@@ -21,6 +23,7 @@ mod evolution;
 pub mod fitness;
 mod generation;
 pub mod genome;
+pub mod lineup_fun;
 pub mod output;
 pub mod run;
 

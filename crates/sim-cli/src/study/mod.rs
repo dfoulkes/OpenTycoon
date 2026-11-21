@@ -12,9 +12,14 @@
 //! - [`seats`]: the roster and the seat rotation.
 //! - [`metrics`]: Wilson intervals, evenness, the R65 flag and the ranking score.
 //! - [`run`]: playing a study, in parallel, resumable.
+//! - [`fun`]: the fun score (R79): lead changes, comebacks, margins, upsets, playstyles,
+//!   streaks, the target bands, and `study rescore` from recordings.
+//! - [`confirm`]: re-running chosen models on fresh seeds (`study confirm`).
 //! - [`output`]: `models.csv`, `games.csv`, `summary.json` and the overlays.
 
+pub mod confirm;
 pub mod def;
+pub mod fun;
 pub mod lhs;
 pub mod metrics;
 pub mod models;
@@ -22,6 +27,7 @@ pub mod output;
 pub mod run;
 pub mod seats;
 
+pub use confirm::{Compared, ConfirmOptions, confirm};
 pub use def::{
     Criteria, Distribution, Expectation, IDLE, Kind, Mode, Parameter, StudyDef, StudyError,
 };

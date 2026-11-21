@@ -4,6 +4,7 @@ pub mod batch;
 pub mod cli;
 pub mod config;
 pub mod evolve;
+pub mod fun;
 pub mod replay;
 pub mod study;
 

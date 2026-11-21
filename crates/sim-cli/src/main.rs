@@ -49,7 +49,10 @@ use sim_cli::replay::store::{LocalStore, ObjectStore};
 use sim_cli::replay::verify::{VerifyError, verify};
 use sim_cli::replay::writer::{RunWriter, WriteStats, WriterOptions};
 use sim_cli::replay::{self, extract, load};
-use sim_cli::study::{RunOptions, StudyDef, StudyRecording, run_study, run_study_recorded};
+use sim_cli::study::fun::{RescoreOptions, find_study_run, rescore};
+use sim_cli::study::{
+    ConfirmOptions, RunOptions, StudyDef, StudyRecording, confirm, run_study, run_study_recorded,
+};
 use sim_cli::timing::Stopwatch;
 use sim_core::clock::ClockRules;
 use sim_core::config::ConfigFile;
@@ -131,9 +134,10 @@ enum Command {
     /// Measure the sim and compare against the perf budgets; exit 1 if any is over budget.
     /// Not part of `cargo test`: run it on a quiet machine (`cargo perf`).
     PerfBudget(PerfArgs),
-    /// Balance study (R64, R65): sample economic models, play each over many games with the
-    /// seats rotated, and rank the balanced ones. Resumes an interrupted study in `--out`.
-    Study(StudyArgs),
+    /// Balance study (R64, R65, R79): sample economic models, play each over many games with
+    /// the seats rotated, and rank the balanced ones by fun. Resumes an interrupted study in
+    /// `--out`. `study rescore` and `study confirm` work on a finished or recorded study.
+    Study(StudyCmd),
     /// Evolve each AI personality's settings over generations of games (docs/evolve.md).
     /// Resumes an interrupted evolution in `--out`.
     Evolve(EvolveArgs),
@@ -232,14 +236,90 @@ struct ExtractArgs {
     human_weight: f64,
 }
 
+/// `sim-cli study <dir> ...`, or one of its subcommands.
+#[derive(Args, Debug)]
+#[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
+struct StudyCmd {
+    #[command(subcommand)]
+    action: Option<StudyAction>,
+    #[command(flatten)]
+    run: StudyArgs,
+}
+
+#[derive(Subcommand, Debug)]
+enum StudyAction {
+    /// Compute the fun metrics (R79) of a recorded study from its manifests and replays,
+    /// without playing a game, and write a re-ranked models.csv and summary.json.
+    Rescore(RescoreArgs),
+    /// Re-run chosen models of a finished study on fresh seeds and compare their R65 and fun
+    /// metrics with the study's (a guard against winner's-curse selection).
+    Confirm(ConfirmArgs),
+}
+
+#[derive(Args, Debug)]
+struct RescoreArgs {
+    /// The recordings: `s3` (from `OPENTYCOON_S3_*`) or a local directory.
+    #[arg(long)]
+    recordings: String,
+    /// The study's output directory (models.csv, summary.json), or a recording run id.
+    #[arg(long)]
+    run: String,
+    /// The run id, when `--run` is a directory whose summary.json does not name it (a study
+    /// recorded before it did) and the store holds several study runs.
+    #[arg(long)]
+    run_id: Option<String>,
+    /// A definition file whose `fun:` bands replace the study's (with a run id alone, the
+    /// whole definition).
+    #[arg(long = "def")]
+    def: Option<PathBuf>,
+    /// Output directory for the rescored models.csv and summary.json.
+    #[arg(long)]
+    out: PathBuf,
+    /// Worker threads (default: every core). Output is identical for any value.
+    #[arg(long)]
+    threads: Option<usize>,
+}
+
+#[derive(Args, Debug)]
+struct ConfirmArgs {
+    #[command(flatten)]
+    config: ConfigArgs,
+    /// The study's output directory (its summary.json defines the models).
+    #[arg(long)]
+    from: PathBuf,
+    /// Model ids to re-run, comma-separated.
+    #[arg(long, value_delimiter = ',', required = true)]
+    models: Vec<u32>,
+    /// Games per model (default: the study's).
+    #[arg(long)]
+    games: Option<u32>,
+    /// First game seed: must not overlap the study's seeds.
+    #[arg(long)]
+    seed: u64,
+    /// Output directory: models.csv, summary.json, confirm.csv.
+    #[arg(long, default_value = "study-out/confirm")]
+    out: PathBuf,
+    /// Worker threads (default: every core).
+    #[arg(long)]
+    threads: Option<usize>,
+    /// No progress lines on stderr.
+    #[arg(long)]
+    quiet: bool,
+}
+
 #[derive(Args, Debug)]
 #[allow(
     clippy::struct_excessive_bools,
     reason = "independent command-line switches, not a state machine"
 )]
 struct StudyArgs {
-    #[command(flatten)]
-    config: ConfigArgs,
+    /// Config directory (required unless a subcommand is given).
+    #[arg(required = true)]
+    dir: Option<PathBuf>,
+    /// Override one config value, `file.key.path=value` (repeatable), e.g.
+    /// `--set economy.money.overdraft.start_limit=20000`. Validated like a hand-edited file.
+    #[arg(long = "set", value_name = "FILE.KEY=VALUE", value_parser = parse_override)]
+    overrides: Vec<Override>,
     /// Study definition file (docs/study.md).
     #[arg(long = "def", default_value = "study/study.yaml")]
     def: PathBuf,
@@ -535,7 +615,11 @@ fn run(cli: Cli) -> Result<ExitCode> {
         Command::Batch(args) => batch_cmd(args),
         Command::Bench(args) => bench_cmd(args),
         Command::PerfBudget(args) => perf_budget_cmd(args),
-        Command::Study(args) => study_cmd(args),
+        Command::Study(cmd) => match (cmd.action, cmd.run) {
+            (Some(StudyAction::Rescore(a)), _) => rescore_cmd(&a),
+            (Some(StudyAction::Confirm(a)), _) => Ok(confirm_cmd(&a)),
+            (None, args) => study_cmd(args),
+        },
         Command::Evolve(args) => evolve_cmd(&args),
         Command::Record(args) => record_cmd(args),
         Command::Replay(args) => replay_cmd(&args),
@@ -846,10 +930,13 @@ fn study_cmd(args: StudyArgs) -> Result<ExitCode> {
     if let Some(v) = args.top {
         def.top_n = v;
     }
-    let Some(mut base) = read_sources(&args.config.dir) else {
+    let Some(dir) = &args.dir else {
+        anyhow::bail!("study: give a config directory or a subcommand");
+    };
+    let Some(mut base) = read_sources(dir) else {
         return Ok(ExitCode::FAILURE);
     };
-    for ov in &args.config.overrides {
+    for ov in &args.overrides {
         if let Err(e) = overrides::apply(&mut base, ov) {
             eprintln!("error: {e}");
             return Ok(ExitCode::FAILURE);
@@ -863,13 +950,16 @@ fn study_cmd(args: StudyArgs) -> Result<ExitCode> {
         fresh: args.fresh,
         stop_after: args.stop_after,
         progress: !args.quiet,
+        only: None,
+        game_seed: None,
     };
     let watch = Stopwatch::start();
     let result = match &args.record {
         None => run_study(&def, &base, &opts),
         Some(dest) => {
             let base_hash = snapshot(&base).hash;
-            let def_json = serde_json::to_string(&def)?;
+            // The fun bands only score games: a retuned `fun:` keeps the run id.
+            let def_json = serde_json::to_string(&def.games_identity())?;
             let run_id = default_run_id("study", &(def_json, base_hash));
             let rec = Recording::open(dest, &args.record_opts, run_id)?;
             let mut writer = RunWriter::new(rec.store.as_ref(), &rec.run_id, rec.opts);
@@ -912,6 +1002,115 @@ fn study_cmd(args: StudyArgs) -> Result<ExitCode> {
     );
     println!("wrote {}", args.out.display());
     Ok(ExitCode::SUCCESS)
+}
+
+fn rescore_cmd(args: &RescoreArgs) -> Result<ExitCode> {
+    let store = replay::store::open(&args.recordings)?;
+    let def = match &args.def {
+        Some(path) => {
+            let text = std::fs::read_to_string(path)
+                .with_context(|| format!("reading {}", path.display()))?;
+            match StudyDef::from_yaml(&text) {
+                Ok(d) => Some(d),
+                Err(e) => {
+                    eprintln!("error: {}: {e}", path.display());
+                    return Ok(ExitCode::FAILURE);
+                }
+            }
+        }
+        None => None,
+    };
+    let dir = Path::new(&args.run);
+    let (study, run_id) = if dir.is_dir() {
+        let named = std::fs::read_to_string(dir.join("summary.json"))
+            .ok()
+            .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+            .and_then(|v| v["recording"]["run_id"].as_str().map(str::to_owned));
+        let run_id = match (args.run_id.clone(), named) {
+            (Some(id), _) | (None, Some(id)) => id,
+            (None, None) => find_study_run(store.as_ref())?,
+        };
+        (Some(dir.to_path_buf()), run_id)
+    } else {
+        (None, args.run.clone())
+    };
+    let opts = RescoreOptions {
+        run_id: run_id.clone(),
+        study,
+        def,
+        out: args.out.clone(),
+        threads: args.threads,
+    };
+    let watch = Stopwatch::start();
+    let report = match rescore(store.as_ref(), &opts) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return Ok(ExitCode::FAILURE);
+        }
+    };
+    if !report.missing.is_empty() {
+        eprintln!(
+            "rescore: {} models of the study have no recording in run {run_id} (fun columns left \
+             empty): {:?}",
+            report.missing.len(),
+            report.missing
+        );
+    }
+    println!(
+        "rescore: run {run_id} from {}: {} models, {} games in {:.1}s; best {:?}",
+        store.describe(),
+        report.models,
+        report.games,
+        watch.elapsed().as_secs_f64(),
+        report.order.iter().take(10).collect::<Vec<_>>()
+    );
+    println!("wrote {}", args.out.display());
+    Ok(ExitCode::SUCCESS)
+}
+
+fn confirm_cmd(args: &ConfirmArgs) -> ExitCode {
+    let Some(mut base) = read_sources(&args.config.dir) else {
+        return ExitCode::FAILURE;
+    };
+    for ov in &args.config.overrides {
+        if let Err(e) = overrides::apply(&mut base, ov) {
+            eprintln!("error: {e}");
+            return ExitCode::FAILURE;
+        }
+    }
+    let opts = ConfirmOptions {
+        from: args.from.clone(),
+        models: args.models.clone(),
+        games: args.games,
+        seed: args.seed,
+        out: args.out.clone(),
+        threads: args.threads,
+        progress: !args.quiet,
+    };
+    let (report, rows) = match confirm(&base, &opts) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    println!(
+        "confirm: {} models × {} games on fresh seeds from {}",
+        report.ran, report.games_per_model, args.seed
+    );
+    println!(
+        "{:>6}  {:<24} {:>14} {:>14}",
+        "model", "metric", "study", "confirm"
+    );
+    for c in &rows {
+        println!(
+            "{:>6}  {:<24} {:>14} {:>14}",
+            c.model_id, c.metric, c.original, c.confirm
+        );
+    }
+    println!("wrote {}", args.out.join("confirm.csv").display());
+    ExitCode::SUCCESS
 }
 
 /// The command line's overrides of an evolution definition.

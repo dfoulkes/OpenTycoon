@@ -239,16 +239,29 @@ pub fn play_recorded(
     game_id: &str,
     seats: Vec<Seat>,
 ) -> (GameResult, Replay) {
+    let (result, replay, _) = play_recorded_world(world, spec, ctx, game_id, seats);
+    (result, replay)
+}
+
+/// [`play_recorded`], also returning the finished world (for measures taken at the whistle,
+/// such as the study's end-of-game holdings).
+pub fn play_recorded_world(
+    world: World,
+    spec: &GameSpec,
+    ctx: &RecordContext,
+    game_id: &str,
+    seats: Vec<Seat>,
+) -> (GameResult, Replay, World) {
     let header = header(&world, ctx, game_id, seats);
     let mut rec = Recorder::new();
-    let (result, _) = play_with(world, spec, &mut rec);
+    let (result, world) = play_with(world, spec, &mut rec);
     let replay = Replay {
         header,
         commands: rec.commands,
         checkpoints: rec.checkpoints,
         outcome: outcome(&result),
     };
-    (result, replay)
+    (result, replay, world)
 }
 
 #[cfg(test)]

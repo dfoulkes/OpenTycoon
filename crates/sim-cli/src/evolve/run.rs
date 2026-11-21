@@ -333,6 +333,8 @@ pub fn run_evolution_recorded(
             .collect();
         append(&evo.path("generations.csv"), &text)?;
         report.invalid += done.candidates.iter().filter(|c| c.result.is_err()).count() as u64;
+        // Output only (R79): before lineup.json, which marks the generation finished.
+        super::lineup_fun::write(&opts.out, &evo.roster, g, &done.lineup)?;
         evo.write_champions(g, &done)?;
         let games = done.games;
         rows.extend(done.candidates);
