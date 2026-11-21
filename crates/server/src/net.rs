@@ -393,3 +393,35 @@ pub fn load_config(config_dir: &Path, economy: Option<&str>) -> Result<Config, S
     }
     Config::load(&sources).map_err(|e| e.to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dir() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config")
+    }
+
+    #[test]
+    fn new_game_plays_the_economy_file_it_is_given() {
+        let shipped = load_config(&dir(), None).unwrap();
+        let text = std::fs::read_to_string(dir().join("economy.yaml")).unwrap();
+        let cash = shipped.economy.money.starting_cash.money().pence();
+        let edited = text.replacen("starting_cash:", "starting_cash: 1234 #", 1);
+        let path = std::env::temp_dir().join(format!("economy-{}.yaml", std::process::id()));
+        std::fs::write(&path, edited).unwrap();
+        let other = load_config(&dir(), Some(path.to_str().unwrap()));
+        let _ = std::fs::remove_file(&path);
+        let other = other.unwrap();
+        assert_eq!(other.economy.money.starting_cash.money().pence(), 123_400);
+        assert_ne!(cash, 123_400);
+        // An empty path is the shipped economy, as SimLink sends it.
+        assert_eq!(load_config(&dir(), Some("")).unwrap(), shipped);
+    }
+
+    #[test]
+    fn a_missing_economy_file_is_named() {
+        let e = load_config(&dir(), Some("no/such/economy.yaml")).unwrap_err();
+        assert!(e.contains("no/such/economy.yaml"), "{e}");
+    }
+}

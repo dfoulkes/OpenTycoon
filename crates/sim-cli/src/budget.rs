@@ -121,6 +121,11 @@ pub struct Budgets {
     pub reference_machine: String,
     /// Per metric.
     pub budgets: BTreeMap<Metric, Budget>,
+    /// Wire-size budgets (`snapshot_bytes`, `delta_bytes`). Sizes are deterministic, so the
+    /// server crate checks them in `cargo test` (`crates/server/tests/wire_budget.rs`);
+    /// `perf-budget` reads past them.
+    #[serde(default)]
+    pub wire: BTreeMap<String, Budget>,
 }
 
 impl Budgets {
@@ -409,6 +414,7 @@ mod tests {
         Budgets {
             tolerance: 0.2,
             reference_machine: String::new(),
+            wire: BTreeMap::new(),
             budgets: [(
                 Metric::GameDayMs,
                 Budget {
@@ -486,6 +492,7 @@ mod tests {
         Budgets {
             tolerance: 0.2,
             reference_machine: String::new(),
+            wire: BTreeMap::new(),
             budgets: pairs
                 .iter()
                 .map(|(m, l)| {

@@ -8,17 +8,18 @@ How OpenTycoon v2 is put together, and where each piece of work belongs. The spe
 ```
 crates/
   sim-core/    the game: deterministic, headless, no I/O        (library)
-  protocol/    wire messages shared by server and client         (library, placeholder until M2)
-  server/      authoritative server; single-player on 127.0.0.1  (binary `opentycoon-server`, placeholder)
+  protocol/    wire messages shared by server and client         (library; v1, docs/inspector-protocol.md)
+  server/      authoritative server; single-player on 127.0.0.1  (library + binary `opentycoon-server`)
   sim-cli/     headless harness: validate config, run, batch, bench, study, evolve, record (binary `sim-cli`; docs/perf.md, docs/study.md, docs/evolve.md, docs/replay.md)
   client-ext/  godot-rust (gdext) extension for the Godot client  (cdylib)
 client/        Godot 4.7 project: GDScript scenes, cameras, UI, GUT tests
-config/        the nine YAML files (§10b) + generated JSON Schemas
+config/        the nine YAML files (§10b), server.yaml + generated JSON Schemas
 ```
 
 Dependency direction is one way: `server`, `sim-cli` → `sim-core`; `server`, `client-ext` →
-`protocol` (from M2). Nothing depends on `server` or `sim-cli`. `sim-core` depends on no other
-workspace crate and never on the client.
+`protocol`; `client-ext` → `server` (single player runs the server in-process, R44). Nothing else
+depends on `server`, and nothing depends on `sim-cli`. `sim-core` depends on no other workspace
+crate and never on the client.
 
 Single-player is multiplayer against a server on 127.0.0.1 (R44). The server runs the
 simulation; clients only send commands and display state (R40).
@@ -167,7 +168,7 @@ derived from the map and config, which are). It is handed to the customers phase
 
 ## Config
 
-Eight YAML files (§10b). Pipeline: parse YAML → validate against the JSON Schema generated from
+Nine YAML files (§10b). Pipeline: parse YAML → validate against the JSON Schema generated from
 the Rust types (`schemars`) → deserialise into typed structs → cross-file rules
 (`config/validate.rs`). Every problem is collected and reported with file and JSON pointer; any
 problem fails the load. The committed `config/schema/*.schema.json` must match the types
@@ -177,9 +178,37 @@ problem fails the load. The committed `config/schema/*.schema.json` must match t
 Money is written as decimal pounds and converted exactly to pence; ratios are decimals converted
 to basis points; times are `"HH:MM"`. A value that would lose precision fails the load.
 
+`config/server.yaml` sits beside them but is not sim config: it is one of sim-core's
+`COMPANION_FILES`, which `ConfigSources::read_dir` leaves alone, and the `server` crate loads it
+through the same pipeline (YAML → schema from its Rust types → typed struct → cross-field rules,
+errors naming file and pointer). Its schema, `config/schema/server.schema.json`, is regenerated
+with `cargo run -p server -- --write-schema config/schema` and kept in sync by a server test.
+It holds the speed steps (ticks per real second), the delta rate, `max_walkers`, the recent-bids
+history and the token rule. Nothing in it can change a game's result.
+
+## Server
+
+The `server` crate is the game inspector's back end (§10d, R88); the wire contract is
+[`inspector-protocol.md`](inspector-protocol.md) and the `protocol` crate.
+
+| Module | Does |
+|---|---|
+| `config` | `server.yaml`: speeds, delta rate, `max_walkers`, recent bids, token rule |
+| `view` | pure functions `&World` → protocol shapes: the board's rectangles, lots (owner, land value, lease, buildings, shop table, takings, costs, rent, profit), players, the live auction and its room, walkers |
+| `session` | one game, every seat an AI (`World::seated` with the `ai.yaml` roster from the last seat down): steps a tick at a time, keeps what the world forgets at midnight (each business's takings and units sold) and what the auction house does not keep (bid events, passes, last bids, rounds), and makes one snapshot then deltas holding only changed lots and players |
+| `net` | the WebSocket server: plain `tungstenite` on a std thread, one client, bound to `127.0.0.1:0`; answers `hello` (protocol version and one-time token), `new_game`, `set_speed`, `leave`; runs ticks at the speed's rate and sends at most `deltas_per_second` deltas a second |
+
+The session only reads the world between ticks, so a watched game is the same game as a headless
+one with the same config and seed (a scenario checks the state hash). The wall clock is read only
+in `net`, to decide how many ticks to run. The binary `opentycoon-server` checks the config (and
+with `--serve --token` serves one client); single player does not use it.
+
 ## Client
 
 `client/` is a Godot 4.7 project (R47). GDScript owns scenes, cameras and UI; the Rust extension
-(`crates/client-ext`, registered by `client/opentycoon.gdextension`) will own the network client
-and walker interpolation. GUT is vendored under `client/addons/gut`; tests live in
-`client/test/`.
+(`crates/client-ext`, registered by `client/opentycoon.gdextension`) owns the network client and
+will own walker interpolation. Its `SimLink` node starts the server in-process on a thread
+(R44: single player is multiplayer on localhost, hidden from the player), connects over
+WebSocket, polls the socket without blocking in `_process` and emits each message as a
+`Dictionary` signal; scenes never touch the socket. GUT is vendored under `client/addons/gut`;
+tests live in `client/test/` (`test_sim_link.gd` plays a game through the real server).
