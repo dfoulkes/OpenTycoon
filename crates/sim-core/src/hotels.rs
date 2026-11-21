@@ -270,6 +270,8 @@ pub fn choose_hotel(
     let rules = &config.customers;
     let mut index = Vec::new();
     let mut scores = Vec::new();
+    // The shopper's end of every route, once.
+    let here = streets.from(at);
     for (i, o) in offers.iter().enumerate() {
         if o.free == 0 || o.price > budget {
             continue;
@@ -282,7 +284,7 @@ pub fn choose_hotel(
             o.price,
             o.ref_price,
             false,
-            streets.blocks_between(at, o.door),
+            here.blocks_to(o.door),
             reputation
                 .get(&o.hotel)
                 .copied()
