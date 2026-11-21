@@ -125,7 +125,7 @@ fn parse(text: &str) -> Result<Override, LoadError> {
 }
 
 /// The overrides one parameter makes at `value`.
-fn parameter_overrides(
+pub(crate) fn parameter_overrides(
     p: &Parameter,
     base: &ConfigSources,
     value: f64,
@@ -185,7 +185,12 @@ pub fn overrides_for(
 /// `scale` factor, the index of the base value among a categorical parameter's `values`;
 /// `None` if the key holds no single number (or is missing, or a category not listed).
 pub fn baseline_values(def: &StudyDef, base: &ConfigSources) -> Vec<Option<f64>> {
-    def.parameters
+    parameter_baselines(&def.parameters, base)
+}
+
+/// [`baseline_values`] for any list of parameters (the evolution's genes too).
+pub(crate) fn parameter_baselines(params: &[Parameter], base: &ConfigSources) -> Vec<Option<f64>> {
+    params
         .iter()
         .map(|p| match p.mode {
             _ if p.is_categorical() => {

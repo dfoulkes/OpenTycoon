@@ -1,0 +1,72 @@
+# Evolving each AI personality's settings: `sim-cli evolve config` reads this file.
+# Format, algorithm and fitness: docs/evolve.md.
+#
+# It lives outside config/ because config/ holds exactly the nine game files and the loader
+# rejects any other YAML there. Every gene is one personality's tunable in ai.yaml,
+# `ai.<personality>.<key>`, in the study's parameter format (docs/study.md "Parameters").
+# Evolution changes settings, never code: a genome is validated like a hand-edited ai.yaml, and
+# a genome the loader rejects is reported in generations.csv (status = invalid), not fatal.
+#
+# The Grocer's opportunism is not a gene and cannot be one: the Grocer stays pure retail (R66).
+
+# Run size: sized for about 8 hours on a 32-core machine at the measured cost of a full-span,
+# six-seat game (docs/evolve.md "Cost"). Each generation plays
+# 5 personalities × population × games_per_eval games, plus games_per_eval for the lineup.
+population: 16           # genomes per personality per generation
+generations: 30
+games_per_eval: 120      # rounded up to whole seat rotations (120 for six seats)
+elitism: 2               # the best two of each personality carry over unchanged
+selection: { method: tournament, tournament_size: 3 }
+mutation: { rate: 0.25, sigma: 0.1 }   # per-gene chance; step = sigma × the gene's range
+crossover: { rate: 0.5 }               # chance a child has two parents (uniform crossover)
+fitness: { bankruptcy_penalty: 0.5 }   # fitness = win share − 0.5 × bankruptcy rate
+preset: full             # 1930–2050
+seed: 0
+# economy: study-out/models/<id>/economy.yaml   # evolve under an adopted economic model
+# evolve: [landlord, toff]                      # default: every personality in the roster
+# roster: not set: every personality in ai.yaml (grocer, landlord, toff, speculator,
+#   sir_penny_sugar), then one idle seat
+# record: recordings                            # or --record <dir>
+
+genes:
+  # The Grocer: what it pays for land, its buffer, its prices and its orders. Shipped values
+  # are noted; every range contains them, so candidate 0 of generation 0 is the shipped Grocer.
+  - { name: grocer_bid,        key: ai.grocer.max_bid_share,          min: 0.1, max: 0.6 }    # 0.3
+  - { name: grocer_buffer,     key: ai.grocer.cash_buffer,            min: 100, max: 1500, distribution: log_uniform, kind: integer }   # £300
+  - { name: grocer_discount,   key: ai.grocer.working_class_discount, min: 0.0, max: 0.2 }    # 0.05
+  - { name: grocer_first_order, key: ai.grocer.initial_order_share,   min: 0.3, max: 1.0 }    # 1.0
+  - { name: grocer_margin,     key: ai.grocer.order_margin,           min: 0.0, max: 0.3 }    # 0.1
+  # The Landlord
+  - { name: landlord_aggression, key: ai.landlord.aggression,        min: 0.1, max: 0.9 }     # 0.31
+  - { name: landlord_buffer,   key: ai.landlord.cash_buffer,          min: 100, max: 2500, distribution: log_uniform, kind: integer }   # £500
+  - { name: landlord_jitter,   key: ai.landlord.bid_jitter,           min: 0.0, max: 0.5 }    # 0.2
+  - { name: landlord_leases,   key: ai.landlord.max_leases,           min: 2,   max: 16,  kind: integer }   # 8
+  - { name: landlord_blocks,   key: ai.landlord.apartments_per_lot,   min: 1,   max: 4,   kind: integer }   # 3
+  - { name: landlord_rent_step, key: ai.landlord.rent_step,           min: 0.1, max: 0.6 }    # 0.3
+  - { name: landlord_max_rent, key: ai.landlord.max_rent,             min: 1.0, max: 3.0 }    # 2.0
+  - { name: landlord_sell_within, key: ai.landlord.sell_within_years, min: 0,   max: 15,  kind: integer }   # 5
+  # The Toff
+  - { name: toff_aggression,   key: ai.toff.aggression,               min: 0.3, max: 1.0 }    # 0.8
+  - { name: toff_buffer,       key: ai.toff.cash_buffer,              min: 500, max: 5000, distribution: log_uniform, kind: integer }   # £1,500
+  - { name: toff_jitter,       key: ai.toff.bid_jitter,               min: 0.0, max: 0.5 }    # 0.2
+  - { name: toff_premium,      key: ai.toff.price_premium,            min: 0.0, max: 0.6 }    # 0.3
+  - { name: toff_first_order,  key: ai.toff.initial_order_share,      min: 0.2, max: 1.0 }    # 0.5
+  - { name: toff_margin,       key: ai.toff.order_margin,             min: 0.0, max: 0.3 }    # 0.1
+  - { name: toff_switch,       key: ai.toff.opportunism.threshold,    min: 0.05, max: 0.6 }   # 0.25
+  - { name: toff_outside,      key: ai.toff.opportunism.max_outside_share, min: 0.1, max: 0.8 }   # 0.4
+  # The Speculator
+  - { name: speculator_aggression, key: ai.speculator.aggression,     min: 0.2, max: 0.9 }    # 0.51
+  - { name: speculator_jitter, key: ai.speculator.bid_jitter,         min: 0.0, max: 0.6 }    # 0.35
+  - { name: speculator_markup, key: ai.speculator.max_markup,         min: 0.0, max: 0.5 }    # 0.2
+  - { name: speculator_holdings, key: ai.speculator.max_holdings,     min: 2,   max: 10,  kind: integer }   # 4
+  - { name: speculator_hold,   key: ai.speculator.hold_hours,         min: 1,   max: 24,  kind: integer }   # 6
+  - { name: speculator_bargain, key: ai.speculator.bargain_share,     min: 0.3, max: 0.9 }    # 0.6
+  - { name: speculator_switch, key: ai.speculator.opportunism.threshold, min: 0.05, max: 0.6 }   # 0.25
+  # Sir Penny Sugar
+  - { name: penny_aggression,  key: ai.sir_penny_sugar.aggression,    min: 0.1, max: 0.9 }    # 0.34
+  - { name: penny_buffer,      key: ai.sir_penny_sugar.cash_buffer,   min: 100, max: 2500, distribution: log_uniform, kind: integer }   # £400
+  - { name: penny_jitter,      key: ai.sir_penny_sugar.bid_jitter,    min: 0.0, max: 0.7 }    # 0.55
+  - { name: penny_station,     key: ai.sir_penny_sugar.station_premium, min: 0.0, max: 0.3 }  # 0.1
+  - { name: penny_blocks,      key: ai.sir_penny_sugar.apartments_per_lot, min: 1, max: 4, kind: integer }   # 2
+  - { name: penny_rent_step,   key: ai.sir_penny_sugar.rent_step,     min: 0.1, max: 0.6 }    # 0.45
+  - { name: penny_max_rent,    key: ai.sir_penny_sugar.max_rent,      min: 1.5, max: 5.0 }    # 3.0

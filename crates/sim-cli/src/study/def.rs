@@ -393,58 +393,64 @@ impl StudyDef {
                 "must not exceed max_win_share",
             ));
         }
-        for (i, p) in self.parameters.iter().enumerate() {
-            let at = |field: &str| format!("parameters[{i}].{field}");
-            if p.name.is_empty()
-                || !p
-                    .name
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        check_parameters(&self.parameters, "parameters")
+    }
+}
+
+/// Checks a list of parameters (names, keys, ranges, categories), naming errors
+/// `<list>[i].<field>`. Shared by the study's `parameters` and the evolution's `genes`.
+pub(crate) fn check_parameters(params: &[Parameter], list: &str) -> Result<(), StudyError> {
+    for (i, p) in params.iter().enumerate() {
+        let at = |field: &str| format!("{list}[{i}].{field}");
+        if p.name.is_empty()
+            || !p
+                .name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
+            return Err(StudyError::def(
+                at("name"),
+                format!("{:?}: use letters, digits and _", p.name),
+            ));
+        }
+        if params[..i].iter().any(|q| q.name == p.name) {
+            return Err(StudyError::def(
+                at("name"),
+                format!("{:?} is used twice", p.name),
+            ));
+        }
+        if p.all_keys().is_empty() {
+            return Err(StudyError::def(at("key"), "give `key` or `keys`"));
+        }
+        for k in p.all_keys() {
+            if format!("{k}=0")
+                .parse::<crate::overrides::Override>()
+                .is_err()
             {
                 return Err(StudyError::def(
-                    at("name"),
-                    format!("{:?}: use letters, digits and _", p.name),
+                    at("key"),
+                    format!("{k:?} is not `file.key.path`"),
                 ));
-            }
-            if self.parameters[..i].iter().any(|q| q.name == p.name) {
-                return Err(StudyError::def(
-                    at("name"),
-                    format!("{:?} is used twice", p.name),
-                ));
-            }
-            if p.all_keys().is_empty() {
-                return Err(StudyError::def(at("key"), "give `key` or `keys`"));
-            }
-            for k in p.all_keys() {
-                if format!("{k}=0")
-                    .parse::<crate::overrides::Override>()
-                    .is_err()
-                {
-                    return Err(StudyError::def(
-                        at("key"),
-                        format!("{k:?} is not `file.key.path`"),
-                    ));
-                }
-            }
-            for (j, e) in p.expect.iter().enumerate() {
-                if format!("{}=0", e.key)
-                    .parse::<crate::overrides::Override>()
-                    .is_err()
-                {
-                    return Err(StudyError::def(
-                        at(&format!("expect[{j}].key")),
-                        format!("{:?} is not `file.key.path`", e.key),
-                    ));
-                }
-            }
-            if p.is_categorical() {
-                check_categorical(p, &at)?;
-            } else {
-                check_numeric(p, &at)?;
             }
         }
-        Ok(())
+        for (j, e) in p.expect.iter().enumerate() {
+            if format!("{}=0", e.key)
+                .parse::<crate::overrides::Override>()
+                .is_err()
+            {
+                return Err(StudyError::def(
+                    at(&format!("expect[{j}].key")),
+                    format!("{:?} is not `file.key.path`", e.key),
+                ));
+            }
+        }
+        if p.is_categorical() {
+            check_categorical(p, &at)?;
+        } else {
+            check_numeric(p, &at)?;
+        }
     }
+    Ok(())
 }
 
 /// A numeric parameter: a finite range that its distribution and kind can sample.
