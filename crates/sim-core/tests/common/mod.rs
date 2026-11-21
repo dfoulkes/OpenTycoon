@@ -2,6 +2,7 @@
 #![allow(dead_code, reason = "each test target uses a different subset")]
 
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 use sim_core::config::ConfigFile;
 use sim_core::{Config, ConfigSources};
@@ -17,15 +18,37 @@ pub fn repo_root() -> PathBuf {
 }
 
 /// The shipped config as sources (tests may do I/O; sim-core may not).
+///
+/// `config/` is read from disk once per test binary and every later call gets a copy, so a
+/// file that changes while the tests run (an edit, a branch switch in the same checkout) can't
+/// change the config half way through. Property tests load the config before their first case,
+/// so a broken file fails the test once, with the read error, instead of failing every case
+/// and being reported as a shrunk counterexample (`steps = []`).
 pub fn shipped_sources() -> ConfigSources {
+    static SHIPPED: OnceLock<Result<ConfigSources, String>> = OnceLock::new();
+    match SHIPPED.get_or_init(read_shipped_sources) {
+        Ok(sources) => sources.clone(),
+        Err(e) => panic!("{e}"),
+    }
+}
+
+/// Reads `config/` and checks it loads, before a property test's first case. Call it at the
+/// top of the test: a missing or broken file then fails the test once, with its error, and the
+/// cases get the copy already read.
+pub fn preload_shipped_config() {
+    let _ = shipped_config();
+}
+
+fn read_shipped_sources() -> Result<ConfigSources, String> {
     let dir = config_dir();
     let mut sources = ConfigSources::new();
     for file in ConfigFile::ALL {
-        let text = std::fs::read_to_string(dir.join(file.file_name()))
-            .unwrap_or_else(|e| panic!("reading {}: {e}", file.file_name()));
+        let path = dir.join(file.file_name());
+        let text = std::fs::read_to_string(&path)
+            .map_err(|e| format!("reading shipped config {}: {e}", path.display()))?;
         sources.insert(file.file_name(), text);
     }
-    sources
+    Ok(sources)
 }
 
 /// The shipped config, loaded. Panics with every error if it is invalid.

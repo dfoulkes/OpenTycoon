@@ -45,10 +45,11 @@ fn a_cloned_world_stays_in_lockstep() {
     assert_eq!(a.state_hash(), b.state_hash());
 }
 
-proptest! {
-    #![proptest_config(ProptestConfig::with_cases(16))]
-    #[test]
-    fn any_seed_replays_identically(seed in any::<u64>(), ticks in 0u64..2_000) {
+#[test]
+fn any_seed_replays_identically() {
+    // Read config/ before the first case: a broken file fails here once, not as a shrunk case.
+    common::preload_shipped_config();
+    proptest!(ProptestConfig::with_cases(16), |(seed in any::<u64>(), ticks in 0u64..2_000)| {
         prop_assert_eq!(run(seed, ticks), run(seed, ticks));
-    }
+    });
 }

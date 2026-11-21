@@ -58,16 +58,16 @@ fn config_with_online(year: i32) -> Config {
     Config::load(&sources).unwrap()
 }
 
-proptest! {
-    #![proptest_config(ProptestConfig::with_cases(24))]
-
-    #[test]
-    fn hotels_never_let_more_rooms_than_they_have_and_only_to_tourists(
+#[test]
+fn hotels_never_let_more_rooms_than_they_have_and_only_to_tourists() {
+    // Read config/ before the first case: a broken file fails here once, not as a shrunk case.
+    common::preload_shipped_config();
+    proptest!(ProptestConfig::with_cases(24), |(
         seed in any::<u64>(),
         heights in prop::collection::vec((0u32..9, 1u32..12, 30i64..300), 1..4),
         people in 0u64..600,
         class in 0usize..3,
-    ) {
+    )| {
         let config = common::shipped_config();
         let map = Map::from_config(&config.map);
         let mut businesses = Businesses::default();
@@ -136,7 +136,7 @@ proptest! {
                 && customers.parked.is_empty(),
             "everyone is in bed or gone by 04:00"
         );
-    }
+    });
 }
 
 /// A 2000 game with a Hotel and a well-stocked online seller: every tick the ledger grows by
@@ -196,11 +196,11 @@ fn hotels_and_online_sales_conserve_money_plus_what_was_minted() {
     );
 }
 
-proptest! {
-    #![proptest_config(ProptestConfig::with_cases(3))]
-
-    #[test]
-    fn money_is_conserved_with_hotels_and_online_for_any_seed(seed in any::<u64>()) {
+#[test]
+fn money_is_conserved_with_hotels_and_online_for_any_seed() {
+    // Read config/ before the first case: a broken file fails here once, not as a shrunk case.
+    common::preload_shipped_config();
+    proptest!(ProptestConfig::with_cases(3), |(seed in any::<u64>())| {
         run_game_with_hotels_and_online(seed, 8_640 + 600);
-    }
+    });
 }

@@ -45,17 +45,17 @@ fn building(type_id: &str, block: u32, slot: u32, height: u32) -> Business {
     Business::new(request, &config.businesses.types[type_id], Money::ZERO)
 }
 
-proptest! {
-    #![proptest_config(ProptestConfig::with_cases(48))]
-
-    #[test]
-    fn house_hunting_conserves_people_and_never_over_lets(
+#[test]
+fn house_hunting_conserves_people_and_never_over_lets() {
+    // Read config/ before the first case: a broken file fails here once, not as a shrunk case.
+    common::preload_shipped_config();
+    proptest!(ProptestConfig::with_cases(48), |(
         seed in any::<u64>(),
         arriving in prop::collection::vec((0u8..4, 0u8..2, 0u8..3, 0u64..60), 0..12),
         pool in prop::collection::vec((0u8..4, 0u8..2, 0u8..3, 0u64..60), 0..12),
         blocks in prop::collection::vec((0u32..9, 1u32..20, 100i64..800), 0..5),
         year in 1930i32..2050,
-    ) {
+    )| {
         let config = common::shipped_config();
         let map = Map::from_config(&config.map);
         let mut businesses = Businesses::default();
@@ -82,18 +82,22 @@ proptest! {
         for listing in &l {
             prop_assert!(occupancy.get(&listing.building).copied().unwrap_or(0) <= listing.flats);
         }
-    }
+    });
+}
 
-    /// The commute-preference lever (docs/economy.md "Residential levers"): the house-hunt
-    /// never houses more than `⌊adults × (1 − commute_preference)⌋`, and still conserves people.
-    #[test]
-    fn commute_preference_caps_the_housed_share(
+/// The commute-preference lever (docs/economy.md "Residential levers"): the house-hunt
+/// never houses more than `⌊adults × (1 − commute_preference)⌋`, and still conserves people.
+#[test]
+fn commute_preference_caps_the_housed_share() {
+    // Read config/ before the first case: a broken file fails here once, not as a shrunk case.
+    common::preload_shipped_config();
+    proptest!(ProptestConfig::with_cases(48), |(
         seed in any::<u64>(),
         preference_bp in 0i64..=10_000,
         arriving in prop::collection::vec((0u8..4, 0u8..2, 0u8..3, 0u64..60), 0..12),
         pool in prop::collection::vec((0u8..4, 0u8..2, 0u8..3, 0u64..60), 0..12),
         blocks in prop::collection::vec((0u32..9, 1u32..20), 1..5),
-    ) {
+    )| {
         let mut config = common::shipped_config();
         config.economy.residential.commute_preference = Ratio(Rate::from_bp(preference_bp));
         let map = Map::from_config(&config.map);
@@ -117,14 +121,18 @@ proptest! {
         let keep = u64::try_from(10_000 - preference_bp).unwrap();
         prop_assert_eq!(pop.total_adults(), adults);
         prop_assert!(pop.housed() <= adults * keep / 10_000, "{} housed of {}", pop.housed(), adults);
-    }
+    });
+}
 
-    #[test]
-    fn without_deaths_or_migration_the_year_step_keeps_every_adult(
+#[test]
+fn without_deaths_or_migration_the_year_step_keeps_every_adult() {
+    // Read config/ before the first case: a broken file fails here once, not as a shrunk case.
+    common::preload_shipped_config();
+    proptest!(ProptestConfig::with_cases(48), |(
         seed in any::<u64>(),
         pool in prop::collection::vec((0u8..4, 0u8..2, 0u8..3, 0u64..5_000), 0..24),
         year in 1930i32..2050,
-    ) {
+    )| {
         let mut sources = common::shipped_sources();
         common::set_key(&mut sources, "economy.yaml", "/population/migration_per_day", "0");
         for b in ["18-29", "30-49", "50-64", "65+"] {
@@ -141,14 +149,18 @@ proptest! {
         prop_assert_eq!(pop.total_adults(), before);
         prop_assert_eq!(step.deaths, 0);
         prop_assert_eq!(pop.children() + pop.pending_arrivals(), step.births);
-    }
+    });
+}
 
-    #[test]
-    fn shoppers_never_drive_stock_negative_and_sales_match_the_shelf(
+#[test]
+fn shoppers_never_drive_stock_negative_and_sales_match_the_shelf() {
+    // Read config/ before the first case: a broken file fails here once, not as a shrunk case.
+    common::preload_shipped_config();
+    proptest!(ProptestConfig::with_cases(48), |(
         seed in any::<u64>(),
         stocks in prop::collection::vec((0u32..9, 0i64..40), 1..6),
         people in 0u64..400,
-    ) {
+    )| {
         let config = common::shipped_config();
         let map = Map::from_config(&config.map);
         let mut businesses = Businesses::default();
@@ -181,7 +193,7 @@ proptest! {
         let shelf_after: i64 = businesses.by_id.values().flat_map(|b| b.stock.values()).sum();
         prop_assert_eq!(shelf_before - shelf_after, sold);
         prop_assert!(customers.agents.iter().all(|c| c.budget >= Money::ZERO));
-    }
+    });
 }
 
 #[test]

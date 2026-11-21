@@ -36,14 +36,15 @@ fn command() -> impl Strategy<Value = (u8, Command)> {
     )
 }
 
-proptest! {
-    #![proptest_config(ProptestConfig::with_cases(32))]
-    #[test]
-    fn auctions_conserve_money_and_respect_ceilings(
+#[test]
+fn auctions_conserve_money_and_respect_ceilings() {
+    // Loaded before the first case: a broken config fails here, once, not as a counterexample.
+    let mut shipped = common::shipped_config();
+    shipped.ai.opponents.clear();
+    proptest!(ProptestConfig::with_cases(32), |(
         steps in prop::collection::vec((command(), 1u64..400), 0..80)
-    ) {
-        let mut config = common::shipped_config();
-        config.ai.opponents.clear();
+    )| {
+        let config = shipped.clone();
         let limit = config.economy.money.overdraft.start_limit.money();
         let term = config.economy.land.lease_term_years;
         let mut world = World::new(config, 7, 3);
@@ -73,5 +74,5 @@ proptest! {
                 }
             }
         }
-    }
+    });
 }
