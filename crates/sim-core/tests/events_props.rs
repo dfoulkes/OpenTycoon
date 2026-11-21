@@ -93,11 +93,12 @@ fn the_same_seed_replays_the_same_history() {
     assert_eq!(a.state_hash(), b.state_hash());
 }
 
-proptest! {
-    #![proptest_config(ProptestConfig::with_cases(4))]
-    /// Money conservation through events, for any seed and any frequency of building events.
-    #[test]
-    fn events_never_create_or_destroy_money(seed in any::<u64>(), chance in 0i64..3_000) {
+/// Money conservation through events, for any seed and any frequency of building events.
+#[test]
+fn events_never_create_or_destroy_money() {
+    // Read config/ before the first case: a broken file fails here once, not as a shrunk case.
+    common::preload_shipped_config();
+    proptest!(ProptestConfig::with_cases(4), |(seed in any::<u64>(), chance in 0i64..3_000)| {
         play(eventful(chance), seed, 1960);
-    }
+    });
 }

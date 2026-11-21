@@ -33,11 +33,11 @@ fn op() -> impl Strategy<Value = Op> {
     ]
 }
 
-proptest! {
-    #![proptest_config(ProptestConfig::with_cases(64))]
-
-    #[test]
-    fn stock_stays_within_zero_and_capacity_and_is_conserved(ops in prop::collection::vec(op(), 1..60)) {
+#[test]
+fn stock_stays_within_zero_and_capacity_and_is_conserved() {
+    // Read config/ before the first case: a broken file fails here once, not as a shrunk case.
+    common::preload_shipped_config();
+    proptest!(ProptestConfig::with_cases(64), |(ops in prop::collection::vec(op(), 1..60))| {
         let config = common::shipped_config_v1(); // shops on the v1 map's block 0
         let map = Map::from_config(&config.map);
         let mut clock = Clock::new(ClockRules::from_config(&config.game.clock));
@@ -131,7 +131,7 @@ proptest! {
             let on_hand: i64 = shops.by_id.values().flat_map(|b| b.stock.values()).sum();
             prop_assert_eq!(delivered, sold + binned + on_hand);
         }
-    }
+    });
 }
 
 /// docs/economy.md "Business stats": every shipped stock density is the formula's, rounded up
