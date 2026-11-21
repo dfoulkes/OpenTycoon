@@ -508,6 +508,7 @@ pub fn read_models(text: &str, expected: &[String]) -> Result<Vec<Row>, Vec<Stri
 /// Invalid models are not ranked. Returns the ids in rank order (ok models only), fills each ok
 /// row's `rank`, and fills `evenness_rank` with the ranking R65 alone gives (no fun score).
 pub fn rank(cols: &Columns, rows: &mut [Row]) -> Vec<u32> {
+    let fun = |r: &Row| parse_ppm(cols.get(r, "fun_score")).unwrap_or(0);
     let evenness = |a: &Row, b: &Row| {
         (-cols.num(a, "score"))
             .total_cmp(&-cols.num(b, "score"))
@@ -526,7 +527,8 @@ pub fn rank(cols: &Columns, rows: &mut [Row]) -> Vec<u32> {
     by_fun.sort_by(|a, b| {
         (!cols.is_balanced(a))
             .cmp(&!cols.is_balanced(b))
-            .then(evenness(a, b)) // red: not yet implemented: the fun score does not rank yet
+            .then(fun(b).cmp(&fun(a)))
+            .then(evenness(a, b))
     });
     let mut by_evenness = ok;
     by_evenness.sort_by(|a, b| {

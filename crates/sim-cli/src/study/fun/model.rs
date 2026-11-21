@@ -70,17 +70,53 @@ pub struct FunMetrics {
 /// The upset rate: games whose winner is not the strongest AI / games. Also returns the
 /// strongest AI (most wins among `ai`, the lower index on a tie; none if no AI won).
 pub fn upset_rate_ppm(winners: &[Option<usize>], ai: &[bool]) -> (i64, Option<usize>) {
-    // red: not yet implemented
-    let _ = (winners, ai);
-    (0, None)
+    let mut wins = vec![0u64; ai.len()];
+    for w in winners.iter().flatten() {
+        if let Some(c) = wins.get_mut(*w) {
+            *c += 1;
+        }
+    }
+    let strongest = (0..ai.len())
+        .filter(|i| ai[*i] && wins[*i] > 0)
+        .max_by(|a, b| wins[*a].cmp(&wins[*b]).then(b.cmp(a)));
+    let games = winners.len() as u64;
+    let upsets = winners
+        .iter()
+        .filter(|w| strongest.is_none() || **w != strongest)
+        .count() as u64;
+    (ratio_ppm(upsets, games), strongest)
 }
 
 /// Mean pairwise total variation distance between the mixes (counts per category), in parts
 /// per million (see the module docs). [`PPM`] with fewer than two mixes.
 pub fn distinctness_ppm(mixes: &[Vec<u64>]) -> i64 {
-    // red: not yet implemented
-    let _ = mixes;
-    0
+    if mixes.len() < 2 {
+        return PPM;
+    }
+    // A mix with nothing in it is its own category, "nothing".
+    let shares: Vec<(Vec<i128>, i128)> = mixes
+        .iter()
+        .map(|m| {
+            let total: u64 = m.iter().sum();
+            let mut v: Vec<i128> = m.iter().map(|c| i128::from(*c)).collect();
+            v.push(i128::from(total == 0));
+            (v, i128::from(total.max(1)))
+        })
+        .collect();
+    let mut sum = 0i128;
+    let mut pairs = 0i128;
+    for (i, (a, ta)) in shares.iter().enumerate() {
+        for (b, tb) in &shares[i + 1..] {
+            let len = a.len().max(b.len());
+            let at = |v: &Vec<i128>, k: usize| v.get(k).copied().unwrap_or(0);
+            let l1: i128 = (0..len)
+                .map(|k| (at(a, k) * tb - at(b, k) * ta).abs())
+                .sum();
+            sum += div_round(l1 * i128::from(PPM), 2 * ta * tb);
+            pairs += 1;
+        }
+    }
+    i64::try_from(div_round(sum, pairs)).unwrap_or(PPM)
 }
 
 /// The streak statistic of a winner sequence (see the module docs).
@@ -134,9 +170,43 @@ fn moments(counts: &[u64], n: u64) -> Option<(i128, i128)> {
 /// The streak statistic of `winners` (roster index of each game's outright winner, in plan
 /// order); `ai[i]` says whether roster entry `i` is an AI personality.
 pub fn streak(winners: &[Option<usize>], ai: &[bool]) -> Streak {
-    // red: not yet implemented
-    let _ = (winners, ai);
-    Streak::default()
+    let is_ai = |w: &Option<usize>| w.is_some_and(|i| ai.get(i).copied().unwrap_or(false));
+    let mut repeats = 0u64;
+    let (mut longest, mut run) = (0u32, 0u32);
+    for (i, w) in winners.iter().enumerate() {
+        if !is_ai(w) {
+            run = 0;
+            continue;
+        }
+        if i > 0 && winners[i - 1] == *w {
+            repeats += 1;
+            run += 1;
+        } else {
+            run = 1;
+        }
+        longest = longest.max(run);
+    }
+    let mut counts = vec![0u64; ai.len()];
+    for w in winners.iter().filter(|w| is_ai(w)).flatten() {
+        counts[*w] += 1;
+    }
+    let z_ppm = moments(&counts, winners.len() as u64).and_then(|(mean, var)| {
+        if var <= 0 {
+            return Some(0);
+        }
+        let sd = u128::try_from(var.checked_mul(SCALE)?).ok()?.isqrt();
+        let dev = i128::from(repeats).checked_mul(SCALE)?.checked_sub(mean)?;
+        i64::try_from(div_round(
+            dev.checked_mul(i128::from(PPM))?,
+            i128::try_from(sd).ok()?,
+        ))
+        .ok()
+    });
+    Streak {
+        repeats,
+        z_ppm,
+        longest,
+    }
 }
 
 /// One model's fun metrics from its games, in plan order.

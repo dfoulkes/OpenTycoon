@@ -45,9 +45,15 @@ impl Band {
     /// The score of `value` (parts per million of the metric's unit): [`PPM`] inside the band,
     /// `PPM × (1 − distance / falloff)` outside it, never below 0. No value scores 0.
     pub fn score_ppm(&self, value: Option<i64>) -> i64 {
-        // red: not yet implemented
-        let _ = value;
-        PPM
+        let Some(x) = value else { return 0 };
+        let falloff = i128::from(to_ppm(self.falloff).max(1));
+        let distance = match (self.min.map(to_ppm), self.max.map(to_ppm)) {
+            (Some(lo), _) if x < lo => lo - x,
+            (_, Some(hi)) if x > hi => x - hi,
+            _ => 0,
+        };
+        let lost = div_round(i128::from(distance) * i128::from(PPM), falloff);
+        i64::try_from((i128::from(PPM) - lost).max(0)).unwrap_or(0)
     }
 
     fn check(&self, path: &str) -> Result<(), StudyError> {

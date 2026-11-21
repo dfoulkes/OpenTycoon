@@ -250,6 +250,26 @@ No column holds wall time, so two runs of the same definition diff byte for byte
   games"). When only one personality evolves, the lineup is exactly its champion's evaluation,
   so the digests match too. `lineup.json` is written last: it marks the generation finished.
 
+### `lineup_fun.json`
+
+Choosing the shipped line-up by fun (R79): the strongest evolved settings make a harder
+difficulty tier, while the line-up players meet by default should be the one whose games are
+most fun. `lineup_fun.json` scores each finished generation's champion line-up with the study's
+fun metrics ([`study.md`](study.md) "Fun (R79)") over its lineup games: one entry per
+generation, in order, with `generation`, `games`, the lineup's R65 verdict and shares (`r65`:
+`balanced`, `max_win_share`, `min_win_share`, `ai_bankruptcy_rate`,
+`idle_below_solvent_rate`), the raw metrics (`fun`: `strongest`, `upset_rate`,
+`lead_changes_mean`, `decided`, `comeback_rate`, `margin_median`, `distinctness`,
+`distinctness_checkpoint`, `streak_z`, `streak_longest`), each metric's band score (`scores`)
+and `fun_score`, with the default bands (`bands`). Pick the generation whose champions'
+`ai.yaml` to ship by `fun_score` among those whose lineup is `balanced`.
+
+It is output only: it reads the lineup games the generation already played and changes nothing
+about fitness, selection or breeding. It is written just before the generation's
+`lineup.json`, replacing any entry of that generation or later, so a resumed run ends with the
+same file as a run in one go. With 2 to 3 lineup games per generation in a smoke run the numbers
+are noise; judge them on a real run's `games_per_eval`.
+
 ### `summary.json`
 
 - `evolution`: the resolved definition, the preset run, the roster, the evolving personalities,

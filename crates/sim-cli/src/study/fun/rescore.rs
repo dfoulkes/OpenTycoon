@@ -228,15 +228,33 @@ struct StudyDir {
     rows: Vec<Row>,
 }
 
-fn read_study(dir: &Path) -> Result<StudyDir, StudyError> {
-    let text = read_opt(&dir.join("summary.json"))?
-        .ok_or_else(|| err(format!("{}: no summary.json", dir.display())))?;
-    let summary: Json = serde_json::from_str(&text).map_err(err)?;
-    let def: StudyDef = serde_json::from_value(summary["study"]["definition"].clone())
-        .map_err(|e| err(format!("summary.json study.definition: {e}")))?;
-    let names: Vec<String> = serde_json::from_value(summary["study"]["roster"].clone())
-        .map_err(|e| err(format!("summary.json study.roster: {e}")))?;
-    let roster = Roster::new(names.iter().map(|n| Entry::from_name(n)).collect());
+/// Reads the study directory. Without a `summary.json` (a study still running its first
+/// chunk under a build that writes it only at the end), the definition must come from `--def`
+/// (`fallback`) and the roster from the recordings (`roster`).
+fn read_study(
+    dir: &Path,
+    fallback: Option<&StudyDef>,
+    roster: impl FnOnce() -> Result<Roster, StudyError>,
+) -> Result<StudyDir, StudyError> {
+    let (summary, def, roster) = if let Some(text) = read_opt(&dir.join("summary.json"))? {
+        let summary: Json = serde_json::from_str(&text).map_err(err)?;
+        let def: StudyDef = serde_json::from_value(summary["study"]["definition"].clone())
+            .map_err(|e| err(format!("summary.json study.definition: {e}")))?;
+        let names: Vec<String> = serde_json::from_value(summary["study"]["roster"].clone())
+            .map_err(|e| err(format!("summary.json study.roster: {e}")))?;
+        let roster = Roster::new(names.iter().map(|n| Entry::from_name(n)).collect());
+        (summary, def, roster)
+    } else {
+        let def = fallback.cloned().ok_or_else(|| {
+            err(format!(
+                "{}: no summary.json; pass --def with the study's definition",
+                dir.display()
+            ))
+        })?;
+        let roster = roster()?;
+        let summary = json!({ "study": { "definition": def, "roster": roster.names() } });
+        (summary, def, roster)
+    };
     let models = read_opt(&dir.join("models.csv"))?
         .ok_or_else(|| err(format!("{}: no models.csv", dir.display())))?;
     let header = models
@@ -357,7 +375,101 @@ pub fn rescore(
     store: &dyn ObjectStore,
     opts: &RescoreOptions,
 ) -> Result<RescoreReport, StudyError> {
-    // red: not yet implemented
-    let _ = (store, opts);
-    Err(err("study rescore is not implemented yet"))
+    let parts = parts(store, &opts.run_id)?;
+    let study = opts
+        .study
+        .as_deref()
+        .map(|dir| {
+            read_study(dir, opts.def.as_ref(), || match parts.first() {
+                Some((_, key)) => roster_from(store, key),
+                None => Err(err(format!("no manifests/{}/part-m*.parquet", opts.run_id))),
+            })
+        })
+        .transpose()?;
+    let mut def = match (&study, &opts.def) {
+        (Some(s), Some(d)) => StudyDef {
+            fun: d.fun.clone(),
+            ..s.def.clone()
+        },
+        (Some(s), None) => s.def.clone(),
+        (None, Some(d)) => d.clone(),
+        (None, None) => StudyDef::default(),
+    };
+    // A checkpoint counts leases and businesses only: that is the playstyle basis here.
+    let asked = def.fun.playstyle;
+    def.fun.playstyle = Playstyle::Checkpoint;
+    let roster = match (&study, parts.first()) {
+        (Some(s), _) => s.roster.clone(),
+        (None, Some((_, key))) => roster_from(store, key)?,
+        (None, None) => {
+            return Err(err(format!(
+                "no manifests/{}/part-m*.parquet in the recordings",
+                opts.run_id
+            )));
+        }
+    };
+    let wanted: Vec<&(u32, String)> = parts
+        .iter()
+        .filter(|(id, _)| {
+            study
+                .as_ref()
+                .is_none_or(|s| s.rows.iter().any(|r| r.id == *id))
+        })
+        .collect();
+    let scored = score_parts(store, &wanted, &roster, opts.threads)?;
+    let mut report = RescoreReport {
+        models: scored.len(),
+        games: scored.iter().map(|m| m.games).sum(),
+        ..RescoreReport::default()
+    };
+    let (header, mut rows) = if let Some(s) = &study {
+        study_rows(s, &scored, &mut report.missing)
+    } else {
+        recorded_rows(&def, &roster, &scored)
+    };
+    let cols = Columns::new(header.clone());
+    apply_fun_scores(&cols, &mut rows, &def.fun);
+    let order = rank(&cols, &mut rows);
+    std::fs::create_dir_all(&opts.out).map_err(|e| StudyError::io(&opts.out, e))?;
+    write(
+        &opts.out.join("models.csv"),
+        &csv_text(&header, rows.iter().map(|r| r.fields.clone())),
+    )?;
+    let balanced: Vec<u32> = order
+        .iter()
+        .copied()
+        .filter(|id| rows.iter().any(|r| r.id == *id && cols.is_balanced(r)))
+        .collect();
+    let top: Vec<u32> = balanced
+        .iter()
+        .copied()
+        .take(usize::try_from(def.top_n).unwrap_or(usize::MAX))
+        .collect();
+    let mut summary = study.as_ref().map_or_else(
+        || json!({ "study": { "definition": def, "roster": roster.names() } }),
+        |s| s.summary.clone(),
+    );
+    summary["models"]["balanced"] = json!(balanced.len());
+    summary["ranking"] = json!(ranking_json(&cols, &rows, &order));
+    summary["top"] = json!(top);
+    summary["columns"]["models.csv"] = json!(header);
+    summary["fun"] = json!({
+        "definition": def.fun,
+        "playstyle_asked": asked,
+        "playstyle_used": Playstyle::Checkpoint,
+    });
+    summary["rescore"] = json!({
+        "run_id": opts.run_id,
+        "models": report.models,
+        "games": report.games,
+        "missing": report.missing,
+        "note": "fun columns computed from the recordings' checkpoints; playstyle measured on \
+                 leases and businesses. Overlays are not rewritten: see models/<id> of the study.",
+    });
+    write(
+        &opts.out.join("summary.json"),
+        &(serde_json::to_string_pretty(&summary).unwrap_or_default() + "\n"),
+    )?;
+    report.order = order;
+    Ok(report)
 }

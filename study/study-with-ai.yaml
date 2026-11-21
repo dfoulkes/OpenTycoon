@@ -83,3 +83,17 @@ parameters:
   - { name: toff_aggression,       key: ai.toff.aggression,            min: 0.1, max: 0.9 }   # shipped 0.8
   - { name: speculator_aggression, key: ai.speculator.aggression,      min: 0.1, max: 0.9 }   # shipped 0.51
   - { name: sir_penny_aggression,  key: ai.sir_penny_sugar.aggression, min: 0.1, max: 0.9 }   # shipped 0.34
+
+# The fun score (R79): balanced models are ranked by how much fun their games are. Each metric
+# scores 1 inside its band and falls off linearly to 0 at `falloff` outside it; the fun score is
+# the weighted mean. The bands only score games: editing them and rerunning re-ranks a finished
+# study without playing a game (docs/study.md "Fun (R79)").
+fun:
+  playstyle: holdings          # what distinctness is measured on: holdings (flats, shops, land,
+                               # hotels, other) or checkpoint (leases, businesses)
+  upset:        { min: 0.50, max: 0.75, falloff: 0.25, weight: 1 }   # games the strongest AI did not win
+  lead_changes: { min: 2.0,             falloff: 2.0,  weight: 1 }   # net-worth leader changes per game
+  comeback:     { min: 0.20, max: 0.40, falloff: 0.20, weight: 1 }   # winner not leading at halfway (1990)
+  margin:       {            max: 0.25, falloff: 0.25, weight: 1 }   # median (winner − runner-up) / winner
+  distinctness: { min: 0.30,            falloff: 0.30, weight: 1 }   # personalities' holdings mixes differ
+  streak:       {            max: 2.0,  falloff: 2.0,  weight: 1 }   # z of one AI winning consecutive games

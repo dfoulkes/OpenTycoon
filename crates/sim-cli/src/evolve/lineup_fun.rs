@@ -93,7 +93,27 @@ pub fn write(
     generation: u32,
     lineup: &[GameOutcome],
 ) -> Result<(), EvolveError> {
-    // red: not yet implemented
-    let _ = (dir, roster, generation, lineup);
-    Ok(())
+    let path = dir.join(FILE);
+    let mut entries: Vec<Json> = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|t| serde_json::from_str::<Json>(&t).ok())
+        .and_then(|v| v["generations"].as_array().cloned())
+        .unwrap_or_default();
+    entries.retain(|e| {
+        e["generation"]
+            .as_u64()
+            .is_some_and(|g| g < u64::from(generation))
+    });
+    entries.push(entry(roster, generation, lineup));
+    let doc = json!({
+        "note": "each generation's champion line-up scored by the study's fun metrics (R79) over \
+                 its lineup games; docs/evolve.md",
+        "bands": FunDef::default(),
+        "generations": entries,
+    });
+    std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&doc).unwrap_or_default() + "\n",
+    )
+    .map_err(|e| EvolveError::io(&path, e))
 }
