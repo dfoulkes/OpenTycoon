@@ -25,22 +25,40 @@ use crate::population::residential::fit_out_appeal;
 pub struct GoodId(pub u16);
 
 /// Good ids ↔ names, in catalogue key order, with each good's unlock and obsolete years.
+///
+/// Built on every tick a shopper acts, so it holds the names in one buffer (one allocation,
+/// not one per good).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct GoodsIndex {
-    names: Vec<String>,
+    /// Every name, back to back.
+    text: String,
+    /// Where each name ends in `text`, by id.
+    ends: Vec<usize>,
     years: Vec<(Option<i32>, Option<i32>)>,
 }
 
 impl GoodsIndex {
     /// The index for a goods catalogue.
     pub fn new(goods: &BTreeMap<String, Good>) -> Self {
+        let mut text = String::with_capacity(goods.keys().map(String::len).sum());
+        let mut ends = Vec::with_capacity(goods.len());
+        for name in goods.keys() {
+            text.push_str(name);
+            ends.push(text.len());
+        }
         GoodsIndex {
-            names: goods.keys().cloned().collect(),
+            text,
+            ends,
             years: goods
                 .values()
                 .map(|g| (g.unlock_year, g.obsolete_year))
                 .collect(),
         }
+    }
+
+    fn name_at(&self, i: usize) -> &str {
+        let start = if i == 0 { 0 } else { self.ends[i - 1] };
+        self.text.get(start..self.ends[i]).unwrap_or("")
     }
 
     /// A good's `(unlock_year, obsolete_year)` by id (`(None, None)` if unknown).
@@ -53,26 +71,36 @@ impl GoodsIndex {
 
     /// How many goods the catalogue holds.
     pub fn len(&self) -> usize {
-        self.names.len()
+        self.ends.len()
     }
 
     /// True if the catalogue is empty.
     pub fn is_empty(&self) -> bool {
-        self.names.is_empty()
+        self.ends.is_empty()
     }
 
-    /// A good's id by name.
+    /// A good's id by name: a binary search, as the catalogue is in key (byte) order.
     pub fn id(&self, name: &str) -> Option<GoodId> {
-        self.names
-            .iter()
-            .position(|n| n == name)
-            .and_then(|i| u16::try_from(i).ok())
-            .map(GoodId)
+        let (mut lo, mut hi) = (0, self.ends.len());
+        while lo < hi {
+            let mid = lo + (hi - lo) / 2;
+            match self.name_at(mid).cmp(name) {
+                std::cmp::Ordering::Less => lo = mid + 1,
+                std::cmp::Ordering::Greater => hi = mid,
+                std::cmp::Ordering::Equal => return u16::try_from(mid).ok().map(GoodId),
+            }
+        }
+        None
     }
 
     /// A good's name by id (`""` if unknown).
     pub fn name(&self, id: GoodId) -> &str {
-        self.names.get(usize::from(id.0)).map_or("", String::as_str)
+        let i = usize::from(id.0);
+        if i < self.ends.len() {
+            self.name_at(i)
+        } else {
+            ""
+        }
     }
 }
 
@@ -111,12 +139,17 @@ pub fn shop_offers(
 ) -> Vec<ShopOffer> {
     let mut out = Vec::new();
     for (id, b) in &businesses.by_id {
+        // Shut now (flats never trade) or a Hotel, which sells rooms to tourists
+        // (crate::hotels): checked first, as it is cheap and rules out most buildings.
+        if b.hours == Hours::Hotel || !b.is_trading(clock) {
+            continue;
+        }
         let Some(kind) = config.businesses.types.get(&b.type_id) else {
             continue;
         };
         // Only walk-in shops are on the high street: online sellers and infrastructure have no
-        // door (§7.5), and Hotels sell rooms to tourists (crate::hotels).
-        if kind.channel != Channel::Shop || b.hours == Hours::Hotel || !b.is_trading(clock) {
+        // door (§7.5).
+        if kind.channel != Channel::Shop {
             continue;
         }
         let Some(block) = map.block(b.block) else {
@@ -194,5 +227,28 @@ pub fn apply_modifiers(
                 *a *= f;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ids_and_names_round_trip_over_the_shipped_catalogue() {
+        let text = include_str!("../../../../config/businesses.yaml");
+        let file: serde_json::Value = serde_yaml_ng::from_str(text).unwrap_or_default();
+        let goods: BTreeMap<String, Good> =
+            serde_json::from_value(file["goods"].clone()).unwrap_or_default();
+        assert!(goods.len() > 50, "the shipped catalogue");
+        let index = GoodsIndex::new(&goods);
+        for (i, name) in goods.keys().enumerate() {
+            let id = index.id(name);
+            assert_eq!(id, u16::try_from(i).ok().map(GoodId), "{name}");
+            assert_eq!(index.name(GoodId(u16::try_from(i).unwrap_or(0))), name);
+        }
+        assert_eq!(index.id("caviar"), None);
+        assert_eq!(index.id(""), None);
+        assert_eq!(index.name(GoodId(u16::MAX)), "");
     }
 }

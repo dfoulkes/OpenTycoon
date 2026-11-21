@@ -194,6 +194,42 @@ the rest is `Vec::retain_mut` compacting the vector every tick a shopper scatter
 leaves, moving every later 96-byte `Customer`. The criterion `customers_day` bench (with a high
 street of shops) is 28.6 ms per day at 10k adults.
 
+### Shopping windows (R70)
+
+R70 spreads the day's trade over the whole of day and night trade: someone is choosing a shop at
+1,784 ticks of the shipped day instead of 728, and the high street is rebuilt 1,463 times instead
+of 714. Three changes keep the customers phase inside budget (none changes a result: the state
+hash and 40 full six-seat games come out the same):
+
+- **Shoppers off the map are parked** (`Customers::parked`, by the second they wake), so a tick
+  steps only those who can act; they rejoin `agents` in id order by one linear merge.
+- **The high street is built only on ticks when someone will choose a shop** (or a wave opens).
+- **`GoodsIndex` is cheaper to build and search:** one name buffer instead of a `String` per
+  good, and a binary search by name. `shop_offers` skips shut buildings (flats) before looking
+  up their type.
+
+Measured A/B on a shared, loaded machine (load average 9–12; the old and new binaries run back to
+back, two rounds each, so the ratios matter more than the absolute numbers):
+
+| Metric | Before R70 | With R70 |
+|---|---|---|
+| `game_day_ms` | 6.72–6.81 | 5.97–6.09 |
+| `tick_mean_us` | 0.78–0.79 | 0.69–0.70 |
+| `tick_p99_us` | 15.1–15.2 | 15.5 |
+| `game_day_ms_10k_agents` | 17.8–17.9 | 12.9–13.1 |
+| `tick_p99_us_10k_agents` | 26.6–26.7 | 15.5 |
+| `tick_max_us_20k_agents` | 5,005–5,111 | 6,999–7,048 (+40%: the 07:00 wave parks every shopper) |
+| `batch_1000_games_s` | 4.08–4.88 | 3.97–4.78 |
+| `config_load_ms` | 5.58–5.59 | 8.00–8.04 (+2.4 ms: the window coverage check) |
+
+The criterion `customers` bench, whose high street has many more shops than the shipped city,
+is slower: `customers_day` +19% (1,000 adults) and +8% (10,000), with hotels +16% / +7%, with
+online in 2020 +29% / +34%; `shop_choice` is 2% faster. There a rebuild of the high street is the
+main cost and R70 doubles the ticks that need one. Caching the offers between ticks would remove
+it, but needs a change counter on `Businesses` (its fields are written from many places), so it
+is left for a follow-up. The baseline column of the budgets is unchanged: it needs a quiet
+machine.
+
 ## Determinism checks
 
 - `sim-cli run config --seed 42 --ticks 17280` prints the state hash; CI compares it between

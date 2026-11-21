@@ -255,6 +255,48 @@ shoppers behave exactly as before R70: the state hash of `sim-cli run --seed 42`
 pre-R70 build. The scenarios that are about something else (bankruptcy arithmetic, online
 shares, the R69 waiting rule) use that table (`Given shoppers shop at any hour of trade`).
 
+### What the windows cost
+
+The retail probe from "Retail through the eras" (full 1930–2050 games, seeds 1–3, the default
+roster; every walk-in shop's net profit as a share of its build cost a day), before and after
+R70:
+
+| Step | Before | After | | Decade | Before | After |
+|---|---|---|---|---|---|---|
+| 1960 | 11.8% | 12.4% | | 1930s | 5.7% | 5.7% |
+| 1965 | 11.6% | 14.2% | | 1940s | 10.1% | 9.8% |
+| **1970** (power cuts) | 11.1% | **10.3%** | | 1950s | 11.5% | 12.7% |
+| 1975 | 9.5% | 10.5% | | 1960s | 11.7% | 13.3% |
+| 1980 | 7.7% | 5.9% | | 1970s | 10.3% | 10.4% |
+| | | | | 1980s | 6.5% | 5.8% |
+| | | | | 1990s | 4.8% | 4.3% |
+| | | | | 2000s | 6.7% | 6.1% |
+| | | | | 2010s | 6.8% | 6.5% |
+| | | | | 2020s | 0.2% | −0.2% |
+| | | | | 2030s | 4.8% | 5.2% |
+| | | | | 2040s | 5.6% | 6.5% |
+
+The power cuts now cost something: the 1970 step was half a point below 1965 and is now four
+points below it, because the morning paper's window is dark for nearly everyone and working
+people's lunchtime food window has only an hour of light. A competent shop stays profitable in
+every decade (the R68 lone-shop scenarios pass); the 2020s are the pandemic step as before, and
+the all-retail average there moves from just above to just below zero. The middle-class
+housewife's morning shop lifts the 1950s and 1960s.
+
+`sim-cli study config --models 1 --games 600` (the shipped model, seats rotated), before → after:
+
+| Seat | Win share | Median net worth | Bankrupt |
+|---|---|---|---|
+| The Grocer | 0% → 0% | £8,254 → £8,271 | 0% → 0% |
+| The Landlord | 48.7% → 49.0% | £58,662 → £58,333 | 0% → 0% |
+| The Toff | 0% → 0% | £7,752 → £7,753 | 0% → 0% |
+| The Speculator | 0% → 0% | £11,771 → £11,898 | 3.3% → 1.7% |
+| Sir Penny Sugar | 51.3% → 51.0% | £58,638 → £59,186 | 0% → 0% |
+| Idle | 0% → 0% | £7,000 → £7,000 | 0% → 0% |
+
+Balance is essentially unchanged: R70 moves retail by a point here and there, and retail was
+not what decided these games (R65 is still unmet on the shipped config).
+
 ## Retail through the eras (R68)
 
 R68: a competently run shop must be profitable in every era, and retail is fixed in the

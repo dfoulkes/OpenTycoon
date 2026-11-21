@@ -30,6 +30,7 @@ pub fn tick(
 ) -> PhaseReport {
     let mut report = PhaseReport::default();
     window_edges(state, inputs, doors, goods, businesses, rng, &mut report);
+    state.wake(inputs.clock.second_of_day());
 
     let clock = inputs.clock;
     let now = clock.second_of_day();
@@ -61,6 +62,7 @@ pub fn tick(
         reputation: std::mem::take(&mut state.reputation),
         guests: std::mem::take(&mut state.hotel_guests),
         wanderers: Vec::new(),
+        parked: Vec::new(),
         report,
     };
     let before = state.agents.len();
@@ -70,10 +72,12 @@ pub fn tick(
         reputation,
         guests,
         wanderers,
+        parked,
         ..
     } = step;
-    report.despawned += (before - state.agents.len() - wanderers.len()) as u64;
+    report.despawned += (before - state.agents.len() - wanderers.len() - parked.len()) as u64;
     state.wanderers.extend(wanderers);
+    state.park_all(parked);
     state.reputation = reputation;
     state.hotel_guests = guests;
     report
@@ -97,7 +101,8 @@ fn window_edges(
     if now == trading.day.1 {
         let before = state.agents.len();
         state.agents.retain(|c| c.wave != Wave::Day);
-        report.despawned += (before - state.agents.len()) as u64;
+        let parked = state.retain_parked(|c| c.wave != Wave::Day);
+        report.despawned += (before - state.agents.len() + parked) as u64;
     }
     if now == trading.night.1 && !beds_open {
         // No hotel window to wait for (an unusual config): the wanderers go home too.
@@ -105,18 +110,23 @@ fn window_edges(
         state.agents.sort_by_key(|c| c.id);
     }
     if now == trading.night.1 {
-        let before = state.agents.len();
         // Those who never came out stay in; those off the map between errands (R70) are done
         // for the night, except tourists, who still need a bed.
-        state.agents.retain(|c| {
-            !(c.wave == Wave::Night
-                && match c.activity {
-                    Activity::Waiting { .. } => true,
-                    Activity::Away { .. } => !(c.origin == Origin::Tourist && beds_open),
-                    _ => false,
-                })
+        let mut bed_seekers = Vec::new();
+        let gone = state.retain_parked(|c| {
+            let bed = matches!(c.activity, Activity::Away { .. })
+                && c.origin == Origin::Tourist
+                && beds_open;
+            if c.wave == Wave::Night && bed {
+                bed_seekers.push(c.clone());
+            }
+            c.wave != Wave::Night
         });
-        report.despawned += (before - state.agents.len()) as u64;
+        report.despawned += (gone - bed_seekers.len()) as u64;
+        if !bed_seekers.is_empty() {
+            state.agents.extend(bed_seekers);
+            state.agents.sort_by_key(|c| c.id);
+        }
         for c in state.agents.iter_mut().filter(|c| c.wave == Wave::Night) {
             c.activity = after_night_trade(c, beds_open);
         }
@@ -190,6 +200,8 @@ struct Step<'a, 'i> {
     guests: BTreeMap<BusinessId, u32>,
     /// Tourists who started wandering this tick (R42).
     wanderers: Vec<Customer>,
+    /// Shoppers who went away between windows this tick (R70), to park.
+    parked: Vec<Customer>,
     report: PhaseReport,
 }
 
@@ -204,10 +216,9 @@ impl Step<'_, '_> {
 
     /// One agent's step. Returns false when the agent leaves the map (home, the tube, or bed).
     fn agent(&mut self, c: &mut Customer) -> bool {
-        if let Activity::Waiting { from } = c.activity {
-            if self.now < from {
-                return true;
-            }
+        if let Activity::Waiting { from } = c.activity
+            && self.now >= from
+        {
             // Setting out: online first, whatever the hour (§7.5; windows are for the high
             // street, R70).
             self.shop_online(c);
@@ -227,10 +238,12 @@ impl Step<'_, '_> {
             c.activity = Activity::Choosing;
         }
         match c.activity {
-            Activity::Waiting { .. }
-            | Activity::Away { .. }
-            | Activity::WaitingForPower { .. }
-            | Activity::Wandering => true,
+            Activity::Waiting { .. } | Activity::Away { .. } => {
+                // Off the map until a set second: parked, out of the busy list (R70).
+                self.parked.push(c.clone());
+                false
+            }
+            Activity::WaitingForPower { .. } | Activity::Wandering => true,
             Activity::Choosing => {
                 let rules = &self.inputs.config.customers;
                 let geometry = self.geometry();
@@ -249,12 +262,19 @@ impl Step<'_, '_> {
                 if c.activity == Activity::Leaving {
                     c.activity = after_shopping(c, self.beds_open);
                 }
-                if c.activity == Activity::Wandering {
-                    // Off to wait for the hotels: out of the busy list, still on the map.
-                    self.wanderers.push(c.clone());
-                    return false;
+                match c.activity {
+                    Activity::Wandering => {
+                        // Off to wait for the hotels: out of the busy list, still on the map.
+                        self.wanderers.push(c.clone());
+                        false
+                    }
+                    Activity::Away { .. } => {
+                        // Off the map until their next window opens (R70).
+                        self.parked.push(c.clone());
+                        false
+                    }
+                    _ => true,
                 }
-                true
             }
             Activity::Walking { to, shop, good } => {
                 c.at = step_towards(c.at, to, self.cells());
