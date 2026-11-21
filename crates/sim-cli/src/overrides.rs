@@ -1,7 +1,7 @@
 //! Config overrides and presets for parameter sweeps (spec §10b, R45).
 //!
-//! An override is `<file>.<key>.<key>...=<value>`, e.g. `game.overdraft.start_limit=20000`:
-//! the first segment names the YAML file (`game` → `game.yaml`), the rest is the key path, and
+//! An override is `<file>.<key>.<key>...=<value>`, e.g. `economy.money.starting_cash=9000`: the
+//! first segment names the YAML file (`economy` → `economy.yaml`), the rest is the key path, and
 //! the value is parsed as YAML (`20000` is a number, `"x"` or `x` a string, `[1, 2]` a list).
 //! Overrides edit the YAML *text* and the result goes through the normal loader, so a swept
 //! value is schema-checked and cross-checked exactly like a hand-edited file and fails naming
@@ -85,7 +85,7 @@ impl Override {
         self.file.file_name()
     }
 
-    /// JSON pointer of the key inside the file, e.g. `/overdraft/start_limit`.
+    /// JSON pointer of the key inside the file, e.g. `/money/overdraft/start_limit`.
     pub fn pointer(&self) -> String {
         self.path.iter().fold(String::new(), |mut s, p| {
             s.push('/');
@@ -122,7 +122,7 @@ impl FromStr for Override {
         let path: Vec<String> = segments.map(str::to_owned).collect();
         if stem.is_empty() || path.is_empty() || path.iter().any(String::is_empty) {
             return Err(syntax(
-                "expected `file.key=value`, e.g. `game.overdraft.start_limit=20000`",
+                "expected `file.key=value`, e.g. `economy.money.overdraft.start_limit=20000`",
             ));
         }
         let file_name = format!("{stem}.yaml");
@@ -276,11 +276,11 @@ mod tests {
 
     #[test]
     fn parses_file_path_and_value() {
-        let ov: Override = "game.overdraft.start_limit=20000".parse().unwrap();
-        assert_eq!(ov.file_name(), "game.yaml");
-        assert_eq!(ov.pointer(), "/overdraft/start_limit");
+        let ov: Override = "economy.money.overdraft.start_limit=20000".parse().unwrap();
+        assert_eq!(ov.file_name(), "economy.yaml");
+        assert_eq!(ov.pointer(), "/money/overdraft/start_limit");
         assert_eq!(ov.value(), "20000");
-        assert_eq!(ov.to_string(), "game.overdraft.start_limit=20000");
+        assert_eq!(ov.to_string(), "economy.money.overdraft.start_limit=20000");
     }
 
     #[test]
@@ -293,7 +293,7 @@ mod tests {
     #[test]
     fn rejects_missing_equals_missing_key_and_empty_segments() {
         for bad in [
-            "game.overdraft.start_limit",
+            "economy.money.overdraft.start_limit",
             "game=1",
             "=1",
             "game..x=1",

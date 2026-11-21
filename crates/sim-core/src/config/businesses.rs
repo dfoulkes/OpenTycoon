@@ -12,8 +12,6 @@ use crate::businesses::Hours;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct BusinessesConfig {
-    /// Build cost per unit of building volume, before the tier multiplier (§5.3).
-    pub build_base_rate: Pounds,
     /// Fit-out levels (§7.1).
     pub fit_out: FitOutTable,
     /// The reference shop the stats formula is built around (docs/economy.md).

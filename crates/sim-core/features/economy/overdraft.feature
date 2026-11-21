@@ -28,8 +28,8 @@ Feature: The overdraft and the bid ceiling
 
   @R7 @R17
   Scenario: The overdraft is configurable
-    Given the shipped config with "game.yaml" key "/overdraft/start_limit" set to "20000"
-    And the shipped config with "game.yaml" key "/overdraft/increase_per_step" set to "1000"
+    Given the shipped config with "economy.yaml" key "/money/overdraft/start_limit" set to "20000"
+    And the shipped config with "economy.yaml" key "/money/overdraft/increase_per_step" set to "1000"
     And a new game with 2 players
     When the game runs for 2 days
     Then the credit limit is "£22,000.00"
@@ -72,7 +72,7 @@ Feature: The overdraft and the bid ceiling
 
   @R17
   Scenario: An interest rate, if configured, is charged to the city at 06:00
-    Given the shipped config with "game.yaml" key "/overdraft/interest_rate" set to "0.01"
+    Given the shipped config with "economy.yaml" key "/money/overdraft/interest_rate" set to "0.01"
     And a new game with 2 players
     And the game has run to "01:00"
     And player 1 has a balance of "-£5,000.00"

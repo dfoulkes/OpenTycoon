@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use super::{AgeBand, Class, Cohort, Population, Sex};
-use crate::config::CustomersConfig;
+use crate::config::{Config, CustomersConfig};
 use crate::money::{BASIS_POINTS_PER_UNIT, Rate};
 use crate::rng::{SimRng, below};
 
@@ -195,16 +195,23 @@ pub fn split_newcomers(
 /// 4. **Coming of age**: children aged `adult_age` or more join the next 05:30 arrivals as
 ///    18–29s, split by class and sex.
 /// 5. **Migration**: `migration_per_day` newcomers join the next arrivals.
+///
+/// The historical births per woman (`customers.yaml`) are scaled by `economy.yaml`
+/// `population.births_multiplier`, and migration is `economy.yaml`
+/// `population.migration_per_day` (R71).
 pub fn year_step(
     pop: &mut Population,
-    rules: &CustomersConfig,
+    config: &Config,
     new_year: i32,
     years: u32,
     rng: &mut SimRng,
 ) -> YearStep {
+    let rules = &config.customers;
+    let economy = &config.economy.population;
     let mut report = YearStep::default();
     let old_year = new_year - i32::try_from(years).unwrap_or(0);
     let bpw = era_value(&rules.births_per_woman, old_year).map_or(Rate::ZERO, |r| r.rate());
+    let bpw = bpw.times(economy.births_multiplier.rate());
     let women = women_of_childbearing_age(pop, rules);
     report.births = births(women, bpw, years, rules.childbearing_years, rng);
     report.deaths = deaths(pop, rules, rng);
@@ -213,8 +220,8 @@ pub fn year_step(
         *pop.children.entry(new_year).or_insert(0) += report.births;
     }
     report.came_of_age = coming_of_age(pop, rules, new_year);
-    report.migrants = rules.migration_per_day;
-    for (cohort, k) in split_newcomers(rules.migration_per_day, rules, new_year, None) {
+    report.migrants = economy.migration_per_day;
+    for (cohort, k) in split_newcomers(economy.migration_per_day, rules, new_year, None) {
         *pop.pending.entry(cohort).or_insert(0) += k;
     }
     report

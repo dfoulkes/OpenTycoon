@@ -1,5 +1,7 @@
 # yaml-language-server: $schema=schema/customers.schema.json
-# customers.yaml: §7.2, §8. Placeholders are marked; the balance harness tunes them.
+# customers.yaml: §7.2, §8. The world's people and their tastes. The levels (births multiplier,
+# migration, allowance by class, price sensitivity, demand by decade, the residential market)
+# are in economy.yaml (R71). Placeholders are marked.
 initial_population: 2000        # placeholder: adults on the v1 map at the start
 visitors:
   commuter_share: 0.7           # R59
@@ -8,7 +10,7 @@ age_bands:                      # R60
   - { id: "30-49", min_age: 30, max_age: 49 }
   - { id: "50-64", min_age: 50, max_age: 64 }
   - { id: "65+",   min_age: 65 }
-births_per_woman:               # §8.1, R61: approximate England & Wales; 2025+ projected
+births_per_woman:               # §8.1, R61: approximate England & Wales; 2025+ projected; × economy.yaml births_multiplier
   1930: 1.9
   1935: 1.8
   1940: 1.9
@@ -40,13 +42,11 @@ mortality_per_step:             # placeholder: share of each band dying per 5-ye
   "30-49": 0.01
   "50-64": 0.04
   "65+": 0.25
-migration_per_day: 50           # placeholder
-allowance:                      # §8.2, R55; daily, before rent
-  base_by_class: { working: 20, middle: 45, upper: 120 }
+allowance:                      # §8.2, R55; daily, before rent: economy.yaml allowance_by_class × these
   age_multiplier: { "18-29": 0.9, "30-49": 1.1, "50-64": 1.0, "65+": 0.7 }
   sex_multiplier: { female: 1.0, male: 1.0 }
   day_share: 0.6                # placeholder: share of the after-rent allowance spent by day
-desires:                        # §8.2, R55, R64: P(good | age, class, sex, hour, year)
+desires:                        # §8.2, R55, R64: P(good | age, class, sex, hour, year), × economy.yaml demand_multipliers
   # Rules apply in order. A `set` rule (the default) sets the weight of each good it names; a
   # `scale` rule multiplies weights already set (capped at 1). Match on class, age (band id),
   # sex, window (day|night), from_year, until_year. On top of the table, a good is wanted only
@@ -162,7 +162,6 @@ obsolescence:                   # §7.1: demand fades after a good's or a type's
 demographics:                   # §8.1: class split by era; age and sex placeholders
   1930: { class: [0.60, 0.30, 0.10], age: [0.30, 0.35, 0.20, 0.15], sex: [0.5, 0.5] }
   2050: { class: [0.40, 0.45, 0.15], age: [0.22, 0.33, 0.22, 0.23], sex: [0.5, 0.5] }
-price_sensitivity: { working: 3.0, middle: 1.5, upper: 0.5 }   # §8.3 k_class
 class_affinity:                 # §8.3 placeholder: pull of each tier per class, × fit-out appeal
   working: { low: 1.0, medium: 0.8, high: 0.4 }
   middle:  { low: 0.7, medium: 1.0, high: 0.9 }
@@ -177,21 +176,9 @@ distance_decay:
 movement:                       # §8.1, §8.4
   cells_per_tick: 3             # placeholder: lot units per tick (≈1.2 m/s)
   spawn_spread_minutes: 60      # placeholder: shoppers trickle in over the first hour
-residential:                    # §7.2
-  flat_size: 4                  # R50
-  comfortable_share: 0.2        # R52
-  stretch_share: 0.5            # R52
-  move_interval_years: 10       # R54
+residential:                    # §7.2; the market's numbers are economy.yaml residential
   building_type: apartments     # R20: the businesses.yaml type that holds flats
-  default_rent: 3.00            # placeholder: £ per flat per day until the owner sets it (R51)
-  reference_rent: 3.00          # placeholder: ref price for rent in price_factor (R51)
-  stretch_min_desirability: 1.0 # placeholder: affinity × appeal needed to stretch to 50% (R52)
   rehunt_unhoused: true         # unhoused residents of the city look again while flats are empty
-  # Study levers, off by default (docs/economy.md "Residential levers"): not rulings, choices
-  # the balance study can search between.
-  max_rent_per_flat: null       # £ cap on any flat's rent per day; null = no cap
-  rent_tax: 0.0                 # share of residents' rent paid to the city
-  commute_preference: 0.0       # share of adults who commute rather than rent, even if they can afford it
 tourists:                       # §7.3, R29
   desire_boost: { souvenirs: 5.0 }   # placeholder: the Souvenir Shop's bonus from tourists
 online:                         # §7.5; R15, R36. online_share(year, good) = share_by_year × good_multiplier

@@ -179,7 +179,12 @@ fn holder(world: &World, name: &str) -> Option<AccountId> {
 fn nobody_shops(w: &mut SimWorld) {
     let sources = w.config.sources_mut();
     common::set_key(sources, "customers.yaml", "/initial_population", "0");
-    common::set_key(sources, "customers.yaml", "/migration_per_day", "0");
+    common::set_key(
+        sources,
+        "economy.yaml",
+        "/population/migration_per_day",
+        "0",
+    );
 }
 
 #[given(expr = "the {string} game length")]
@@ -202,7 +207,7 @@ fn rival_holds_all_low(w: &mut SimWorld) {
 fn rival_holds_low(w: &mut SimWorld, except: String) {
     let world = game(w);
     let year = world.clock().year();
-    let term = world.config().game.leases.term_years;
+    let term = world.config().economy.land.lease_term_years;
     for block in &mut world.map_mut().blocks {
         if block.tier == Tier::Low && block.name != except {
             block.lease = Some(sim_core::land::Lease::new(

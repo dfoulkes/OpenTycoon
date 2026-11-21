@@ -176,7 +176,7 @@ impl Businesses {
         Ok(build_cost(
             request.height,
             request.footprint,
-            config.businesses.build_base_rate.money(),
+            config.economy.building.base_rate.money(),
             config.map.tiers.get(block.tier).desirability_mult.rate(),
             fit_out_mult(config, request.fit_out),
         ))

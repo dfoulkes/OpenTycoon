@@ -9,7 +9,7 @@ Feature: Opening an auction
 
   @R23
   Scenario Outline: The minimum opening bid is the district's land base price
-    Given the shipped config with "game.yaml" key "/players/starting_cash" set to "20000"
+    Given the shipped config with "economy.yaml" key "/money/starting_cash" set to "20000"
     And a game with 2 players
     When player 0 opens an auction on "<district>" with £<bid>
     Then the command is <result>
@@ -69,7 +69,7 @@ Feature: Opening an auction
   # §5.1 and R7: the opening bid, like every bid, is capped at balance + credit limit.
   @R8
   Scenario: An opening bid above the bidder's ceiling is refused
-    Given the shipped config with "game.yaml" key "/players/starting_cash" set to "0"
+    Given the shipped config with "economy.yaml" key "/money/starting_cash" set to "0"
     And a game with 2 players
     When player 0 opens an auction on "Mayfair" with £14,000
     Then the command is refused: over the ceiling

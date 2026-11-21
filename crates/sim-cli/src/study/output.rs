@@ -394,9 +394,11 @@ fn write(path: &Path, text: &str) -> Result<(), StudyError> {
     std::fs::write(path, text).map_err(|e| StudyError::io(path, e))
 }
 
-/// Writes the overlay of each model in `ids` under `dir/models/<id>/`: every config file the
-/// model changes (copy them over `config/` to adopt it), `overrides.txt` (the same change as
-/// `--set` lines) and `model.json` (its parameters and metrics). Replaces any older overlays.
+/// Writes the overlay of each model in `ids` under `dir/models/<id>/`: the model's whole
+/// `economy.yaml` (R71: adopting the model is copying that one file over `config/`), any other
+/// config file the model changes (only a study that also varies `ai.yaml`), `overrides.txt`
+/// (the same change as `--set` lines) and `model.json` (its parameters and metrics). Replaces
+/// any older overlays.
 pub fn write_overlays(
     dir: &Path,
     def: &StudyDef,
@@ -423,7 +425,7 @@ pub fn write_overlays(
             let (Some(old), Some(new)) = (base.get(name), edited.get(name)) else {
                 continue;
             };
-            if old != new {
+            if old != new || file == ConfigFile::Economy {
                 let schema = file.schema_file_name();
                 let text = format!(
                     "# yaml-language-server: $schema=schema/{schema}\n# sim-cli study model {id}: \

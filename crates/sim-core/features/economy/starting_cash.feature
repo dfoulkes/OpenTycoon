@@ -13,7 +13,7 @@ Feature: Starting cash
 
   @R62 @R17
   Scenario: Starting cash is configurable
-    Given the shipped config with "game.yaml" key "/players/starting_cash" set to "2500"
+    Given the shipped config with "economy.yaml" key "/money/starting_cash" set to "2500"
     And a new game with 2 players
     Then player 1's balance is "£2,500.00"
     And player 2's balance is "£2,500.00"

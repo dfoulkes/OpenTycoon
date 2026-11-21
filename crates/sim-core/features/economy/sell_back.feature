@@ -25,7 +25,7 @@ Feature: Selling a business back to the city
 
   @R5 @R17
   Scenario: The sell-back share is configurable
-    Given the shipped config with "game.yaml" key "/bankruptcy/sell_to_city_ratio" set to "0.75"
+    Given the shipped config with "economy.yaml" key "/money/sell_to_city_ratio" set to "0.75"
     And a new game with 2 players
     And player 1 owns a 10-high 2x2 "bakery" on "Old Kent Road"
     And player 1 has a balance of "£0.00"

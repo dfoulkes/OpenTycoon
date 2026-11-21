@@ -144,7 +144,7 @@ fn has_balance(w: &mut SimWorld, who: String, amount: String) {
 #[given(expr = "player {int} holds the lease on {string} bought for {string} in {int}")]
 fn holds_lease(w: &mut SimWorld, n: u8, block: String, price: String, year: i32) {
     let id = block_id(w, &block);
-    let term_years = world(w).config().game.leases.term_years;
+    let term_years = world(w).config().economy.land.lease_term_years;
     world(w).map_mut().blocks[id.0 as usize].lease = Some(Lease {
         holder: AccountId::Player(player(n)),
         start_year: year,
@@ -191,7 +191,7 @@ pub(crate) fn owns_building(
     let cost = build_cost(
         height,
         footprint,
-        config.businesses.build_base_rate.money(),
+        config.economy.building.base_rate.money(),
         config.map.tiers.get(tier).desirability_mult.rate(),
         config.businesses.fit_out.medium.build_cost_mult.rate(),
     );
@@ -356,7 +356,7 @@ fn leader(w: &mut SimWorld, n: u8) {
 #[then(expr = "land is valued by {string}")]
 fn land_valued_by(w: &mut SimWorld, method: String) {
     let config = w.config.load_ok();
-    let shown = serde_json::to_value(config.game.net_worth.land_value).unwrap();
+    let shown = serde_json::to_value(config.economy.land.value_method).unwrap();
     assert_eq!(shown, serde_json::Value::String(method));
 }
 

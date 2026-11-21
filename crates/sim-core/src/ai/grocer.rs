@@ -364,7 +364,7 @@ fn one_shop_cost(config: &Config, tier: Tier, type_id: &str) -> Option<Money> {
     Some(build_cost(
         height,
         crate::land::Footprint { x: 0, y: 0, w, d },
-        config.businesses.build_base_rate.money(),
+        config.economy.building.base_rate.money(),
         config.map.tiers.get(tier).desirability_mult.rate(),
         config.businesses.fit_out.medium.build_cost_mult.rate(),
     ))

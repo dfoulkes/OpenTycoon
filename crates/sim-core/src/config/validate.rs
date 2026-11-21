@@ -14,7 +14,7 @@ pub use super::map_checks::check_board;
 pub fn check(config: &Config) -> Vec<ConfigError> {
     let mut errors = Vec::new();
     check_game(config, &mut errors);
-    check_game_economy(config, &mut errors);
+    check_economy(config, &mut errors);
     errors.extend(check_board(config, &config.map));
     check_businesses(config, &mut errors);
     check_customers(config, &mut errors);
@@ -114,45 +114,169 @@ fn check_game(config: &Config, errors: &mut Vec<ConfigError>) {
     }
 }
 
-/// `game.yaml` keys the economy owns (§2.3, §3): no negative limits, rates or uplifts, and
-/// the city never pays more than true value for a sell-back (R5).
-fn check_game_economy(config: &Config, errors: &mut Vec<ConfigError>) {
-    let game = &config.game;
-    let ratio = game.bankruptcy.sell_to_city_ratio.rate();
-    if ratio < Rate::ZERO || ratio > Rate::ONE {
+/// `economy.yaml` (R71): no negative limits, rates, uplifts or multipliers; shares between 0
+/// and 1; the city never pays more than true value for a sell-back (R5); stretch at least
+/// comfortable (R52); demand multipliers named by decade, 0–10, from the start of every game.
+fn check_economy(config: &Config, errors: &mut Vec<ConfigError>) {
+    let e = &config.economy;
+    let file = ConfigFile::Economy;
+    for (pointer, share) in [
+        ("/money/sell_to_city_ratio", e.money.sell_to_city_ratio),
+        (
+            "/residential/comfortable_share",
+            e.residential.comfortable_share,
+        ),
+        ("/residential/stretch_share", e.residential.stretch_share),
+        ("/residential/rent_tax", e.residential.rent_tax),
+        (
+            "/residential/commute_preference",
+            e.residential.commute_preference,
+        ),
+    ] {
+        if share.rate() < Rate::ZERO || share.rate() > Rate::ONE {
+            err(
+                errors,
+                file,
+                pointer.into(),
+                "must be between 0 and 1".into(),
+            );
+        }
+    }
+    check_economy_signs(config, errors);
+    if e.residential
+        .max_rent_per_flat
+        .is_some_and(|cap| cap.money().is_negative())
+    {
         err(
             errors,
-            ConfigFile::Game,
-            "/bankruptcy/sell_to_city_ratio".into(),
-            "must be between 0 and 1 (a share of true value, R5)".into(),
+            file,
+            "/residential/max_rent_per_flat".into(),
+            "must be at least 0, or null for no cap".into(),
         );
     }
+    if e.residential.stretch_share.rate() < e.residential.comfortable_share.rate() {
+        err(
+            errors,
+            file,
+            "/residential/stretch_share".into(),
+            "must be at least comfortable_share (R52)".into(),
+        );
+    }
+    check_demand_multipliers(config, errors);
+}
+
+/// `economy.yaml` amounts, rates and multipliers that may not be negative (R71).
+fn check_economy_signs(config: &Config, errors: &mut Vec<ConfigError>) {
+    let e = &config.economy;
+    let file = ConfigFile::Economy;
     for (pointer, negative) in [
+        ("/land/base_rate", e.land.base_rate.money().is_negative()),
         (
-            "/overdraft/start_limit",
-            game.overdraft.start_limit.money().is_negative(),
+            "/land/lot_property_uplift",
+            e.land.lot_property_uplift.rate() < Rate::ZERO,
         ),
         (
-            "/overdraft/increase_per_step",
-            game.overdraft.increase_per_step.money().is_negative(),
+            "/building/base_rate",
+            e.building.base_rate.money().is_negative(),
         ),
         (
-            "/overdraft/interest_rate",
-            game.overdraft.interest_rate.rate() < Rate::ZERO,
+            "/utilities/internet_base_rate",
+            e.utilities.internet_base_rate.money().is_negative(),
         ),
         (
-            "/net_worth/lot_property_uplift",
-            game.net_worth.lot_property_uplift.rate() < Rate::ZERO,
+            "/money/starting_cash",
+            e.money.starting_cash.money().is_negative(),
+        ),
+        (
+            "/money/overdraft/start_limit",
+            e.money.overdraft.start_limit.money().is_negative(),
+        ),
+        (
+            "/money/overdraft/increase_per_step",
+            e.money.overdraft.increase_per_step.money().is_negative(),
+        ),
+        (
+            "/money/overdraft/interest_rate",
+            e.money.overdraft.interest_rate.rate() < Rate::ZERO,
+        ),
+        (
+            "/population/births_multiplier",
+            e.population.births_multiplier.rate() < Rate::ZERO,
+        ),
+        (
+            "/residential/default_rent",
+            e.residential.default_rent.money().is_negative(),
+        ),
+        (
+            "/residential/reference_rent",
+            e.residential.reference_rent.money().is_negative(),
         ),
     ] {
         if negative {
+            err(errors, file, pointer.into(), "must not be negative".into());
+        }
+    }
+    let rates = &e.utilities.base_rates;
+    for (name, rate) in [
+        ("electricity", rates.electricity),
+        ("gas", rates.gas),
+        ("water", rates.water),
+        ("telecoms", rates.telecoms),
+    ] {
+        if rate.money().is_negative() {
             err(
                 errors,
-                ConfigFile::Game,
-                pointer.into(),
+                file,
+                format!("/utilities/base_rates/{name}"),
                 "must not be negative".into(),
             );
         }
+    }
+}
+
+/// `economy.yaml` `demand_multipliers`: keys are decades (`"1930s"`), values 0–10, and the
+/// first decade is at or before the start of the game and of every preset.
+fn check_demand_multipliers(config: &Config, errors: &mut Vec<ConfigError>) {
+    use super::economy::decade_start;
+    let file = ConfigFile::Economy;
+    let table = &config.economy.demand_multipliers;
+    for (key, m) in table {
+        let pointer = format!("/demand_multipliers/{key}");
+        if decade_start(key).is_none() {
+            err(
+                errors,
+                file,
+                pointer.clone(),
+                format!(
+                    "{key:?} is not a decade: write the decade's first year and an s, e.g. \"1930s\""
+                ),
+            );
+        }
+        if !(0.0..=10.0).contains(m) {
+            err(
+                errors,
+                file,
+                pointer,
+                format!("{m} must be between 0 and 10"),
+            );
+        }
+    }
+    let first = table.keys().filter_map(|k| decade_start(k)).min();
+    let start = config
+        .game
+        .presets
+        .values()
+        .map(|p| p.start_year)
+        .chain([config.game.clock.start_year])
+        .min()
+        .unwrap_or(config.game.clock.start_year);
+    if first.is_none_or(|f| f > start) {
+        err(
+            errors,
+            file,
+            "/demand_multipliers".into(),
+            format!("needs a decade at or before the start year {start}"),
+        );
     }
 }
 
@@ -293,45 +417,13 @@ fn check_customers_m1(config: &Config, bands: &BTreeSet<&str>, errors: &mut Vec<
     use crate::businesses::Hours;
     let c = &config.customers;
     let file = ConfigFile::Customers;
-    for (pointer, share) in [
-        ("/allowance/day_share", c.allowance.day_share),
-        (
-            "/residential/comfortable_share",
-            c.residential.comfortable_share,
-        ),
-        ("/residential/stretch_share", c.residential.stretch_share),
-        ("/residential/rent_tax", c.residential.rent_tax),
-        (
-            "/residential/commute_preference",
-            c.residential.commute_preference,
-        ),
-    ] {
-        if share.rate() > Rate::ONE || share.rate() < Rate::ZERO {
-            err(
-                errors,
-                file,
-                pointer.into(),
-                "must be between 0 and 1".into(),
-            );
-        }
-    }
-    if c.residential
-        .max_rent_per_flat
-        .is_some_and(|cap| cap.money().is_negative())
-    {
+    let day_share = c.allowance.day_share.rate();
+    if day_share > Rate::ONE || day_share < Rate::ZERO {
         err(
             errors,
             file,
-            "/residential/max_rent_per_flat".into(),
-            "must be at least 0, or null for no cap".into(),
-        );
-    }
-    if c.residential.stretch_share.rate() < c.residential.comfortable_share.rate() {
-        err(
-            errors,
-            file,
-            "/residential/stretch_share".into(),
-            "must be at least comfortable_share (R52)".into(),
+            "/allowance/day_share".into(),
+            "must be between 0 and 1".into(),
         );
     }
     match config.businesses.types.get(&c.residential.building_type) {

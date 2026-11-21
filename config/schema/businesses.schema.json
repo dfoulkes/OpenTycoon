@@ -302,10 +302,6 @@
   "additionalProperties": false,
   "description": "Root of `businesses.yaml`.",
   "properties": {
-    "build_base_rate": {
-      "description": "Build cost per unit of building volume, before the tier multiplier (§5.3).",
-      "type": "number"
-    },
     "fit_out": {
       "$ref": "#/$defs/FitOutTable",
       "description": "Fit-out levels (§7.1)."
@@ -334,7 +330,6 @@
     }
   },
   "required": [
-    "build_base_rate",
     "fit_out",
     "reference",
     "goods",

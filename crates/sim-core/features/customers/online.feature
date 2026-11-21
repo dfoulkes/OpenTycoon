@@ -63,7 +63,7 @@ Feature: Online shopping from 1995
   @R15 @R63
   Scenario: Online spending comes out of the shopper's allowance
     Given the game starts in 2020
-    And the shipped config with "customers.yaml" key "/allowance/base_by_class/working" set to "1.00"
+    And the shipped config with "economy.yaml" key "/population/allowance_by_class/working" set to "1.00"
     And a city of 100 working men aged "30-49"
     And an online bakery "WebBun" on "old_kent_road" with 100000 bread
     When the city runs to "12:00:00"

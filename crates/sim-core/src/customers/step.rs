@@ -245,7 +245,7 @@ impl Step<'_, '_> {
             }
             Activity::WaitingForPower { .. } | Activity::Wandering => true,
             Activity::Choosing => {
-                let rules = &self.inputs.config.customers;
+                let config = self.inputs.config;
                 let geometry = self.geometry();
                 let (next, missed) = next_errand(
                     c,
@@ -253,7 +253,7 @@ impl Step<'_, '_> {
                     self.dark_until,
                     self.offers,
                     &self.reputation,
-                    rules,
+                    config,
                     geometry,
                     self.rng,
                 );
@@ -294,7 +294,7 @@ impl Step<'_, '_> {
                     c.budget,
                     &self.beds,
                     &self.reputation,
-                    &self.inputs.config.customers,
+                    self.inputs.config,
                     self.geometry(),
                     self.rng,
                 )

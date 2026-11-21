@@ -294,7 +294,7 @@ fn seat_focus(w: &mut SimWorld, who: String) {
 fn rival_holds_all(w: &mut SimWorld, except: String) {
     let world = game(w);
     let year = world.clock().year();
-    let term = world.config().game.leases.term_years;
+    let term = world.config().economy.land.lease_term_years;
     for block in &mut world.map_mut().blocks {
         if block.name != except && block.kind == sim_core::land::BlockKind::Buildable {
             block.lease = Some(Lease::new(
@@ -322,7 +322,7 @@ fn rival_paid(w: &mut SimWorld, name: String, paid: String) {
     regex = r#"^(the Grocer|the Landlord|the Toff|the Speculator|Sir Penny Sugar) holds the lease on "([^"]+)"$"#
 )]
 fn focus_holds(w: &mut SimWorld, who: String, name: String) {
-    let term = game(w).config().game.leases.term_years;
+    let term = game(w).config().economy.land.lease_term_years;
     focus_holds_with(w, who, name, term, None);
 }
 
@@ -338,7 +338,7 @@ fn focus_holds_with(w: &mut SimWorld, who: String, name: String, left: u32, paid
     let world = game(w);
     let block = block_named(world, &name);
     let year = world.clock().year();
-    let term = world.config().game.leases.term_years;
+    let term = world.config().economy.land.lease_term_years;
     let start = year - i32::try_from(term - left).unwrap();
     let b = &mut world.map_mut().blocks[block.0 as usize];
     let price = paid.unwrap_or(b.land_base_price);
@@ -395,7 +395,12 @@ fn people(w: &mut SimWorld, n: u64) {
         &n.to_string(),
     );
     if n == 0 {
-        common::set_key(sources, "customers.yaml", "/migration_per_day", "0");
+        common::set_key(
+            sources,
+            "economy.yaml",
+            "/population/migration_per_day",
+            "0",
+        );
     }
 }
 
@@ -404,8 +409,8 @@ fn starting_cash(w: &mut SimWorld, cash: String) {
     let pounds = pounds(&cash).pence() / 100;
     common::set_key(
         w.config.sources_mut(),
-        "game.yaml",
-        "/players/starting_cash",
+        "economy.yaml",
+        "/money/starting_cash",
         &pounds.to_string(),
     );
 }
@@ -819,7 +824,7 @@ fn first_rent(w: &mut SimWorld, how: String, pounds: i64, pence: i64) {
     let rent = world
         .population()
         .residential
-        .rent(id, rules.default_rent.money());
+        .rent(id, world.config().economy.residential.default_rent.money());
     let mark = Money::from_pence(pounds * 100 + pence);
     if how == "above" {
         assert!(rent > mark, "rent {rent}");
@@ -1008,15 +1013,10 @@ fn flats_let_at(w: &mut SimWorld, pounds: u32, pence: u32) {
     // The city's default rent and the reference rent residents judge prices by, together.
     let rent = format!("{pounds}.{pence:02}");
     let sources = w.config.sources_mut();
+    common::set_key(sources, "economy.yaml", "/residential/default_rent", &rent);
     common::set_key(
         sources,
-        "customers.yaml",
-        "/residential/default_rent",
-        &rent,
-    );
-    common::set_key(
-        sources,
-        "customers.yaml",
+        "economy.yaml",
         "/residential/reference_rent",
         &rent,
     );

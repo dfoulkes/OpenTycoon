@@ -57,7 +57,7 @@ Feature: One file holds the economy's weights
 
     Examples:
       | table                       | named                     |
-      | {1930s: 1.0, "1950": 1.0}   | /demand_multipliers/1950  |
+      | {1930s: 1.0, 1950: 1.0}     | /demand_multipliers/1950  |
       | {1930s: 1.0, 1955s: 1.0}    | /demand_multipliers/1955s |
       | {1950s: 1.0}                | start year 1930           |
 

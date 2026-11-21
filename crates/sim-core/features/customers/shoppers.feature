@@ -93,7 +93,7 @@ Feature: Shoppers come from home and from the tube
 
   @R25
   Scenario: Shoppers spend only what they have
-    Given the shipped config with "customers.yaml" key "/allowance/base_by_class/working" set to "0.10"
+    Given the shipped config with "economy.yaml" key "/population/allowance_by_class/working" set to "0.10"
     And a city of 10 working men aged "30-49"
     And a bakery "Bun" on "holborn" with 1000 bread
     When the city runs to "12:00:00"

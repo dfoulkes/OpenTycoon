@@ -74,7 +74,7 @@ proptest! {
         let before = pop.total_adults() + pop.pending_arrivals();
         let l = listings(&businesses, &map, &config, &pop.residential);
         let mut rng = seeded(seed);
-        let report = arrivals(&mut pop, &l, &config.customers, year, &mut rng);
+        let report = arrivals(&mut pop, &l, &config, year, &mut rng);
         prop_assert_eq!(pop.pending_arrivals(), 0);
         prop_assert_eq!(pop.total_adults(), before);
         prop_assert_eq!(report.housed + report.unhoused, report.arrived);
@@ -95,7 +95,7 @@ proptest! {
         blocks in prop::collection::vec((0u32..9, 1u32..20), 1..5),
     ) {
         let mut config = common::shipped_config();
-        config.customers.residential.commute_preference = Ratio(Rate::from_bp(preference_bp));
+        config.economy.residential.commute_preference = Ratio(Rate::from_bp(preference_bp));
         let map = Map::from_config(&config.map);
         let mut businesses = Businesses::default();
         let mut pop = Population::default();
@@ -113,7 +113,7 @@ proptest! {
         let adults = pop.total_adults() + pop.pending_arrivals();
         let l = listings(&businesses, &map, &config, &pop.residential);
         let mut rng = seeded(seed);
-        arrivals(&mut pop, &l, &config.customers, 1950, &mut rng);
+        arrivals(&mut pop, &l, &config, 1950, &mut rng);
         let keep = u64::try_from(10_000 - preference_bp).unwrap();
         prop_assert_eq!(pop.total_adults(), adults);
         prop_assert!(pop.housed() <= adults * keep / 10_000, "{} housed of {}", pop.housed(), adults);
@@ -126,7 +126,7 @@ proptest! {
         year in 1930i32..2050,
     ) {
         let mut sources = common::shipped_sources();
-        common::set_key(&mut sources, "customers.yaml", "/migration_per_day", "0");
+        common::set_key(&mut sources, "economy.yaml", "/population/migration_per_day", "0");
         for b in ["18-29", "30-49", "50-64", "65+"] {
             common::set_key(&mut sources, "customers.yaml", &format!("/mortality_per_step/{b}"), "0");
         }
@@ -137,7 +137,7 @@ proptest! {
         }
         let before = pop.total_adults();
         let mut rng = seeded(seed);
-        let step = year_step(&mut pop, &config.customers, year + 5, 5, &mut rng);
+        let step = year_step(&mut pop, &config, year + 5, 5, &mut rng);
         prop_assert_eq!(pop.total_adults(), before);
         prop_assert_eq!(step.deaths, 0);
         prop_assert_eq!(pop.children() + pop.pending_arrivals(), step.births);

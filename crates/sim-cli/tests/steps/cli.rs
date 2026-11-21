@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use cucumber::{then, when};
+use cucumber::{given, then, when};
 
 use crate::HarnessWorld;
 
@@ -139,4 +139,38 @@ fn json_agents(w: &mut HarnessWorld, scenario: String, agents: u64) {
     let v = json(w);
     assert_eq!(v["scenario"], scenario);
     assert_eq!(v["agents"], agents);
+}
+
+/// Copies the shipped `config/` into the scenario's scratch directory as `name`, leaving out
+/// `skip` if given, and returns the copy's path.
+fn copy_shipped(w: &mut HarnessWorld, name: &str, skip: Option<&str>) -> PathBuf {
+    let target = w.cli.tmp().join(name);
+    std::fs::create_dir_all(&target).unwrap();
+    for entry in std::fs::read_dir(super::repo_root().join("config"))
+        .unwrap()
+        .flatten()
+    {
+        let file = entry.file_name();
+        if entry.path().is_file() && skip.is_none_or(|s| file != s) {
+            std::fs::copy(entry.path(), target.join(&file)).unwrap();
+        }
+    }
+    target
+}
+
+#[given(expr = "a copy of the shipped config without {string} in {string}")]
+fn copy_without(w: &mut HarnessWorld, skip: String, name: String) {
+    copy_shipped(w, &name, Some(&skip));
+}
+
+#[given(
+    expr = "a copy of the shipped config in {string} with {string} key {string} set to {string}"
+)]
+fn copy_with(w: &mut HarnessWorld, name: String, file: String, key: String, value: String) {
+    let dir = copy_shipped(w, &name, None);
+    let mut sources = sim_core::ConfigSources::read_dir(&dir).unwrap();
+    let stem = file.trim_end_matches(".yaml");
+    let ov: sim_cli::overrides::Override = format!("{stem}.{key}={value}").parse().unwrap();
+    sim_cli::overrides::apply(&mut sources, &ov).unwrap();
+    std::fs::write(dir.join(&file), sources.get(&file).unwrap()).unwrap();
 }

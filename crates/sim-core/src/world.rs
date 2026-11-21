@@ -34,7 +34,7 @@ use crate::auctions::{
 use crate::businesses::{BuildRequest, Business, BusinessId, Businesses, FitOutLevel, LeverError};
 use crate::clock::{Clock, ClockEvents, ClockRules};
 use crate::config::Config;
-use crate::config::game::LandValueMethod;
+use crate::config::economy::LandValueMethod;
 use crate::customers::{Customers, PhaseInputs};
 use crate::economy::{
     self, AccountId, Ledger, NetWorthBoard, PlayerId, Solvency, SolvencyTracker,
@@ -279,7 +279,7 @@ impl World {
         for (p, _) in &seats {
             ledger.open(
                 AccountId::Player(*p),
-                config.game.players.starting_cash.money(),
+                config.economy.money.starting_cash.money(),
             );
         }
         let ai = ai
@@ -413,7 +413,7 @@ impl World {
         let years = self.clock.rules().years_per_day;
         crate::population::year_step(
             &mut self.population,
-            &self.config.customers,
+            &self.config,
             self.clock.year(),
             years,
             &mut self.rng,
@@ -463,8 +463,8 @@ impl World {
     fn score_net_worth(&mut self) {
         let years_per_day = i32::try_from(self.clock.rules().years_per_day).unwrap_or(0);
         let scoring_year = self.clock.year().saturating_sub(years_per_day);
-        let uplift = self.config.game.net_worth.lot_property_uplift.rate();
-        let method = self.config.game.net_worth.land_value;
+        let uplift = self.config.economy.land.lot_property_uplift.rate();
+        let method = self.config.economy.land.value_method;
         // The spec's book value reads no events; only the market methods need the factors.
         let factors = match method {
             LandValueMethod::BookDecay => Vec::new(),
@@ -535,13 +535,12 @@ impl World {
         crate::population::arrivals(
             &mut self.population,
             &listings,
-            &self.config.customers,
+            &self.config,
             self.clock.year(),
             &mut self.rng,
         );
         // R63: today's allowances are new money, minted into the shoppers' purse.
-        let allowances =
-            crate::population::daily_allowances(&self.population, &self.config.customers);
+        let allowances = crate::population::daily_allowances(&self.population, &self.config);
         self.ledger.mint(AccountId::Shoppers, allowances);
     }
 
@@ -560,7 +559,7 @@ impl World {
         let mut bills = economy::settlement::interest_bills(
             &self.ledger,
             active,
-            self.config.game.overdraft.interest_rate.rate(),
+            self.config.economy.money.overdraft.interest_rate.rate(),
         );
         bills.extend(economy::settlement::resident_rent_bills(&rent_due));
         bills.extend(self.insurance_bills());
@@ -745,7 +744,7 @@ impl World {
                         Lease::new(
                             buyer,
                             self.clock.year(),
-                            self.config.game.leases.term_years,
+                            self.config.economy.land.lease_term_years,
                             price,
                         )
                     },
@@ -846,11 +845,7 @@ impl World {
             &self.config,
             &self.population.residential,
         );
-        residential::rent_due(
-            &self.population.residential,
-            &listings,
-            &self.config.customers,
-        )
+        residential::rent_due(&self.population.residential, &listings, &self.config)
     }
 
     /// Phase 9. Owner: businesses.
@@ -1016,7 +1011,7 @@ impl World {
 
     /// Today's credit limit, the same for every player: `start + day × increase` (R7).
     pub fn credit_limit(&self) -> Money {
-        credit_limit_on_day(&self.config.game.overdraft, self.clock.day())
+        credit_limit_on_day(&self.config.economy.money.overdraft, self.clock.day())
     }
 
     /// A player's bid ceiling, `balance + credit limit` (R7, §5.1): the most they can bid or
@@ -1111,6 +1106,7 @@ fn city_apartments(map: &Map, config: &Config) -> Businesses {
         return businesses;
     };
     let rates = &config.businesses;
+    let build_rate = config.economy.building.base_rate.money();
     for site in crate::land::city_apartment_sites(map, &config.map) {
         let Some(block) = map.block(site.block) else {
             continue;
@@ -1118,7 +1114,7 @@ fn city_apartments(map: &Map, config: &Config) -> Businesses {
         let build_cost = crate::businesses::build_cost(
             site.height,
             site.footprint,
-            rates.build_base_rate.money(),
+            build_rate,
             config.map.tiers.get(block.tier).desirability_mult.rate(),
             rates.fit_out.medium.build_cost_mult.rate(),
         );
@@ -1159,6 +1155,7 @@ mod businesses_tests {
             ConfigFile::Customers => include_str!("../../../config/customers.yaml"),
             ConfigFile::Events => include_str!("../../../config/events.yaml"),
             ConfigFile::Ai => include_str!("../../../config/ai.yaml"),
+            ConfigFile::Economy => include_str!("../../../config/economy.yaml"),
         };
         let mut sources = ConfigSources::new();
         for f in ConfigFile::ALL {

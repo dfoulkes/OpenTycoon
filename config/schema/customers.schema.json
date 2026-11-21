@@ -34,7 +34,7 @@
     },
     "AllowanceSettings": {
       "additionalProperties": false,
-      "description": "Daily allowance (R55).",
+      "description": "Daily allowance (R55): `allowance_by_class` (`economy.yaml`) × age × sex multipliers.",
       "properties": {
         "age_multiplier": {
           "additionalProperties": {
@@ -43,10 +43,6 @@
           },
           "description": "Multiplier per age band id.",
           "type": "object"
-        },
-        "base_by_class": {
-          "$ref": "#/$defs/ClassPounds",
-          "description": "Base allowance per class."
         },
         "day_share": {
           "description": "Share of the after-rent allowance a shopper brings to day trade; night trade gets the\nrest (§8.2, §8.4).",
@@ -58,7 +54,6 @@
         }
       },
       "required": [
-        "base_by_class",
         "age_multiplier",
         "sex_multiplier",
         "day_share"
@@ -117,63 +112,6 @@
           "type": "string"
         }
       ]
-    },
-    "ClassF64": {
-      "additionalProperties": false,
-      "description": "A float per class (scoring inputs only).",
-      "properties": {
-        "middle": {
-          "description": "Middle class.",
-          "format": "double",
-          "maximum": 100.0,
-          "minimum": 0.0,
-          "type": "number"
-        },
-        "upper": {
-          "description": "Upper class.",
-          "format": "double",
-          "maximum": 100.0,
-          "minimum": 0.0,
-          "type": "number"
-        },
-        "working": {
-          "description": "Working class.",
-          "format": "double",
-          "maximum": 100.0,
-          "minimum": 0.0,
-          "type": "number"
-        }
-      },
-      "required": [
-        "working",
-        "middle",
-        "upper"
-      ],
-      "type": "object"
-    },
-    "ClassPounds": {
-      "additionalProperties": false,
-      "description": "Money per class.",
-      "properties": {
-        "middle": {
-          "description": "Middle class.",
-          "type": "number"
-        },
-        "upper": {
-          "description": "Upper class.",
-          "type": "number"
-        },
-        "working": {
-          "description": "Working class.",
-          "type": "number"
-        }
-      },
-      "required": [
-        "working",
-        "middle",
-        "upper"
-      ],
-      "type": "object"
     },
     "ClassTierF64": {
       "additionalProperties": false,
@@ -391,6 +329,25 @@
         }
       ]
     },
+    "HousingSettings": {
+      "additionalProperties": false,
+      "description": "Which building holds flats (§7.2).",
+      "properties": {
+        "building_type": {
+          "description": "The business type id in `businesses.yaml` that is an apartment block (R20, R50).",
+          "type": "string"
+        },
+        "rehunt_unhoused": {
+          "description": "Whether unhoused people already in the city look again each morning, after the\narrivals, while flats stand empty (§7.2: everyone wants to live in the city).",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "building_type",
+        "rehunt_unhoused"
+      ],
+      "type": "object"
+    },
     "MovementSettings": {
       "additionalProperties": false,
       "description": "Walking and spawning (§8.1, §8.4).",
@@ -503,86 +460,6 @@
         "initial",
         "lost_sale_penalty",
         "sale_recovery"
-      ],
-      "type": "object"
-    },
-    "ResidentialSettings": {
-      "additionalProperties": false,
-      "description": "Apartment affordability (§7.2).",
-      "properties": {
-        "building_type": {
-          "description": "The business type id in `businesses.yaml` that is an apartment block (R20, R50).",
-          "type": "string"
-        },
-        "comfortable_share": {
-          "description": "Comfortable rent share of allowance (R52, default 0.2).",
-          "type": "number"
-        },
-        "commute_preference": {
-          "description": "Study lever, off by default (0): the share of the city's adults who would rather\ncommute than live in a flat, even one they can afford. The 05:30 house-hunt houses no\nmore than `⌊adults × (1 − commute_preference)⌋` (docs/economy.md \"Residential levers\").",
-          "type": "number"
-        },
-        "default_rent": {
-          "description": "Rent per flat per day until the owner sets one: the city's default (R4, R51).",
-          "type": "number"
-        },
-        "flat_size": {
-          "description": "Units of volume per flat (R50, default 4).",
-          "format": "uint32",
-          "maximum": 10000,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "max_rent_per_flat": {
-          "description": "Study lever, off by default (`null`): the most any flat's rent can be per day. An\nowner may set more, but residents see and pay `min(rent, cap)` (docs/economy.md\n\"Residential levers\").",
-          "type": [
-            "number",
-            "null"
-          ]
-        },
-        "move_interval_years": {
-          "description": "Minimum in-game years between moves (R54, default 10).",
-          "format": "uint32",
-          "maximum": 500,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "reference_rent": {
-          "description": "The reference rent for `price_factor` when people weigh flats (R51).",
-          "type": "number"
-        },
-        "rehunt_unhoused": {
-          "description": "Whether unhoused people already in the city look again each morning, after the\narrivals, while flats stand empty (§7.2: everyone wants to live in the city).",
-          "type": "boolean"
-        },
-        "rent_tax": {
-          "description": "Study lever, off by default (0): the share of residents' rent paid to the city as tax\nat the 06:00 settlement; the owner gets the rest (docs/economy.md \"Residential levers\").",
-          "type": "number"
-        },
-        "stretch_min_desirability": {
-          "description": "A flat whose desirability (class affinity × fit-out appeal) is at least this justifies\nstretching to `stretch_share` (R52).",
-          "format": "double",
-          "maximum": 100.0,
-          "minimum": 0.0,
-          "type": "number"
-        },
-        "stretch_share": {
-          "description": "Stretch rent share for desirable flats (R52, default 0.5).",
-          "type": "number"
-        }
-      },
-      "required": [
-        "flat_size",
-        "comfortable_share",
-        "stretch_share",
-        "move_interval_years",
-        "building_type",
-        "default_rent",
-        "reference_rent",
-        "stretch_min_desirability",
-        "rehunt_unhoused",
-        "rent_tax",
-        "commute_preference"
       ],
       "type": "object"
     },
@@ -834,14 +711,14 @@
     },
     "allowance": {
       "$ref": "#/$defs/AllowanceSettings",
-      "description": "Daily allowance (R55)."
+      "description": "Daily allowance (R55): its shape by age and sex. The base per class is `economy.yaml`\n`population.allowance_by_class`."
     },
     "births_per_woman": {
       "additionalProperties": {
         "description": "A decimal ratio or multiplier, at most 4 decimal places (held as basis points).",
         "type": "number"
       },
-      "description": "Historical births per woman, keyed by step year (R61).",
+      "description": "Historical births per woman, keyed by step year (R61), before `economy.yaml`\n`population.births_multiplier`.",
       "type": "object"
     },
     "childbearing_years": {
@@ -886,12 +763,6 @@
       "minimum": 0.0,
       "type": "number"
     },
-    "migration_per_day": {
-      "description": "Migrants added to each morning's arrivals.",
-      "format": "uint64",
-      "minimum": 0,
-      "type": "integer"
-    },
     "mortality_per_step": {
       "additionalProperties": {
         "description": "A decimal ratio or multiplier, at most 4 decimal places (held as basis points).",
@@ -912,17 +783,13 @@
       "$ref": "#/$defs/OnlineSettings",
       "description": "Online demand from 1995 (§7.5; R15, R36)."
     },
-    "price_sensitivity": {
-      "$ref": "#/$defs/ClassF64",
-      "description": "`k_class` price sensitivity (§8.3)."
-    },
     "reputation": {
       "$ref": "#/$defs/ReputationSettings",
       "description": "Shop reputation (§8.3)."
     },
     "residential": {
-      "$ref": "#/$defs/ResidentialSettings",
-      "description": "Apartment affordability (R50, R52, R54)."
+      "$ref": "#/$defs/HousingSettings",
+      "description": "Which building holds flats (R20, R50). The residential market's numbers are\n`economy.yaml` `residential`."
     },
     "shopping_windows": {
       "$ref": "#/$defs/ShoppingWindows",
@@ -944,13 +811,11 @@
     "births_per_woman",
     "childbearing_years",
     "mortality_per_step",
-    "migration_per_day",
     "allowance",
     "desires",
     "shopping_windows",
     "obsolescence",
     "demographics",
-    "price_sensitivity",
     "class_affinity",
     "luxury_price_boost",
     "movement",

@@ -19,7 +19,7 @@ Feature: Land value
   @R19 @R39
   Scenario Outline: A gentrifying block, valued over the life of one lease
     # Bloomsbury's land base price is £5,500. Player 1 paid £6,000 in 1930 for a 30-year lease.
-    Given the shipped config with "game.yaml" key "/net_worth/land_value" set to "<method>"
+    Given the shipped config with "economy.yaml" key "/land/value_method" set to "<method>"
     And the shipped config with "map.yaml" key "/map" set to "v1"
     And a new game with 2 players
     And the game has run to "12:00"
@@ -51,7 +51,7 @@ Feature: Land value
     # Mayfair's land base price is £14,000. Player 1 paid £15,000 in 2000 for a 30-year lease.
     # The 2008 crash (land values ×0.7) lands at the 2005 year step.
     Given the shipped config with "game.yaml" key "/clock/start_year" set to "2000"
-    And the shipped config with "game.yaml" key "/net_worth/land_value" set to "<method>"
+    And the shipped config with "economy.yaml" key "/land/value_method" set to "<method>"
     And the shipped config with "map.yaml" key "/map" set to "v1"
     And a new game with 2 players
     And the game has run to "12:00"

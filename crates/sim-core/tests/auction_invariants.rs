@@ -44,8 +44,8 @@ proptest! {
     ) {
         let mut config = common::shipped_config();
         config.ai.opponents.clear();
-        let limit = config.game.overdraft.start_limit.money();
-        let term = config.game.leases.term_years;
+        let limit = config.economy.money.overdraft.start_limit.money();
+        let term = config.economy.land.lease_term_years;
         let mut world = World::new(config, 7, 3);
         let total = world.ledger().total();
         for ((player, cmd), wait) in steps {

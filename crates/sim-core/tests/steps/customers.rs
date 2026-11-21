@@ -153,7 +153,7 @@ fn gets(w: &mut SimWorld, name: String, qty: i64, good: String) {
 fn daily_allowance(w: &mut SimWorld, c: String, s: String, b: String, amount: String) {
     let config = CityState::config(w);
     let key = cohort(w, &c, &s, &b);
-    assert_eq!(allowance(&config.customers, key), pounds(&amount));
+    assert_eq!(allowance(&config, key), pounds(&amount));
 }
 
 #[then(
@@ -198,7 +198,7 @@ fn wants(w: &mut SimWorld, c: String, s: String, b: String, window: String, list
     };
     let goods = GoodsIndex::new(&config.businesses.goods);
     for _ in 0..20 {
-        let rolled = shopping::roll_list(&config.customers, &goods, key, hours, 1930, w.city.rng());
+        let rolled = shopping::roll_list(&config, &goods, key, hours, 1930, w.city.rng());
         let names: Vec<&str> = rolled.iter().map(|g| goods.name(*g)).collect();
         assert_eq!(names.join(", "), list);
     }
@@ -481,7 +481,7 @@ fn heading_out(w: &mut SimWorld) {
 )]
 fn price_factor(w: &mut SimWorld, c: String, pct: f64, expected: f64) {
     let config = CityState::config(w);
-    let k = scoring::k_class(&config.customers, class(&c));
+    let k = scoring::k_class(&config.economy, class(&c));
     let got = scoring::price_factor(k, pct, 100.0);
     assert!((got - expected).abs() < 5e-5, "{got} vs {expected}");
 }
@@ -513,7 +513,7 @@ fn choose(w: &mut SimWorld, n: u32, c: String, block: String, good: String) {
             good,
             &offers,
             &w.city.customers.reputation,
-            &config.customers,
+            &config,
             g,
             &mut rng,
         ) {

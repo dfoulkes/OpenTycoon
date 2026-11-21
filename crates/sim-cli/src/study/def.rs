@@ -93,7 +93,7 @@ pub enum Mode {
     #[default]
     Set,
     /// Multiply every number under each key (a scalar, or a whole map such as
-    /// `customers.births_per_woman`) by the sampled factor. A whole-number leaf stays whole.
+    /// `economy.population.allowance_by_class`) by the sampled factor. A whole-number leaf stays whole.
     Scale,
 }
 
@@ -103,7 +103,7 @@ pub enum Mode {
 pub struct Parameter {
     /// Column name in `models.csv` (`param_<name>`): letters, digits and `_`.
     pub name: String,
-    /// One config key, in `--set` form: `file.key.path` (e.g. `game.leases.term_years`).
+    /// One config key, in `--set` form: `file.key.path` (e.g. `economy.land.lease_term_years`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key: Option<String>,
     /// Several keys that all take the same value (or factor).
@@ -532,7 +532,7 @@ mod tests {
     #[test]
     fn parses_a_parameter() {
         let d = StudyDef::from_yaml(
-            "parameters:\n  - { name: lease, key: game.leases.term_years, min: 10, max: 60, kind: integer }\n  - { name: k, keys: [customers.price_sensitivity.working], min: 0.5, max: 2, distribution: log_uniform, decimals: 3, mode: scale }\n",
+            "parameters:\n  - { name: lease, key: economy.land.lease_term_years, min: 10, max: 60, kind: integer }\n  - { name: k, keys: [economy.population.price_sensitivity.working], min: 0.5, max: 2, distribution: log_uniform, decimals: 3, mode: scale }\n",
         )
         .unwrap();
         assert_eq!(d.parameters[0].kind, Kind::Integer);
@@ -541,14 +541,14 @@ mod tests {
         assert_eq!(d.parameters[1].places(), 3);
         assert_eq!(
             d.parameters[1].all_keys(),
-            vec!["customers.price_sensitivity.working"]
+            vec!["economy.population.price_sensitivity.working"]
         );
     }
 
     #[test]
     fn parses_a_categorical_parameter() {
         let d = StudyDef::from_yaml(
-            "parameters:\n  - { name: land, key: game.net_worth.land_value, values: [book_decay, market] }\n",
+            "parameters:\n  - { name: land, key: economy.land.value_method, values: [book_decay, market] }\n",
         )
         .unwrap();
         let p = &d.parameters[0];

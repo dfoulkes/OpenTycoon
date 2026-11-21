@@ -13,8 +13,7 @@ use serde::{Deserialize, Serialize};
 use super::{Cohort, Population, allowance};
 use crate::businesses::{BusinessId, Businesses, FitOutLevel, stock_capacity};
 use crate::config::Config;
-use crate::config::CustomersConfig;
-use crate::config::customers::ResidentialSettings;
+use crate::config::economy::ResidentialSettings;
 use crate::config::types::Pounds;
 use crate::customers::scoring;
 use crate::economy::{AccountId, PlayerId};
@@ -158,11 +157,12 @@ pub fn listings(
     config: &Config,
     residential: &Residential,
 ) -> Vec<FlatListing> {
-    let rules = &config.customers.residential;
+    let rules = &config.economy.residential;
+    let kind = &config.customers.residential.building_type;
     businesses
         .by_id
         .iter()
-        .filter(|(_, b)| b.type_id == rules.building_type)
+        .filter(|(_, b)| &b.type_id == kind)
         .filter_map(|(id, b)| {
             let tier = map.block(b.block)?.tier;
             Some(FlatListing {
@@ -244,19 +244,19 @@ pub fn candidates(
     cohort: Cohort,
     listings: &[FlatListing],
     occupancy: &BTreeMap<BusinessId, u32>,
-    rules: &CustomersConfig,
+    config: &Config,
 ) -> Result<Vec<usize>, HouseHunt> {
-    candidates_except(cohort, listings, occupancy, rules, None)
+    candidates_except(cohort, listings, occupancy, config, None)
 }
 
 fn candidates_except(
     cohort: Cohort,
     listings: &[FlatListing],
     occupancy: &BTreeMap<BusinessId, u32>,
-    rules: &CustomersConfig,
+    config: &Config,
     except: Option<BusinessId>,
 ) -> Result<Vec<usize>, HouseHunt> {
-    let budget = allowance(rules, cohort);
+    let budget = allowance(config, cohort);
     let open: Vec<usize> = listings
         .iter()
         .enumerate()
@@ -268,7 +268,7 @@ fn candidates_except(
         .map(|i| listings[*i].rent)
         .min()
         .ok_or(HouseHunt::NoVacancy)?;
-    let r = &rules.residential;
+    let r = &config.economy.residential;
     if cheapest > r.comfortable_share.rate().apply(budget) {
         return Err(HouseHunt::PricedOut);
     }
@@ -276,14 +276,14 @@ fn candidates_except(
         .into_iter()
         .filter(|i| {
             let l = &listings[*i];
-            let d = scoring::desirability(rules, cohort.class, l.tier, l.appeal);
+            let d = scoring::desirability(&config.customers, cohort.class, l.tier, l.appeal);
             affordability(l.rent, budget, d, r) != Affordability::Unaffordable
         })
         .collect())
 }
 
-fn score(rules: &CustomersConfig, cohort: Cohort, l: &FlatListing) -> f64 {
-    scoring::flat_score(rules, cohort.class, l.tier, l.appeal, l.rent)
+fn score(config: &Config, cohort: Cohort, l: &FlatListing) -> f64 {
+    scoring::flat_score(config, cohort.class, l.tier, l.appeal, l.rent)
 }
 
 /// One person's house-hunt: among [`candidates`], a weighted random pick by the business
@@ -292,15 +292,15 @@ pub fn choose_flat(
     cohort: Cohort,
     listings: &[FlatListing],
     occupancy: &BTreeMap<BusinessId, u32>,
-    rules: &CustomersConfig,
+    config: &Config,
     rng: &mut SimRng,
 ) -> HouseHunt {
-    match candidates(cohort, listings, occupancy, rules) {
+    match candidates(cohort, listings, occupancy, config) {
         Err(why) => why,
         Ok(idx) => {
             let scores: Vec<f64> = idx
                 .iter()
-                .map(|i| score(rules, cohort, &listings[*i]))
+                .map(|i| score(config, cohort, &listings[*i]))
                 .collect();
             scoring::weighted_pick(&scores, rng)
                 .and_then(|k| idx.get(k).copied())
@@ -315,24 +315,24 @@ pub fn better_flat(
     resident: &Resident,
     listings: &[FlatListing],
     occupancy: &BTreeMap<BusinessId, u32>,
-    rules: &CustomersConfig,
+    config: &Config,
     rng: &mut SimRng,
 ) -> Option<usize> {
     let home = listings
         .iter()
         .find(|l| l.building == resident.home)
-        .map_or(0.0, |l| score(rules, resident.cohort, l));
+        .map_or(0.0, |l| score(config, resident.cohort, l));
     let idx = candidates_except(
         resident.cohort,
         listings,
         occupancy,
-        rules,
+        config,
         Some(resident.home),
     )
     .ok()?;
     let (better, scores): (Vec<usize>, Vec<f64>) = idx
         .into_iter()
-        .map(|i| (i, score(rules, resident.cohort, &listings[i])))
+        .map(|i| (i, score(config, resident.cohort, &listings[i])))
         .filter(|(_, s)| *s > home)
         .unzip();
     scoring::weighted_pick(&scores, rng).and_then(|k| better.get(k).copied())
@@ -382,7 +382,7 @@ fn house_all(
     residential: &mut Residential,
     listings: &[FlatListing],
     lets: &mut Lets,
-    rules: &CustomersConfig,
+    config: &Config,
     year: i32,
     rng: &mut SimRng,
 ) -> Vec<Cohort> {
@@ -393,7 +393,7 @@ fn house_all(
             left.push(cohort);
             continue;
         }
-        match choose_flat(cohort, listings, &lets.occupancy, rules, rng) {
+        match choose_flat(cohort, listings, &lets.occupancy, config, rng) {
             HouseHunt::Housed(i) => {
                 let building = listings[i].building;
                 residential.house(cohort, building, year);
@@ -415,8 +415,8 @@ fn house_all(
 /// lever: `⌊adults × (1 − commute_preference)⌋ − housed`, never below 0, where `adults`
 /// counts residents, the unhoused and today's arrivals. `None` when the lever is off (0, the
 /// default): no limit (docs/economy.md "Residential levers").
-pub fn house_room(pop: &Population, rules: &CustomersConfig) -> Option<u64> {
-    let preference = rules.residential.commute_preference.rate();
+pub fn house_room(pop: &Population, config: &Config) -> Option<u64> {
+    let preference = config.economy.residential.commute_preference.rate();
     if preference == Rate::ZERO {
         return None;
     }
@@ -435,14 +435,14 @@ pub fn house_room(pop: &Population, rules: &CustomersConfig) -> Option<u64> {
 pub fn arrivals(
     pop: &mut Population,
     listings: &[FlatListing],
-    rules: &CustomersConfig,
+    config: &Config,
     year: i32,
     rng: &mut SimRng,
 ) -> ArrivalsReport {
     let mut report = ArrivalsReport::default();
     let mut lets = Lets {
         occupancy: pop.residential.occupancy(),
-        room: house_room(pop, rules),
+        room: house_room(pop, config),
     };
 
     // 1. The train's arrivals look for a flat first.
@@ -454,7 +454,7 @@ pub fn arrivals(
         &mut pop.residential,
         listings,
         &mut lets,
-        rules,
+        config,
         year,
         rng,
     );
@@ -465,7 +465,9 @@ pub fn arrivals(
     }
 
     // 2. The city's unhoused try again while anything stands empty.
-    if rules.residential.rehunt_unhoused && listings.iter().any(|l| vacant(l, &lets.occupancy)) {
+    if config.customers.residential.rehunt_unhoused
+        && listings.iter().any(|l| vacant(l, &lets.occupancy))
+    {
         let people = shuffled_people(&pop.pool, rng);
         let before = people.len() as u64;
         let left = house_all(
@@ -473,7 +475,7 @@ pub fn arrivals(
             &mut pop.residential,
             listings,
             &mut lets,
-            rules,
+            config,
             year,
             rng,
         );
@@ -485,7 +487,7 @@ pub fn arrivals(
     }
 
     // 3. Residents whose move window is open (R54).
-    let interval = i64::from(rules.residential.move_interval_years);
+    let interval = i64::from(config.economy.residential.move_interval_years);
     let movers: Vec<ResidentId> = pop
         .residential
         .residents
@@ -497,7 +499,7 @@ pub fn arrivals(
         let Some(r) = pop.residential.residents.get(&id).copied() else {
             continue;
         };
-        if let Some(i) = better_flat(&r, listings, &lets.occupancy, rules, rng) {
+        if let Some(i) = better_flat(&r, listings, &lets.occupancy, config, rng) {
             let to = listings[i].building;
             if let Some(n) = lets.occupancy.get_mut(&r.home) {
                 *n = n.saturating_sub(1);
@@ -538,7 +540,7 @@ pub struct RentDue {
 pub fn rent_due(
     residential: &Residential,
     listings: &[FlatListing],
-    rules: &CustomersConfig,
+    config: &Config,
 ) -> Vec<RentDue> {
     let by_building: BTreeMap<BusinessId, &FlatListing> =
         listings.iter().map(|l| (l.building, l)).collect();
@@ -558,10 +560,10 @@ pub fn rent_due(
         entry.flats_let += 1;
         let budget = *allowances
             .entry(r.cohort)
-            .or_insert_with(|| allowance(rules, r.cohort));
+            .or_insert_with(|| allowance(config, r.cohort));
         entry.amount += l.rent.min(budget).max(Money::ZERO);
     }
-    let tax = rules.residential.rent_tax.rate();
+    let tax = config.economy.residential.rent_tax.rate();
     due.into_values()
         .map(|mut d| {
             d.tax = tax.apply(d.amount);
@@ -597,10 +599,10 @@ pub fn apartment_daily_costs(
     let v = volume(b.height, b.footprint);
     let land_rent = land_rent_per_day(
         v,
-        config.map.land_base_rate.money(),
+        config.economy.land.base_rate.money(),
         config.map.tiers.get(tier).desirability_mult.rate(),
     );
-    let rates = &config.utilities.base_rates;
+    let rates = &config.economy.utilities.base_rates;
     let f = &kind.utility_factor;
     let utilities = UtilityKind::ALL
         .iter()
@@ -635,7 +637,6 @@ mod tests {
             rents in prop::collection::vec(0i64..50_000, 4),
         ) {
             let config = crate::economy::test_support::shipped_config();
-            let rules = &config.customers;
             let listings: Vec<FlatListing> = rents
                 .iter()
                 .enumerate()
@@ -658,9 +659,9 @@ mod tests {
                 };
                 r.house(cohort, BusinessId(home), 1930);
             }
-            let owed: Money = rent_due(&r, &listings, rules).iter().map(|d| d.amount).sum();
+            let owed: Money = rent_due(&r, &listings, &config).iter().map(|d| d.amount).sum();
             let allowances: Money =
-                r.residents.values().map(|p| allowance(rules, p.cohort)).sum();
+                r.residents.values().map(|p| allowance(&config, p.cohort)).sum();
             prop_assert!(owed >= Money::ZERO);
             prop_assert!(owed <= allowances, "{owed} > {allowances}");
         }
@@ -677,7 +678,6 @@ mod tests {
     #[test]
     fn nobody_pays_more_rent_than_their_allowance() {
         let config = crate::economy::test_support::shipped_config();
-        let rules = &config.customers;
         let cohort = Cohort {
             band: super::super::AgeBand(1),
             sex: super::super::Sex::Male,
@@ -696,7 +696,7 @@ mod tests {
         r.house(cohort, BusinessId(7), 1930);
         r.house(cohort, BusinessId(7), 1930);
         r.house(cohort, BusinessId(8), 1930); // not on the listings: owes nobody
-        let due = |rent| rent_due(&r, &[listing(rent)], rules);
+        let due = |rent| rent_due(&r, &[listing(rent)], &config);
         // £22.00 allowance: £3 each is paid in full, £30 each is capped at £22.
         assert_eq!(due(Money::from_pounds(3))[0].amount, Money::from_pounds(6));
         assert_eq!(
@@ -733,14 +733,14 @@ mod tests {
         pop.pending.insert(cohort, 9);
         pop.pool.insert(cohort, 1);
         pop.residential.house(cohort, BusinessId(0), 1930);
-        assert_eq!(house_room(&pop, &config.customers), None);
+        assert_eq!(house_room(&pop, &config), None);
         // 11 adults, 30% prefer to commute: ⌊11 × 0.7⌋ = 7 housed at most, 1 already is.
-        config.customers.residential.commute_preference =
+        config.economy.residential.commute_preference =
             crate::config::types::Ratio(Rate::from_bp(3000));
-        assert_eq!(house_room(&pop, &config.customers), Some(6));
+        assert_eq!(house_room(&pop, &config), Some(6));
         // Everyone prefers to commute: no room, and nobody is evicted.
-        config.customers.residential.commute_preference = crate::config::types::Ratio(Rate::ONE);
-        assert_eq!(house_room(&pop, &config.customers), Some(0));
+        config.economy.residential.commute_preference = crate::config::types::Ratio(Rate::ONE);
+        assert_eq!(house_room(&pop, &config), Some(0));
     }
 
     #[test]

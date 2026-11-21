@@ -14,8 +14,6 @@ Feature: Population and customer settings fail loudly
     Examples:
       | key                                     | value                  | named                             |
       | /residential/building_type              | bungalows              | /residential/building_type        |
-      | /residential/stretch_share              | 0.1                    | /residential/stretch_share        |
-      | /residential/comfortable_share          | 1.5                    | /residential/comfortable_share    |
       | /allowance/day_share                    | 1.5                    | /allowance/day_share              |
       | /desires/0/goods                        | {caviar: 0.5}          | /desires/0/goods/caviar           |
       | /desires/0/goods                        | {bread: 1.5}           | /desires/0/goods/bread            |
@@ -24,10 +22,23 @@ Feature: Population and customer settings fail loudly
       | /movement/cells_per_tick                | 0                      | /movement/cells_per_tick          |
       | /class_affinity/upper/high              | -1                     | /class_affinity/upper/high        |
       | /reputation/sale_recovery               | 2                      | /reputation/sale_recovery         |
-      | /residential/stretch_min_desirability   | -0.5                   | /residential/stretch_min_desirability |
-      | /residential/rent_tax                   | 1.5                    | /residential/rent_tax             |
-      | /residential/commute_preference         | 1.5                    | /residential/commute_preference   |
-      | /residential/max_rent_per_flat          | -1.00                  | /residential/max_rent_per_flat    |
+
+  # The residential market's numbers are in economy.yaml (R71).
+  @R45 @R71
+  Scenario Outline: A bad residential market setting fails and names the key
+    Given the shipped config with "economy.yaml" key "<key>" set to "<value>"
+    When the config is loaded
+    Then loading fails
+    And an error names "economy.yaml" and "<key>"
+
+    Examples:
+      | key                                   | value |
+      | /residential/stretch_share            | 0.1   |
+      | /residential/comfortable_share        | 1.5   |
+      | /residential/stretch_min_desirability | -0.5  |
+      | /residential/rent_tax                 | 1.5   |
+      | /residential/commute_preference       | 1.5   |
+      | /residential/max_rent_per_flat        | -1.00 |
 
   @R45 @R56
   Scenario: The apartment type must not trade

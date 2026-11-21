@@ -278,7 +278,7 @@ fn bid_in_day_trade(w: &mut HarnessWorld) {
 #[given(expr = "player {int} holds the lease on {string}, bought in {int} for £{int}")]
 fn holds_lease(w: &mut HarnessWorld, player: u8, name: String, year: i32, pounds: i64) {
     let world = w.batch.world.as_mut().unwrap();
-    let term_years = world.config().game.leases.term_years;
+    let term_years = world.config().economy.land.lease_term_years;
     let block = world
         .map_mut()
         .blocks

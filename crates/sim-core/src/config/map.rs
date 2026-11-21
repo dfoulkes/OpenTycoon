@@ -1,9 +1,10 @@
-//! `map.yaml`: the boards (grid, blocks, districts, colour sets, land prices, tube stations),
-//! the tier multipliers and the land rate (§4, §5).
+//! `map.yaml`: the boards (grid, blocks, districts, colour sets, land prices, tube stations)
+//! and the tier multipliers (§4, §5). The land rent rate is `economy.yaml` `land.base_rate`
+//! (R71).
 //!
 //! The file holds every board a game can be played on, keyed by name, and picks one with the
-//! top-level `map` key (`v1 | full`). The tier multipliers and land rate are economics, not
-//! geography, so every board shares them. [`MapFile::board`] resolves a board into the
+//! top-level `map` key (`v1 | full`). The tier multipliers are economics, not geography, so
+//! every board shares them. [`MapFile::board`] resolves a board into the
 //! [`MapConfig`] the rest of the sim reads as `config.map`.
 
 use std::collections::BTreeMap;
@@ -55,8 +56,6 @@ pub struct MapFile {
     pub map: MapChoice,
     /// Per-tier multipliers (§5.3), shared by every board.
     pub tiers: TierTable,
-    /// Land rent per unit of building volume per day, before the tier multiplier (§5.3, R10).
-    pub land_base_rate: Pounds,
     /// Tube lines by id, shared by every board (§4.3).
     pub tube_lines: BTreeMap<String, TubeLine>,
     /// Every board, keyed by name.
@@ -96,7 +95,6 @@ impl MapFile {
         Some(MapConfig {
             board: choice,
             tiers: self.tiers.clone(),
-            land_base_rate: self.land_base_rate,
             tube_lines: self.tube_lines.clone(),
             grid: board.grid,
             river: board.river,
@@ -138,7 +136,7 @@ pub struct Board {
 }
 
 /// The board a game is played on, resolved from `map.yaml`: the selected [`Board`] plus the
-/// shared tier table and land rate. This is `config.map`.
+/// shared tier table. This is `config.map`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MapConfig {
     /// Which board this is.
@@ -147,8 +145,6 @@ pub struct MapConfig {
     pub grid: GridSettings,
     /// Per-tier multipliers (§5.3).
     pub tiers: TierTable,
-    /// Land rent per unit of building volume per day, before the tier multiplier (§5.3, R10).
-    pub land_base_rate: Pounds,
     /// Tube lines by id (§4.3).
     pub tube_lines: BTreeMap<String, TubeLine>,
     /// The river, if any (§4.1).

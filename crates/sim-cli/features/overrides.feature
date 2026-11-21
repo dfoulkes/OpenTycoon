@@ -7,7 +7,7 @@ Feature: Config overrides for parameter sweeps
   @R45 @spec-11
   Scenario: An override changes the value the games run with
     Given the shipped config
-    And the override "game.overdraft.start_limit=20000"
+    And the override "economy.money.overdraft.start_limit=20000"
     When the harness loads the config
     Then the config loads
     And the overdraft start limit is £20000
@@ -30,11 +30,11 @@ Feature: Config overrides for parameter sweeps
     Examples:
       | override                          | named                       |
       | game.clock.real_minutes_per_day=0 | /clock/real_minutes_per_day |
-      | game.overdraft.start_limt=1       | start_limt                  |
-      | game.overdraft.start_limit=lots   | /overdraft/start_limit      |
+      | economy.money.overdraft.start_limt=1       | start_limt                  |
+      | economy.money.overdraft.start_limit=lots   | /money/overdraft/start_limit |
       | game.nonsense.deeper=1            | /nonsense                   |
       | gaem.clock.start_year=1930        | gaem.yaml                   |
-      | game.overdraft.start_limit        | file.key=value              |
+      | economy.money.overdraft.start_limit        | file.key=value              |
 
   @R45 @spec-11
   Scenario: The v1 preset runs 1930 to 1950

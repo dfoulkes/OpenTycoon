@@ -1,7 +1,9 @@
 # The balance study (R64, R65): `sim-cli study config` reads this file. Format: docs/study.md.
 #
-# It lives outside config/ because config/ holds exactly the eight game files (§10b) and the
-# loader rejects any other YAML there.
+# It lives outside config/ because config/ holds exactly the nine game files (§10b) and the
+# loader rejects any other YAML there. Every parameter varies a key in config/economy.yaml
+# (R71), so each top model is written as one economy.yaml: adopt it with
+# `cp study-out/models/<id>/economy.yaml config/`.
 #
 # Keys use the `--set` form, `file.key.path`. Every model is validated like a hand-edited
 # config; a model that fails is reported in models.csv (status = invalid), not fatal.
@@ -26,98 +28,49 @@ criteria:                # R65
   min_idle_below_solvent_rate: 1.0  # idle finishes below every solvent AI, every game
 
 parameters:
-  # Ranges are plausible bounds around the shipped value (shown as "shipped"), wide enough that
-  # the space holds economies where trading beats sitting on cash. Money is in pounds.
+  # Every key is in config/economy.yaml (R71), so a model is one economy.yaml. Ranges are
+  # plausible bounds around the shipped value (shown as "shipped"), wide enough that the space
+  # holds economies where trading beats sitting on cash. Money is in pounds.
   #
   # Net worth: how held land is valued (docs/economy.md "Land value"). Categorical: each method
   # gets a third of the models.
-  - { name: land_value,     key: game.net_worth.land_value, values: [book_decay, market, market_no_decay] }   # shipped book_decay
+  - { name: land_value,     key: economy.land.value_method, values: [book_decay, market, market_no_decay] }   # shipped book_decay
   # Land and leases
-  - { name: lease_term,     key: game.leases.term_years,            min: 10,   max: 60,    kind: integer }   # shipped 30; 10 = two game days, 60 = half the full span
-  - { name: lot_uplift,     key: game.net_worth.lot_property_uplift, min: 0.0, max: 0.5 }   # shipped 0.2 (R39); 0 = no reward for owning both
-  - { name: land_rate,      key: map.land_base_rate,                min: 0.02, max: 0.15,  distribution: log_uniform }   # shipped 0.05 £/unit volume/day: 0.4× to 3×
-  - { name: build_rate,     key: businesses.build_base_rate,        min: 5,    max: 20,    distribution: log_uniform }   # shipped 10 £/unit volume: half to double
+  - { name: lease_term,     key: economy.land.lease_term_years,      min: 10,   max: 60,    kind: integer }   # shipped 30; 10 = two game days, 60 = half the full span
+  - { name: lot_uplift,     key: economy.land.lot_property_uplift,   min: 0.0,  max: 0.5 }   # shipped 0.2 (R39); 0 = no reward for owning both
+  - { name: land_rate,      key: economy.land.base_rate,             min: 0.02, max: 0.15,  distribution: log_uniform }   # shipped 0.05 £/unit volume/day: 0.4× to 3×
+  - { name: build_rate,     key: economy.building.base_rate,         min: 5,    max: 20,    distribution: log_uniform }   # shipped 10 £/unit volume: half to double
   # Utilities: one factor on every base rate. Rates are whole pence, so the shipped 1p rates
   # move in 1p steps (0.75× rounds back to 1p); the 2p ones from 2p to 6p.
-  - { name: utility_rates,  keys: [utilities.base_rates, utilities.internet.base_rate], min: 0.75, max: 3.0, distribution: log_uniform, mode: scale }
+  - { name: utility_rates,  keys: [economy.utilities.base_rates, economy.utilities.internet_base_rate], min: 0.75, max: 3.0, distribution: log_uniform, mode: scale }
   # Money
-  - { name: starting_cash,  key: game.players.starting_cash,        min: 5000, max: 30000, distribution: log_uniform, kind: integer }   # shipped 7,000 (R62); High lots cost £11k–£14k, reachable from ~£11k with the overdraft
-  - { name: overdraft,      key: game.overdraft.start_limit,        min: 2500, max: 25000, distribution: log_uniform, kind: integer }   # shipped 10,000 (R7)
-  - { name: overdraft_step, key: game.overdraft.increase_per_step,  min: 0,    max: 5000,  kind: integer }   # shipped 2,500 per 5-year step (R7)
+  - { name: starting_cash,  key: economy.money.starting_cash,        min: 5000, max: 30000, distribution: log_uniform, kind: integer }   # shipped 7,000 (R62); High lots cost £11k–£14k, reachable from ~£11k with the overdraft
+  - { name: overdraft,      key: economy.money.overdraft.start_limit, min: 2500, max: 25000, distribution: log_uniform, kind: integer }   # shipped 10,000 (R7)
+  - { name: overdraft_step, key: economy.money.overdraft.increase_per_step, min: 0, max: 5000, kind: integer }   # shipped 2,500 per 5-year step (R7)
   # Population and demand
-  - { name: births,         key: customers.births_per_woman,        min: 0.7,  max: 1.3,   mode: scale }   # every year's rate ±30%
-  - { name: migration,      key: customers.migration_per_day,       min: 0,    max: 150,   kind: integer }   # shipped 50 adults a day
-  - { name: allowance,      key: customers.allowance.base_by_class, min: 0.6,  max: 1.6,   mode: scale }   # shipped £20 / £45 / £120 a day by class
-  - { name: price_k,        key: customers.price_sensitivity,       min: 0.5,  max: 2.0,   distribution: log_uniform, mode: scale }   # §8.3 k_class (shipped 3.0 / 1.5 / 0.5): halved to doubled
-  # Demand by decade (docs/economy.md "Demand by decade"): one factor per era on its day and
-  # night base tables, customers.desires 0–11 in era order. Four places, so rare goods
-  # (0.004) keep their weight; the highest weight (0.55) stays under 1 at 1.4×. The rules
-  # have no id, so each parameter `expect`s its rules' window and year range: if the desire
-  # rules are reordered, the study refuses to start instead of scaling the wrong table.
-  - name: demand_1930s
-    keys: [customers.desires.0.goods, customers.desires.1.goods]
-    min: 0.6
-    max: 1.4
-    decimals: 4
-    mode: scale
-    expect:
-      - { key: customers.desires.0.match,  equals: { window: day,   from_year: 1930, until_year: 1945 } }
-      - { key: customers.desires.1.match,  equals: { window: night, from_year: 1930, until_year: 1945 } }
-  - name: demand_1950s
-    keys: [customers.desires.2.goods, customers.desires.3.goods]
-    min: 0.6
-    max: 1.4
-    decimals: 4
-    mode: scale
-    expect:
-      - { key: customers.desires.2.match,  equals: { window: day,   from_year: 1950, until_year: 1965 } }
-      - { key: customers.desires.3.match,  equals: { window: night, from_year: 1950, until_year: 1965 } }
-  - name: demand_1970s
-    keys: [customers.desires.4.goods, customers.desires.5.goods]
-    min: 0.6
-    max: 1.4
-    decimals: 4
-    mode: scale
-    expect:
-      - { key: customers.desires.4.match,  equals: { window: day,   from_year: 1970, until_year: 1985 } }
-      - { key: customers.desires.5.match,  equals: { window: night, from_year: 1970, until_year: 1985 } }
-  - name: demand_1990s
-    keys: [customers.desires.6.goods, customers.desires.7.goods]
-    min: 0.6
-    max: 1.4
-    decimals: 4
-    mode: scale
-    expect:
-      - { key: customers.desires.6.match,  equals: { window: day,   from_year: 1990, until_year: 2005 } }
-      - { key: customers.desires.7.match,  equals: { window: night, from_year: 1990, until_year: 2005 } }
-  - name: demand_2010s
-    keys: [customers.desires.8.goods, customers.desires.9.goods]
-    min: 0.6
-    max: 1.4
-    decimals: 4
-    mode: scale
-    expect:
-      - { key: customers.desires.8.match,  equals: { window: day,   from_year: 2010, until_year: 2025 } }
-      - { key: customers.desires.9.match,  equals: { window: night, from_year: 2010, until_year: 2025 } }
-  - name: demand_2030s
-    keys: [customers.desires.10.goods, customers.desires.11.goods]
-    min: 0.6
-    max: 1.4
-    decimals: 4
-    mode: scale
-    expect:
-      - { key: customers.desires.10.match,  equals: { window: day,   from_year: 2030, until_year: 2050 } }
-      - { key: customers.desires.11.match,  equals: { window: night, from_year: 2030, until_year: 2050 } }
+  - { name: births,         key: economy.population.births_multiplier,  min: 0.7, max: 1.3 }   # × every year's births per woman, ±30%
+  - { name: migration,      key: economy.population.migration_per_day,  min: 0,   max: 150, kind: integer }   # shipped 50 adults a day
+  - { name: allowance,      key: economy.population.allowance_by_class, min: 0.6, max: 1.6, mode: scale }   # shipped £20 / £45 / £120 a day by class
+  - { name: price_k,        key: economy.population.price_sensitivity,  min: 0.5, max: 2.0, distribution: log_uniform, mode: scale }   # §8.3 k_class (shipped 3.0 / 1.5 / 0.5): halved to doubled
+  # Demand by decade (docs/economy.md "Demand by decade"): one multiplier per era on what
+  # shoppers want, named by decade in economy.yaml (shipped 1.0 each, the tables as written).
+  # Capped at 1 per good, so the highest weight (0.55) reaches 0.77 at 1.4×.
+  - { name: demand_1930s,   key: economy.demand_multipliers.1930s, min: 0.6, max: 1.4 }
+  - { name: demand_1950s,   key: economy.demand_multipliers.1950s, min: 0.6, max: 1.4 }
+  - { name: demand_1970s,   key: economy.demand_multipliers.1970s, min: 0.6, max: 1.4 }
+  - { name: demand_1990s,   key: economy.demand_multipliers.1990s, min: 0.6, max: 1.4 }
+  - { name: demand_2010s,   key: economy.demand_multipliers.2010s, min: 0.6, max: 1.4 }
+  - { name: demand_2030s,   key: economy.demand_multipliers.2030s, min: 0.6, max: 1.4 }
   # Residential (docs/economy.md "Residential levers"). Over 120 years flat rent from minted
   # allowances (R63) is the strongest income, so the residential AI dominated every study that
   # left these alone. The first four are existing rules; the last three are study levers that
   # are off in the shipped config. Model 0 shows the cap as empty (shipped: no cap).
-  - { name: flat_size,       key: customers.residential.flat_size,           min: 2,    max: 8,    kind: integer }   # shipped 4 (R50): half to double the flat, so double to half the flats
-  - { name: comfortable,     key: customers.residential.comfortable_share,   min: 0.10, max: 0.30 }   # shipped 0.2 (R52)
-  - { name: stretch,         key: customers.residential.stretch_share,       min: 0.30, max: 0.60 }   # shipped 0.5 (R52); never below comfortable's max, so always valid
-  - { name: move_interval,   key: customers.residential.move_interval_years, min: 5,    max: 20,   kind: integer }   # shipped 10 (R54)
-  - { name: rent_cap,        key: customers.residential.max_rent_per_flat,   min: 2.0,  max: 12.0, distribution: log_uniform }   # shipped null (no cap); £ per flat per day. The AIs ask £3 (reference) up to £9 (Sir Penny's max), so the top of the range is no cap in effect
-  - { name: rent_tax,        key: customers.residential.rent_tax,            min: 0.0,  max: 0.30 }   # shipped 0: share of rent to the city
-  - { name: commute_pref,    key: customers.residential.commute_preference,  min: 0.0,  max: 0.50 }   # shipped 0: share of adults who commute rather than rent
+  - { name: flat_size,       key: economy.residential.flat_size,           min: 2,    max: 8,    kind: integer }   # shipped 4 (R50): half to double the flat, so double to half the flats
+  - { name: comfortable,     key: economy.residential.comfortable_share,   min: 0.10, max: 0.30 }   # shipped 0.2 (R52)
+  - { name: stretch,         key: economy.residential.stretch_share,       min: 0.30, max: 0.60 }   # shipped 0.5 (R52); never below comfortable's max, so always valid
+  - { name: move_interval,   key: economy.residential.move_interval_years, min: 5,    max: 20,   kind: integer }   # shipped 10 (R54)
+  - { name: rent_cap,        key: economy.residential.max_rent_per_flat,   min: 2.0,  max: 12.0, distribution: log_uniform }   # shipped null (no cap); £ per flat per day. The AIs ask £3 (reference) up to £9 (Sir Penny's max), so the top of the range is no cap in effect
+  - { name: rent_tax,        key: economy.residential.rent_tax,            min: 0.0,  max: 0.30 }   # shipped 0: share of rent to the city
+  - { name: commute_pref,    key: economy.residential.commute_preference,  min: 0.0,  max: 0.50 }   # shipped 0: share of adults who commute rather than rent
   # AI behaviour is held at its shipped values here, so a balanced model is balanced by the
   # economy, not by handicapping an AI. study/study-with-ai.yaml also varies the AI tunables.

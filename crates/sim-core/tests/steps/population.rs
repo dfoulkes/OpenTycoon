@@ -235,8 +235,8 @@ fn no_migration_no_deaths(w: &mut SimWorld) {
 fn no_migration(w: &mut SimWorld) {
     common::set_key(
         w.config.sources_mut(),
-        "customers.yaml",
-        "/migration_per_day",
+        "economy.yaml",
+        "/population/migration_per_day",
         "0",
     );
 }
@@ -295,13 +295,7 @@ fn step_year(w: &mut SimWorld, from: i32, to: i32) {
     let config = CityState::config(w);
     let years = u32::try_from(to - from).unwrap();
     let mut rng = w.city.rng().clone();
-    w.city.last_step = year_step(
-        &mut w.city.population,
-        &config.customers,
-        to,
-        years,
-        &mut rng,
-    );
+    w.city.last_step = year_step(&mut w.city.population, &config, to, years, &mut rng);
     w.city.rng = Some(rng);
     w.city.year = Some(to);
 }
@@ -381,11 +375,11 @@ fn allowance_flat(w: &mut SimWorld, from: i32, to: i32) {
                     sex: s,
                     class: c,
                 };
-                let a = allowance(&config.customers, key);
+                let a = allowance(&config, key);
                 assert!(a > Money::ZERO);
                 let mut year = from;
                 while year <= to {
-                    assert_eq!(allowance(&config.customers, key), a, "{year}");
+                    assert_eq!(allowance(&config, key), a, "{year}");
                     year += 5;
                 }
             }
@@ -418,7 +412,7 @@ fn fresh_city_until(w: &mut SimWorld, time: String) {
 fn purse_holds(w: &mut SimWorld) {
     let config = CityState::config(w);
     let world = w.city.world.as_ref().unwrap();
-    let due = sim_core::population::daily_allowances(world.population(), &config.customers);
+    let due = sim_core::population::daily_allowances(world.population(), &config);
     assert!(due > Money::ZERO);
     assert_eq!(world.ledger().balance(AccountId::Shoppers), due);
 }
@@ -427,7 +421,7 @@ fn purse_holds(w: &mut SimWorld) {
 fn purse_holds_less_rent(w: &mut SimWorld) {
     let config = CityState::config(w);
     let world = w.city.world.as_ref().unwrap();
-    let due = sim_core::population::daily_allowances(world.population(), &config.customers);
+    let due = sim_core::population::daily_allowances(world.population(), &config);
     let rent: Money = world.rent_due().iter().map(|d| d.amount).sum();
     assert!(rent > Money::ZERO, "nobody owes rent");
     assert_eq!(world.ledger().balance(AccountId::Shoppers), due - rent);
@@ -445,7 +439,7 @@ fn ledger_grew_by_minted(w: &mut SimWorld) {
 fn minted_several(w: &mut SimWorld) {
     let config = CityState::config(w);
     let world = w.city.world.as_ref().unwrap();
-    let one = sim_core::population::daily_allowances(world.population(), &config.customers);
+    let one = sim_core::population::daily_allowances(world.population(), &config);
     assert!(
         world.ledger().minted() > one,
         "{} vs {one}",
@@ -571,7 +565,7 @@ fn rent_now(w: &mut SimWorld, name: String, rent: String) {
         .city
         .population
         .residential
-        .rent(id, config.customers.residential.default_rent.money());
+        .rent(id, config.economy.residential.default_rent.money());
     assert_eq!(got, pounds(&rent));
 }
 
@@ -650,13 +644,7 @@ fn house_hunt(w: &mut SimWorld, year: i32) {
         &w.city.population.residential,
     );
     let mut rng = w.city.rng().clone();
-    w.city.arrivals = residential::arrivals(
-        &mut w.city.population,
-        &l,
-        &config.customers,
-        year,
-        &mut rng,
-    );
+    w.city.arrivals = residential::arrivals(&mut w.city.population, &l, &config, year, &mut rng);
     w.city.rng = Some(rng);
     w.city.year = Some(year);
 }
@@ -716,7 +704,7 @@ fn owed(w: &mut SimWorld, name: String, amount: String) {
         &config,
         &w.city.population.residential,
     );
-    let due = rent_due(&w.city.population.residential, &l, &config.customers);
+    let due = rent_due(&w.city.population.residential, &l, &config);
     let bill = due.iter().find(|d| d.building == id).unwrap();
     assert_eq!(bill.amount, pounds(&amount));
     assert_eq!(bill.landlord, w.city.businesses.by_id[&id].owner);
@@ -733,7 +721,7 @@ fn rent_tax_to_city(w: &mut SimWorld, amount: String, name: String) {
         &config,
         &w.city.population.residential,
     );
-    let due = rent_due(&w.city.population.residential, &l, &config.customers);
+    let due = rent_due(&w.city.population.residential, &l, &config);
     let bill = due.iter().find(|d| d.building == id).unwrap();
     assert_eq!(bill.tax, pounds(&amount));
 }
@@ -757,7 +745,7 @@ fn would_consider(w: &mut SimWorld, c: String, s: String, b: String, expected: S
         &w.city.population.residential,
     );
     let occupancy = w.city.population.residential.occupancy();
-    let got = match candidates(key, &l, &occupancy, &config.customers) {
+    let got = match candidates(key, &l, &occupancy, &config) {
         Ok(idx) => {
             let mut names: Vec<&str> = idx
                 .iter()

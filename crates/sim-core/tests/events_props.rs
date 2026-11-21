@@ -30,8 +30,8 @@ fn opening_money(world: &World) -> Money {
     let seats = i64::try_from(world.players().len()).unwrap();
     world
         .config()
-        .game
-        .players
+        .economy
+        .money
         .starting_cash
         .money()
         .saturating_mul(seats)

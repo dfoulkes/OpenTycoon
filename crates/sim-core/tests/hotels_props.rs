@@ -116,7 +116,7 @@ proptest! {
             }
             for c in &customers.agents {
                 budgets.entry(c.id).or_insert_with(|| {
-                    wave_budget(&config.customers, allowance(&config.customers, c.cohort), c.wave)
+                    wave_budget(&config.customers, allowance(&config, c.cohort), c.wave)
                 });
             }
             for (hotel, taken) in &customers.hotel_guests {

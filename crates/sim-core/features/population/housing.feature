@@ -10,7 +10,7 @@ Feature: Apartments and who lives in them
 
   @R50
   Scenario Outline: Flats = building volume ÷ flat size
-    Given the shipped config with "customers.yaml" key "/residential/flat_size" set to "<flat_size>"
+    Given the shipped config with "economy.yaml" key "/residential/flat_size" set to "<flat_size>"
     And an apartment block "Flats" on "old_kent_road" <w>×<d>×<h>
     Then "Flats" has <flats> flats
 
@@ -98,7 +98,7 @@ Feature: Apartments and who lives in them
 
   @R52 @R17
   Scenario: The stretch threshold is configurable
-    Given the shipped config with "customers.yaml" key "/residential/stretch_min_desirability" set to "2.0"
+    Given the shipped config with "economy.yaml" key "/residential/stretch_min_desirability" set to "2.0"
     And an apartment block "Cheap" on "old_kent_road" 3×3×12
     And an apartment block "Lux" on "mayfair" 3×3×12
     And the rent at "Cheap" is £20.00
@@ -175,7 +175,7 @@ Feature: Apartments and who lives in them
   @R54 @R52
   Scenario Outline: A move must pass the same affordability rule
     # An upper woman aged 30–49 gets £132.00: she may stretch to £66.00 for Mayfair.
-    Given the shipped config with "customers.yaml" key "/residential/reference_rent" set to "50.00"
+    Given the shipped config with "economy.yaml" key "/residential/reference_rent" set to "50.00"
     And an apartment block "Home" on "old_kent_road" 3×3×12
     And the rent at "Home" is £3.00
     And an upper woman aged "30-49" has lived in "Home" since 1930
@@ -197,7 +197,7 @@ Feature: Apartments and who lives in them
   @R51 @R17
   Scenario: A rent cap limits what residents see and pay, whatever the owner sets
     # A working man aged 30–49 gets £22.00: £6.00 is over his 20% (£4.40), the £4.00 cap is not.
-    Given the shipped config with "customers.yaml" key "/residential/max_rent_per_flat" set to "4.00"
+    Given the shipped config with "economy.yaml" key "/residential/max_rent_per_flat" set to "4.00"
     And an apartment block "Flats" on "old_kent_road" 3×3×12 owned by player 0
     And the rent at "Flats" is £6.00
     And 1 working man aged "30-49" arrives on the morning train
@@ -215,7 +215,7 @@ Feature: Apartments and who lives in them
 
   @R51 @R63 @R17
   Scenario Outline: A rent tax sends a share of residents' rent to the city
-    Given the shipped config with "customers.yaml" key "/residential/rent_tax" set to "<tax>"
+    Given the shipped config with "economy.yaml" key "/residential/rent_tax" set to "<tax>"
     And an apartment block "Flats" on "old_kent_road" 3×3×12 owned by player 0
     And a working man aged "30-49" has lived in "Flats" since 1930
     And a working woman aged "30-49" has lived in "Flats" since 1930
@@ -234,7 +234,7 @@ Feature: Apartments and who lives in them
   Scenario: Some adults would rather commute, even when they can afford a flat
     # 10 adults, 30% prefer to commute: at most 7 are housed, and the re-hunt the next
     # morning does not fill the empty flats with the other 3.
-    Given the shipped config with "customers.yaml" key "/residential/commute_preference" set to "0.3"
+    Given the shipped config with "economy.yaml" key "/residential/commute_preference" set to "0.3"
     And an apartment block "Flats" on "old_kent_road" 3×3×12
     And 10 working men aged "30-49" arrive on the morning train
     When the 05:30 arrivals house-hunt

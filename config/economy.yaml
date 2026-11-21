@@ -1,0 +1,55 @@
+# yaml-language-server: $schema=schema/economy.schema.json
+# economy.yaml: every economy weight, the levers the balance study varies (R71). Adopting an
+# economic model means swapping this one file: `cp study-out/models/<id>/economy.yaml config/`.
+# A number that sets the level of the money flows lives here; a description of the world (what
+# exists, where and when, who wants what) stays in its own file (docs/economy.md "Economy
+# weights (R71)"). Money is decimal pounds; ratios are decimals. Placeholders are marked.
+land:
+  base_rate: 0.05               # placeholder: £ land rent per unit of building volume per day (§5.3)
+  lease_term_years: 30          # §5.2
+  value_method: book_decay      # §3: book_decay | market | market_no_decay (docs/economy.md "Land value")
+  lot_property_uplift: 0.2      # R39
+building:
+  base_rate: 10                 # placeholder: £ build cost per unit of building volume (§5.3)
+utilities:                      # §6, R11. £ per unit of volume per day, before the type's utility factor
+  base_rates:
+    electricity: 0.02           # placeholder
+    gas: 0.01                   # placeholder
+    water: 0.01                 # placeholder
+    telecoms: 0.01              # placeholder: the telephone exchange
+  internet_base_rate: 0.02      # placeholder: telecoms from utilities.yaml internet.upgrade_year (R11)
+money:
+  starting_cash: 7000           # R62: every player starts with £7,000
+  overdraft:
+    start_limit: 10000          # R7
+    increase_per_step: 2500     # R7
+    interest_rate: 0.0          # R32: no interest
+  sell_to_city_ratio: 0.5       # R5
+population:                     # §8
+  births_multiplier: 1.0        # × customers.yaml births_per_woman, the historical table (R61)
+  migration_per_day: 50         # placeholder
+  allowance_by_class: { working: 20, middle: 45, upper: 120 }   # §8.2, R55: £ a day, before the age and sex multipliers in customers.yaml
+  price_sensitivity: { working: 3.0, middle: 1.5, upper: 0.5 }  # §8.3 k_class
+# Demand by decade (docs/economy.md "Demand by decade"): × every P(good) from the decade's first
+# year until the next decade named, after the segment rules, capped at 1. One per era table in
+# customers.yaml desires; 1.0 is the tables as written.
+demand_multipliers:
+  1930s: 1.0                    # 1930–1945
+  1950s: 1.0                    # 1950–1965
+  1970s: 1.0                    # 1970–1985
+  1990s: 1.0                    # 1990–2005
+  2010s: 1.0                    # 2010–2025
+  2030s: 1.0                    # 2030–2050
+residential:                    # §7.2; the building type is customers.yaml residential.building_type
+  flat_size: 4                  # R50
+  comfortable_share: 0.2        # R52
+  stretch_share: 0.5            # R52
+  stretch_min_desirability: 1.0 # placeholder: affinity × appeal needed to stretch to 50% (R52)
+  move_interval_years: 10       # R54
+  default_rent: 3.00            # placeholder: £ per flat per day until the owner sets it (R51)
+  reference_rent: 3.00          # placeholder: ref price for rent in price_factor (R51)
+  # Study levers, off by default (docs/economy.md "Residential levers"): not rulings, choices
+  # the balance study can search between.
+  max_rent_per_flat: null       # £ cap on any flat's rent per day; null = no cap
+  rent_tax: 0.0                 # share of residents' rent paid to the city
+  commute_preference: 0.0       # share of adults who commute rather than rent, even if they can afford it

@@ -1,11 +1,12 @@
-//! `game.yaml`: world scale, clock, presets, bankruptcy, overdraft, net worth, leases (§2, §3, §10b).
+//! `game.yaml`: world scale, clock, presets, bankruptcy and player seats (§2, §10b). The money
+//! levers (overdraft, net worth, leases, starting cash, sell-back) are in `economy.yaml` (R71).
 
 use std::collections::BTreeMap;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::types::{ClockTime, Pounds, Ratio};
+use super::types::{ClockTime, Pounds};
 
 /// Root of `game.yaml`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -17,14 +18,8 @@ pub struct GameConfig {
     pub clock: ClockSettings,
     /// Game length presets (§2.4), keyed by name.
     pub presets: BTreeMap<String, Preset>,
-    /// Bankruptcy and selling up (§2.3; R3, R4, R5).
+    /// Bankruptcy (§2.3; R3, R4).
     pub bankruptcy: BankruptcySettings,
-    /// Overdraft (R7, R32).
-    pub overdraft: OverdraftSettings,
-    /// Net worth scoring (R19, R39).
-    pub net_worth: NetWorthSettings,
-    /// Land leases (§5.2).
-    pub leases: LeaseSettings,
     /// Player seats.
     pub players: PlayerSettings,
 }
@@ -112,7 +107,7 @@ pub struct Preset {
     pub end_year: i32,
 }
 
-/// Bankruptcy and selling up (§2.3).
+/// Bankruptcy (§2.3). The sell-back ratio is `economy.yaml` `money.sell_to_city_ratio` (R71).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct BankruptcySettings {
@@ -121,58 +116,9 @@ pub struct BankruptcySettings {
     pub strikes_to_bankrupt: u32,
     /// A midnight balance at or above this passes (R3, default £0).
     pub solvent_at_or_above: Pounds,
-    /// Instant sale back to the city, as a share of true value (R5, default 0.5).
-    pub sell_to_city_ratio: Ratio,
 }
 
-/// Overdraft (R7, R32).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct OverdraftSettings {
-    /// Credit limit at the start (default £10,000).
-    pub start_limit: Pounds,
-    /// Flat increase per 5-year step (default £2,500).
-    pub increase_per_step: Pounds,
-    /// Daily interest on overdrawn balances (default 0: R32 says none).
-    pub interest_rate: Ratio,
-}
-
-/// Net worth scoring (R19, R39).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct NetWorthSettings {
-    /// Share of every property's value credited to the lot's leaseholder (R39, default 0.2).
-    pub lot_property_uplift: Ratio,
-    /// How a held lease's land is valued (§3; docs/economy.md "Land value"). Default
-    /// `book_decay`, the spec's `last auction price × years left / term`.
-    pub land_value: LandValueMethod,
-}
-
-/// How a held lease's land counts towards net worth (§3). The spec's formula is
-/// `book_decay`; the others are balance-study candidates (docs/economy.md "Land value").
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum LandValueMethod {
-    /// `last auction price × remaining lease years / term` (§3, the default).
-    #[default]
-    BookDecay,
-    /// `current land base price × remaining lease years / term`: the block's price today
-    /// (moved by desirability shifts and land-value events such as the 2008 crash).
-    Market,
-    /// `current land base price` while the lease runs, nothing once it has run out.
-    MarketNoDecay,
-}
-
-/// Land leases (§5.2).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct LeaseSettings {
-    /// Lease length in in-game years (default 30).
-    #[schemars(range(min = 1, max = 500))]
-    pub term_years: u32,
-}
-
-/// Player seats (§1).
+/// Player seats (§1). Starting cash is `economy.yaml` `money.starting_cash` (R71).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PlayerSettings {
@@ -182,7 +128,4 @@ pub struct PlayerSettings {
     /// Most players in a game (default 6).
     #[schemars(range(min = 1, max = 16))]
     pub max: u32,
-    /// Cash each player starts with. Not in the spec; placeholder £0 (players start on the
-    /// overdraft, R7).
-    pub starting_cash: Pounds,
 }

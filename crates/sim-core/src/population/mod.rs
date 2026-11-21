@@ -25,7 +25,7 @@ use std::collections::BTreeMap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::config::CustomersConfig;
+use crate::config::{Config, CustomersConfig};
 use crate::money::{Money, Rate};
 
 pub use cohort::{YearStep, year_step};
@@ -190,13 +190,17 @@ pub fn band_for_age(rules: &CustomersConfig, age: u32) -> Option<AgeBand> {
 }
 
 /// Daily allowance before rent: `base(class) × age_multiplier(band) × sex_multiplier(sex)`
-/// (§8.2, R55). It never depends on the year: no inflation (R6).
-pub fn allowance(rules: &CustomersConfig, cohort: Cohort) -> Money {
+/// (§8.2, R55), the base from `economy.yaml` `population.allowance_by_class` (R71), the
+/// multipliers from `customers.yaml` `allowance`. It never depends on the year: no inflation
+/// (R6).
+pub fn allowance(config: &Config, cohort: Cohort) -> Money {
+    let rules = &config.customers;
     let a = &rules.allowance;
+    let by_class = &config.economy.population.allowance_by_class;
     let base = match cohort.class {
-        Class::Working => a.base_by_class.working,
-        Class::Middle => a.base_by_class.middle,
-        Class::Upper => a.base_by_class.upper,
+        Class::Working => by_class.working,
+        Class::Middle => by_class.middle,
+        Class::Upper => by_class.upper,
     }
     .money();
     let age = a
@@ -213,17 +217,17 @@ pub fn allowance(rules: &CustomersConfig, cohort: Cohort) -> Money {
 
 /// Every adult's daily allowance, summed: the new money minted each morning (§8.2, R63).
 /// Residents' rent is owed out of it ([`residential::rent_due`]).
-pub fn daily_allowances(pop: &Population, rules: &CustomersConfig) -> Money {
+pub fn daily_allowances(pop: &Population, config: &Config) -> Money {
     let pool: Money = pop
         .pool
         .iter()
-        .map(|(c, n)| allowance(rules, *c).saturating_mul(i64::try_from(*n).unwrap_or(i64::MAX)))
+        .map(|(c, n)| allowance(config, *c).saturating_mul(i64::try_from(*n).unwrap_or(i64::MAX)))
         .sum();
     let housed: Money = pop
         .residential
         .residents
         .values()
-        .map(|r| allowance(rules, r.cohort))
+        .map(|r| allowance(config, r.cohort))
         .sum();
     pool + housed
 }

@@ -86,7 +86,7 @@ Feature: The population cohort model
 
   @R61 @R17
   Scenario: Migrants top up the morning's arrivals
-    Given the shipped config with "customers.yaml" key "/migration_per_day" set to "40"
+    Given the shipped config with "economy.yaml" key "/population/migration_per_day" set to "40"
     And nobody dies
     When the year steps from 1930 to 1935
     Then 40 people are waiting for the 05:30 train

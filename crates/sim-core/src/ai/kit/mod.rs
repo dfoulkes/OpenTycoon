@@ -190,7 +190,7 @@ pub fn others_rent_on(world: &World, me: PlayerId, block: BlockId) -> Money {
         .on_block(block)
         .filter(|(_, b)| b.owner != AccountId::Player(me))
         .map(|(_, b)| {
-            crate::land::land_rent_per_day(b.volume(), config.map.land_base_rate.money(), mult)
+            crate::land::land_rent_per_day(b.volume(), config.economy.land.base_rate.money(), mult)
         })
         .sum()
 }
@@ -405,7 +405,7 @@ pub fn plan_on(
     let cost = build_cost(
         height,
         footprint,
-        config.businesses.build_base_rate.money(),
+        config.economy.building.base_rate.money(),
         config.map.tiers.get(tier).desirability_mult.rate(),
         fit_out_mult(config, fit_out),
     );
@@ -487,7 +487,7 @@ pub fn building_cost(
             w: size[0],
             d: size[1],
         },
-        config.businesses.build_base_rate.money(),
+        config.economy.building.base_rate.money(),
         config.map.tiers.get(tier).desirability_mult.rate(),
         fit_out_mult(config, fit_out),
     ))

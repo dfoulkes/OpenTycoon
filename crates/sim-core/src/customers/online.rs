@@ -220,7 +220,7 @@ pub fn shop_online(
             online_share(rules, year, name)
         };
         if share > 0.0 && unit_f64(rng) < share {
-            if let Some(k) = choose_online(rules, c.cohort.class, c.budget, good, offers, rng) {
+            if let Some(k) = choose_online(config, c.cohort.class, c.budget, good, offers, rng) {
                 let shop = offers[k].shop;
                 match businesses.try_sell_online(shop, name, 1, &config.businesses) {
                     Ok(amount) => {
@@ -248,14 +248,15 @@ pub fn shop_online(
 /// Picks an online seller for `good` by weighted random over `price_factor × brand`, among
 /// offers with stock the shopper can afford. Returns the index into `offers`.
 pub fn choose_online(
-    rules: &CustomersConfig,
+    config: &Config,
     class: Class,
     budget: Money,
     good: GoodId,
     offers: &[OnlineOffer],
     rng: &mut SimRng,
 ) -> Option<usize> {
-    let k = k_class(rules, class);
+    let rules = &config.customers;
+    let k = k_class(&config.economy, class);
     let mut index = Vec::new();
     let mut scores = Vec::new();
     for (i, o) in offers.iter().enumerate() {

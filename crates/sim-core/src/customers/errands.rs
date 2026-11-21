@@ -10,7 +10,7 @@ use super::shops::{GoodId, ShopOffer};
 use super::windows::Span;
 use super::{Activity, Customer, Errand, choose_shop};
 use crate::businesses::BusinessId;
-use crate::config::CustomersConfig;
+use crate::config::Config;
 use crate::money::Rate;
 use crate::rng::{SimRng, below};
 
@@ -109,7 +109,7 @@ pub(crate) fn next_errand(
     dark_until: Option<u32>,
     offers: &[ShopOffer],
     reputation: &BTreeMap<BusinessId, Rate>,
-    rules: &CustomersConfig,
+    config: &Config,
     geometry: Geometry,
     rng: &mut SimRng,
 ) -> (Activity, u64) {
@@ -126,7 +126,7 @@ pub(crate) fn next_errand(
             Plan::Go => c.list[0].good,
         };
         if let Some(i) = choose_shop(
-            c.cohort, c.at, c.budget, good, offers, reputation, rules, geometry, rng,
+            c.cohort, c.at, c.budget, good, offers, reputation, config, geometry, rng,
         ) {
             let to = offers[i].door;
             return (
