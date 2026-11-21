@@ -45,6 +45,9 @@ pub enum StudyError {
     /// The thread pool could not be built.
     #[error("thread pool: {0}")]
     Pool(#[from] rayon::ThreadPoolBuildError),
+    /// Recording the study's games failed (`--record`).
+    #[error("recording: {0}")]
+    Record(String),
 }
 
 impl StudyError {

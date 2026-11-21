@@ -1,4 +1,4 @@
-//! The S3 backend (MinIO or any S3-compatible store). Endpoint, bucket and keys come from the
+//! The S3 backend (`MinIO` or any S3-compatible store). Endpoint, bucket and keys come from the
 //! environment only (never defaults in the repository):
 //!
 //! | Variable | Meaning |
@@ -12,7 +12,13 @@
 //! Requests are signed with AWS Signature V4 (presigned, path-style URLs) and sent with a
 //! blocking HTTP client: no async runtime.
 
-use super::store::{ObjectStore, StoreError};
+use std::time::Duration;
+
+use rusty_s3::actions::{DeleteObject, GetObject, HeadObject, ListObjectsV2, PutObject};
+use rusty_s3::{Bucket, Credentials, S3Action, UrlStyle};
+use url::Url;
+
+use super::store::{ObjectStore, StoreError, check_key};
 
 /// The environment variables, in the order above.
 pub const ENV: [&str; 4] = [
@@ -22,11 +28,29 @@ pub const ENV: [&str; 4] = [
     "OPENTYCOON_S3_SECRET_KEY",
 ];
 
+/// Optional region variable.
+pub const ENV_REGION: &str = "OPENTYCOON_S3_REGION";
+
+/// How long a presigned request stays valid.
+const SIGN_FOR: Duration = Duration::from_secs(300);
+
 /// An S3 bucket.
-#[derive(Debug)]
 pub struct S3Store {
-    endpoint: String,
-    bucket: String,
+    bucket: Bucket,
+    credentials: Credentials,
+    agent: ureq::Agent,
+}
+
+impl std::fmt::Debug for S3Store {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("S3Store")
+            .field("bucket", &self.bucket.name())
+            .finish_non_exhaustive()
+    }
+}
+
+fn backend(what: &str, key: &str, e: impl std::fmt::Display) -> StoreError {
+    StoreError::Backend(format!("s3 {what} {key}: {e}"))
 }
 
 impl S3Store {
@@ -37,50 +61,224 @@ impl S3Store {
         access_key: &str,
         secret_key: &str,
     ) -> Result<Self, StoreError> {
-        let _ = (access_key, secret_key);
+        Self::with_region(endpoint, bucket, access_key, secret_key, "us-east-1")
+    }
+
+    fn with_region(
+        endpoint: &str,
+        bucket: &str,
+        access_key: &str,
+        secret_key: &str,
+        region: &str,
+    ) -> Result<Self, StoreError> {
+        let url =
+            Url::parse(endpoint).map_err(|e| StoreError::Config(format!("{}: {e}", ENV[0])))?;
+        let bucket = Bucket::new(url, UrlStyle::Path, bucket.to_owned(), region.to_owned())
+            .map_err(|e| StoreError::Config(format!("{}: {e}", ENV[0])))?;
+        let config = ureq::Agent::config_builder()
+            .http_status_as_error(false)
+            .timeout_global(Some(Duration::from_secs(120)))
+            .build();
         Ok(S3Store {
-            endpoint: endpoint.to_owned(),
-            bucket: bucket.to_owned(),
+            bucket,
+            credentials: Credentials::new(access_key, secret_key),
+            agent: ureq::Agent::new_with_config(config),
         })
     }
 
     /// The store the environment configures; names any missing variable.
     pub fn from_env() -> Result<Self, StoreError> {
-        Err(StoreError::Config("not implemented".into()))
+        let mut values = Vec::new();
+        let mut missing = Vec::new();
+        for name in ENV {
+            match std::env::var(name) {
+                Ok(v) if !v.is_empty() => values.push(v),
+                _ => missing.push(name),
+            }
+        }
+        if !missing.is_empty() {
+            return Err(StoreError::Config(format!(
+                "the S3 store needs {} in the environment",
+                missing.join(", ")
+            )));
+        }
+        let region = std::env::var(ENV_REGION).unwrap_or_else(|_| "us-east-1".into());
+        Self::with_region(&values[0], &values[1], &values[2], &values[3], &region)
+    }
+
+    fn read(resp: ureq::http::Response<ureq::Body>, key: &str) -> Result<Vec<u8>, StoreError> {
+        let mut body = resp.into_body();
+        body.with_config()
+            .limit(u64::MAX)
+            .read_to_vec()
+            .map_err(|e| backend("read", key, e))
+    }
+
+    fn status(
+        what: &str,
+        key: &str,
+        resp: ureq::http::Response<ureq::Body>,
+    ) -> Result<ureq::http::Response<ureq::Body>, StoreError> {
+        match resp.status().as_u16() {
+            200..=299 => Ok(resp),
+            404 => Err(StoreError::NotFound(key.to_owned())),
+            code => {
+                let text = Self::read(resp, key).unwrap_or_default();
+                let text = String::from_utf8_lossy(&text);
+                Err(backend(what, key, format!("HTTP {code}: {}", text.trim())))
+            }
+        }
+    }
+
+    fn get_with(&self, key: &str, range: Option<(u64, u64)>) -> Result<Vec<u8>, StoreError> {
+        check_key(key)?;
+        let url = GetObject::new(&self.bucket, Some(&self.credentials), key).sign(SIGN_FOR);
+        let mut req = self.agent.get(url.as_str());
+        if let Some((offset, len)) = range {
+            if len == 0 {
+                return Ok(Vec::new());
+            }
+            req = req.header("Range", format!("bytes={offset}-{}", offset + len - 1));
+        }
+        let resp = req.call().map_err(|e| backend("get", key, e))?;
+        let bytes = Self::read(Self::status("get", key, resp)?, key)?;
+        if let Some((offset, len)) = range {
+            if bytes.len() as u64 != len {
+                return Err(backend(
+                    "get",
+                    key,
+                    format!("range {offset}+{len} returned {} bytes", bytes.len()),
+                ));
+            }
+        }
+        Ok(bytes)
     }
 }
 
 impl ObjectStore for S3Store {
-    fn put(&self, key: &str, _bytes: &[u8]) -> Result<(), StoreError> {
-        Err(StoreError::Backend(format!("not implemented: {key}")))
+    fn put(&self, key: &str, bytes: &[u8]) -> Result<(), StoreError> {
+        check_key(key)?;
+        let url = PutObject::new(&self.bucket, Some(&self.credentials), key).sign(SIGN_FOR);
+        let resp = self
+            .agent
+            .put(url.as_str())
+            .send(bytes)
+            .map_err(|e| backend("put", key, e))?;
+        Self::status("put", key, resp).map(drop)
     }
+
     fn get(&self, key: &str) -> Result<Vec<u8>, StoreError> {
-        Err(StoreError::NotFound(key.to_owned()))
+        self.get_with(key, None)
     }
-    fn get_range(&self, key: &str, _offset: u64, _len: u64) -> Result<Vec<u8>, StoreError> {
-        Err(StoreError::NotFound(key.to_owned()))
+
+    fn get_range(&self, key: &str, offset: u64, len: u64) -> Result<Vec<u8>, StoreError> {
+        self.get_with(key, Some((offset, len)))
     }
-    fn exists(&self, _key: &str) -> Result<bool, StoreError> {
-        Ok(false)
+
+    fn exists(&self, key: &str) -> Result<bool, StoreError> {
+        check_key(key)?;
+        let url = HeadObject::new(&self.bucket, Some(&self.credentials), key).sign(SIGN_FOR);
+        let resp = self
+            .agent
+            .head(url.as_str())
+            .call()
+            .map_err(|e| backend("head", key, e))?;
+        match Self::status("head", key, resp) {
+            Ok(_) => Ok(true),
+            Err(StoreError::NotFound(_)) => Ok(false),
+            Err(e) => Err(e),
+        }
     }
-    fn list(&self, _prefix: &str) -> Result<Vec<(String, u64)>, StoreError> {
-        Ok(Vec::new())
+
+    fn list(&self, prefix: &str) -> Result<Vec<(String, u64)>, StoreError> {
+        let mut out = Vec::new();
+        let mut token: Option<String> = None;
+        loop {
+            let mut action = ListObjectsV2::new(&self.bucket, Some(&self.credentials));
+            action.with_prefix(prefix);
+            if let Some(t) = &token {
+                action.with_continuation_token(t.clone());
+            }
+            let url = action.sign(SIGN_FOR);
+            let resp = self
+                .agent
+                .get(url.as_str())
+                .call()
+                .map_err(|e| backend("list", prefix, e))?;
+            let body = Self::read(Self::status("list", prefix, resp)?, prefix)?;
+            let text = String::from_utf8_lossy(&body);
+            let parsed =
+                ListObjectsV2::parse_response(&text).map_err(|e| backend("list", prefix, e))?;
+            out.extend(
+                parsed
+                    .contents
+                    .into_iter()
+                    .map(|c| (percent_decode(&c.key), c.size)),
+            );
+            match parsed.next_continuation_token {
+                Some(t) if !t.is_empty() => token = Some(t),
+                _ => break,
+            }
+        }
+        out.sort();
+        Ok(out)
     }
-    fn delete(&self, _key: &str) -> Result<(), StoreError> {
-        Ok(())
+
+    fn delete(&self, key: &str) -> Result<(), StoreError> {
+        check_key(key)?;
+        let url = DeleteObject::new(&self.bucket, Some(&self.credentials), key).sign(SIGN_FOR);
+        let resp = self
+            .agent
+            .delete(url.as_str())
+            .call()
+            .map_err(|e| backend("delete", key, e))?;
+        match Self::status("delete", key, resp) {
+            Ok(_) | Err(StoreError::NotFound(_)) => Ok(()),
+            Err(e) => Err(e),
+        }
     }
+
     fn describe(&self) -> String {
-        format!("s3 bucket {} at {}", self.bucket, self.endpoint)
+        format!("s3 bucket {}", self.bucket.name())
     }
+}
+
+/// Undoes the `encoding-type=url` encoding of listed keys.
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let hex = bytes
+            .get(i + 1..i + 3)
+            .and_then(|h| std::str::from_utf8(h).ok())
+            .and_then(|h| u8::from_str_radix(h, 16).ok());
+        match (bytes[i], hex) {
+            (b'%', Some(b)) => {
+                out.push(b);
+                i += 3;
+            }
+            (b'+', _) => {
+                out.push(b' ');
+                i += 1;
+            }
+            (b, _) => {
+                out.push(b);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
     //! The S3 backend against a local S3 mock: a tiny path-style HTTP server that checks each
     //! request is SigV4-presigned and serves PUT, GET (with Range), HEAD, DELETE and
-    //! ListObjectsV2 from memory.
+    //! `ListObjectsV2` from memory.
     use super::*;
     use std::collections::BTreeMap;
+    use std::fmt::Write as _;
     use std::io::{BufRead, BufReader, Read, Write};
     use std::net::TcpListener;
     use std::sync::{Arc, Mutex};
@@ -97,7 +295,7 @@ pub(crate) mod tests {
             for stream in listener.incoming() {
                 let Ok(stream) = stream else { continue };
                 let store = store.clone();
-                std::thread::spawn(move || serve(stream, bucket, &store));
+                std::thread::spawn(move || serve(&stream, bucket, &store));
             }
         });
         (endpoint, objects)
@@ -119,7 +317,7 @@ pub(crate) mod tests {
         String::from_utf8(out).unwrap()
     }
 
-    fn serve(stream: std::net::TcpStream, bucket: &str, store: &Objects) {
+    fn serve(stream: &std::net::TcpStream, bucket: &str, store: &Objects) {
         let mut reader = BufReader::new(stream.try_clone().unwrap());
         let mut line = String::new();
         reader.read_line(&mut line).unwrap();
@@ -145,7 +343,7 @@ pub(crate) mod tests {
         let mut body = vec![0; len];
         reader.read_exact(&mut body).unwrap();
         let (path, query) = target.split_once('?').unwrap_or((&target, ""));
-        let q: BTreeMap<String, String> = query
+        let params: BTreeMap<String, String> = query
             .split('&')
             .filter_map(|kv| kv.split_once('='))
             .map(|(k, v)| (k.to_owned(), decode(v)))
@@ -162,16 +360,19 @@ pub(crate) mod tests {
             }
             s.flush().unwrap();
         };
-        if !q.contains_key("X-Amz-Signature") || !q.contains_key("X-Amz-Credential") {
+        if !params.contains_key("X-Amz-Signature") || !params.contains_key("X-Amz-Credential") {
             respond("403 Forbidden", b"unsigned", "");
             return;
         }
         let prefix = format!("/{bucket}/");
-        let key = path.strip_prefix(&prefix).map(decode);
+        let key = path
+            .strip_prefix(&prefix)
+            .map(decode)
+            .filter(|k| !k.is_empty());
         let mut objects = store.lock().unwrap();
         match (method.as_str(), key) {
             ("GET", None) if path == format!("/{bucket}") || path == prefix => {
-                let p = q.get("prefix").cloned().unwrap_or_default();
+                let p = params.get("prefix").cloned().unwrap_or_default();
                 let mut xml = String::from(
                     "<?xml version=\"1.0\" encoding=\"UTF-8\"?><ListBucketResult \
                      xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><MaxKeys>1000</MaxKeys>",
@@ -180,11 +381,12 @@ pub(crate) mod tests {
                     .range(p.clone()..)
                     .take_while(|(k, _)| k.starts_with(&p))
                 {
-                    xml.push_str(&format!(
+                    let _ = write!(
+                        xml,
                         "<Contents><Key>{k}</Key><LastModified>2020-01-01T00:00:00.000Z\
                          </LastModified><ETag>\"e\"</ETag><Size>{}</Size></Contents>",
                         v.len()
-                    ));
+                    );
                 }
                 xml.push_str("</ListBucketResult>");
                 respond(
@@ -193,23 +395,25 @@ pub(crate) mod tests {
                     "content-type: application/xml\r\n",
                 );
             }
-            ("PUT", Some(k)) => {
-                objects.insert(k, body);
+            ("PUT", Some(key)) => {
+                objects.insert(key, body);
                 respond("200 OK", b"", "");
             }
-            ("GET" | "HEAD", Some(k)) => match objects.get(&k) {
+            ("GET" | "HEAD", Some(key)) => match objects.get(&key) {
                 None => respond("404 Not Found", b"NoSuchKey", ""),
-                Some(v) => match headers.get("range") {
-                    Some(r) => {
-                        let (a, b) = r.trim_start_matches("bytes=").split_once('-').unwrap();
-                        let (a, b): (usize, usize) = (a.parse().unwrap(), b.parse().unwrap());
-                        respond("206 Partial Content", &v[a..=b], "");
+                Some(object) => match headers.get("range") {
+                    Some(range) => {
+                        let (first, last) =
+                            range.trim_start_matches("bytes=").split_once('-').unwrap();
+                        let (first, last): (usize, usize) =
+                            (first.parse().unwrap(), last.parse().unwrap());
+                        respond("206 Partial Content", &object[first..=last], "");
                     }
-                    None => respond("200 OK", v, ""),
+                    None => respond("200 OK", object, ""),
                 },
             },
-            ("DELETE", Some(k)) => {
-                objects.remove(&k);
+            ("DELETE", Some(key)) => {
+                objects.remove(&key);
                 respond("204 No Content", b"", "");
             }
             _ => respond("400 Bad Request", b"?", ""),

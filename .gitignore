@@ -3,6 +3,12 @@
 
 # sim-cli study output (docs/study.md)
 /study-out/
+
+# Game recordings never go in this public repo (docs/replay.md): replays, manifests, extracts.
+*.otr
+recordings/
+*.parquet
+!**/tests/fixtures/**/*.parquet
 **/*.rs.bk
 
 # Godot

@@ -30,5 +30,5 @@ pub use metrics::{
 };
 pub use models::{ModelSpec, baseline_values, generate, model_config, overrides_for};
 pub use output::split_csv_line;
-pub use run::{RunOptions, StudyReport, run_study};
+pub use run::{RunOptions, StudyRecording, StudyReport, run_study, run_study_recorded};
 pub use seats::{Entry, GamePlan, Roster, plan, resolve_roster};

@@ -12,10 +12,11 @@ use std::time::Duration;
 
 use rayon::prelude::*;
 use serde::Serialize;
-use sim_core::Config;
+use sim_core::{Config, World};
 
 use crate::game::{GameResult, GameSpec, Winner, play};
-use crate::replay::record::RecordContext;
+use crate::replay::format::Replay;
+use crate::replay::record::{RecordContext, play_recorded, seats_of};
 use crate::replay::snapshot::ConfigSnapshot;
 use crate::replay::writer::RunWriter;
 use crate::stats::{Distribution, distribution, rate};
@@ -59,6 +60,9 @@ pub enum BatchError {
     /// The thread pool could not be built.
     #[error("thread pool: {0}")]
     Pool(#[from] rayon::ThreadPoolBuildError),
+    /// Recording failed (`--record`).
+    #[error("recording: {0}")]
+    Record(String),
 }
 
 /// Every game's result, sorted by seed, and the batch's wall time.
@@ -115,14 +119,57 @@ pub struct BatchRecording<'w, 'a> {
 }
 
 /// [`run_batch`], recording every game into `rec`'s store: one manifest part per `rec.chunk`
-/// games (`part-00000`, `part-00001`, …). The results are identical to an unrecorded batch.
+/// games (`part-00000`, `part-00001`, …), game ids `seed<seed>`. The results are identical to
+/// an unrecorded batch: recording only reads the world.
 pub fn run_batch_recorded(
     config: &Config,
     spec: &BatchSpec,
     rec: &mut BatchRecording<'_, '_>,
 ) -> Result<BatchReport, BatchError> {
-    let _ = rec;
-    run_batch(config, spec)
+    let end = spec
+        .base_seed
+        .checked_add(spec.games)
+        .ok_or(BatchError::SeedOverflow {
+            base: spec.base_seed,
+            games: spec.games,
+        })?;
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(spec.threads.unwrap_or(0))
+        .build()?;
+    let watch = Stopwatch::start();
+    rec.writer
+        .put_config(&rec.snapshot)
+        .map_err(|e| BatchError::Record(e.to_string()))?;
+    let mut results = Vec::new();
+    let mut first = spec.base_seed;
+    let mut part = 0u32;
+    while first < end {
+        let last = first.saturating_add(rec.chunk.max(1)).min(end);
+        let ctx = &rec.ctx;
+        let played: Vec<(GameResult, Replay)> = pool.install(|| {
+            (first..last)
+                .into_par_iter()
+                .map(|seed| {
+                    let world = World::new(config.clone(), seed, spec.game.players);
+                    let seats = seats_of(&world, spec.game.brain);
+                    play_recorded(world, &spec.game, ctx, &format!("seed{seed}"), seats)
+                })
+                .collect()
+        });
+        let (chunk, replays): (Vec<GameResult>, Vec<Replay>) = played.into_iter().unzip();
+        rec.writer
+            .write_part(&format!("part-{part:05}"), &replays, &rec.source, None)
+            .map_err(|e| BatchError::Record(e.to_string()))?;
+        results.extend(chunk);
+        part += 1;
+        first = last;
+    }
+    results.sort_by_key(|r| r.seed);
+    Ok(BatchReport {
+        results,
+        wall: watch.elapsed(),
+        threads: pool.current_num_threads(),
+    })
 }
 
 /// Whether the CSV carries the per-game wall time (the only non-deterministic column).

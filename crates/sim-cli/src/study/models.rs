@@ -234,6 +234,18 @@ pub fn model_config(
     overrides::load(base, Some(preset), &ovs)
 }
 
+/// The effective config files of a model under `preset`: what [`model_config`] validates, and
+/// what a recorded game's config snapshot holds.
+pub fn model_files(
+    def: &StudyDef,
+    base: &ConfigSources,
+    model: &ModelSpec,
+    preset: &str,
+) -> Result<ConfigSources, LoadError> {
+    let ovs = overrides_for(def, base, model)?;
+    overrides::resolve(base, Some(preset), &ovs)
+}
+
 /// The base sources with a model's overrides applied, *without* the preset: the files a
 /// winner's overlay holds, ready to copy over `config/`.
 pub fn model_sources(

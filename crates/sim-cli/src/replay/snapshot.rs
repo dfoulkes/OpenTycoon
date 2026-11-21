@@ -1,7 +1,10 @@
 //! Config snapshots: the effective config of a game (every file, after preset and overrides)
 //! as one YAML document, stored once per distinct config at `configs/<hash>.yaml`.
 
+use std::collections::BTreeMap;
+
 use sim_core::ConfigSources;
+use sim_core::hash::stable_hash;
 
 /// One config snapshot.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,27 +31,53 @@ pub enum SnapshotError {
     },
 }
 
+fn files(sources: &ConfigSources) -> BTreeMap<String, String> {
+    sources
+        .file_names()
+        .map(|f| (f.to_owned(), sources.get(f).unwrap_or_default().to_owned()))
+        .collect()
+}
+
+fn hash_of(files: &BTreeMap<String, String>) -> String {
+    let pairs: Vec<(&str, &str)> = files
+        .iter()
+        .map(|(f, t)| (f.as_str(), t.as_str()))
+        .collect();
+    format!("{:016x}", stable_hash(&pairs))
+}
+
 /// The snapshot of `sources`.
 pub fn snapshot(sources: &ConfigSources) -> ConfigSnapshot {
-    let _ = sources;
+    let files = files(sources);
+    let hash = hash_of(&files);
+    let body = serde_yaml_ng::to_string(&files).unwrap_or_default();
     ConfigSnapshot {
-        hash: String::new(),
-        yaml: String::new(),
+        yaml: format!("# OpenTycoon config snapshot {hash}: file name -> file text\n{body}"),
+        hash,
     }
 }
 
 /// The hash of `sources`, as [`snapshot`] names it.
 pub fn config_hash(sources: &ConfigSources) -> String {
-    snapshot(sources).hash
+    hash_of(&files(sources))
 }
 
 /// Reads a snapshot back, checking it hashes to `expected`.
 pub fn parse(yaml: &str, expected: &str) -> Result<ConfigSources, SnapshotError> {
-    let _ = yaml;
-    Err(SnapshotError::Hash {
-        expected: expected.to_owned(),
-        found: String::new(),
-    })
+    let files: BTreeMap<String, String> =
+        serde_yaml_ng::from_str(yaml).map_err(|e| SnapshotError::Yaml(e.to_string()))?;
+    let found = hash_of(&files);
+    if found != expected {
+        return Err(SnapshotError::Hash {
+            expected: expected.to_owned(),
+            found,
+        });
+    }
+    let mut sources = ConfigSources::new();
+    for (f, t) in files {
+        sources.insert(f, t);
+    }
+    Ok(sources)
 }
 
 /// The object key of a snapshot.

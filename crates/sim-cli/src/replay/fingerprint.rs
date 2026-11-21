@@ -6,7 +6,10 @@
 //! fingerprint play the reference game identically, so a replay recorded by one can be
 //! re-simulated by the other. Any rule change moves it. It is computed once per process.
 
-use sim_core::ConfigSources;
+use std::sync::OnceLock;
+
+use sim_core::config::ConfigFile;
+use sim_core::{ConfigSources, World};
 
 /// Seed of the reference game.
 pub const REFERENCE_SEED: u64 = 42;
@@ -16,22 +19,45 @@ pub const REFERENCE_PRESET: &str = "full";
 pub const REFERENCE_PLAYERS: u8 = 2;
 
 /// The sim build's git commit (`unknown` if it was built outside a git checkout).
-pub const GIT_COMMIT: &str = "unknown";
+pub const GIT_COMMIT: &str = env!("OPENTYCOON_GIT_COMMIT");
 
 /// The shipped config, as compiled into this binary.
 pub fn shipped_sources() -> ConfigSources {
-    ConfigSources::new()
+    let text = |f: ConfigFile| match f {
+        ConfigFile::Game => include_str!("../../../../config/game.yaml"),
+        ConfigFile::Map => include_str!("../../../../config/map.yaml"),
+        ConfigFile::Auctions => include_str!("../../../../config/auctions.yaml"),
+        ConfigFile::Utilities => include_str!("../../../../config/utilities.yaml"),
+        ConfigFile::Businesses => include_str!("../../../../config/businesses.yaml"),
+        ConfigFile::Customers => include_str!("../../../../config/customers.yaml"),
+        ConfigFile::Events => include_str!("../../../../config/events.yaml"),
+        ConfigFile::Ai => include_str!("../../../../config/ai.yaml"),
+    };
+    let mut sources = ConfigSources::new();
+    for f in ConfigFile::ALL {
+        sources.insert(f.file_name(), text(f));
+    }
+    sources
 }
 
 /// The reference game's final state hash under `sources`, as 16 hex digits.
 pub fn reference_fingerprint(sources: &ConfigSources) -> Result<String, String> {
-    let _ = sources;
-    Err("not implemented".into())
+    let config = crate::overrides::load(sources, Some(REFERENCE_PRESET), &[])
+        .map_err(|e| format!("rules fingerprint: the reference config does not load: {e}"))?;
+    let mut world = World::new(config, REFERENCE_SEED, REFERENCE_PLAYERS);
+    while !world.clock().is_over() {
+        world.tick();
+    }
+    Ok(format!("{:016x}", world.state_hash()))
 }
 
 /// This build's rules fingerprint, computed on first use and cached for the process.
 pub fn rules_fingerprint() -> Result<&'static str, String> {
-    Err("not implemented".into())
+    static FINGERPRINT: OnceLock<Result<String, String>> = OnceLock::new();
+    FINGERPRINT
+        .get_or_init(|| reference_fingerprint(&shipped_sources()))
+        .as_deref()
+        .map_err(Clone::clone)
 }
 
 #[cfg(test)]
