@@ -56,8 +56,26 @@ fn share(part: u64, whole: u64) -> f64 {
 
 /// The evaluation of roster entry `entry` over `games`.
 pub fn evaluate(roster: &Roster, entry: usize, games: &[GameOutcome]) -> Evaluation {
-    let _ = (roster, entry, games);
-    Evaluation::default() // red: not yet
+    let idle = roster.idle();
+    let mut e = Evaluation {
+        games: games.len() as u64,
+        ..Evaluation::default()
+    };
+    let mut diffs = Vec::with_capacity(games.len());
+    for g in games {
+        if g.winner == Some(entry) {
+            e.wins += 1;
+        }
+        let seat_of = |want: usize| g.seating.iter().position(|s| *s == want);
+        let Some(me) = seat_of(entry) else { continue };
+        if g.bankrupt[me] {
+            e.bankruptcies += 1;
+        }
+        let idle_nw = idle.and_then(seat_of).map_or(0, |s| g.net_worth[s]);
+        diffs.push(g.net_worth[me].saturating_sub(idle_nw));
+    }
+    e.nw_vs_idle = distribution(&diffs).map(|d| d.median);
+    e
 }
 
 /// Compares two candidates, **better first**: higher fitness, then (the tie-break) higher
@@ -78,8 +96,9 @@ pub fn compare(a: (u32, &Evaluation), b: (u32, &Evaluation), penalty: f64) -> Or
 /// Ranks candidates best first: `(index, evaluation)` for every valid one; invalid ones are
 /// left out by the caller. Returns the indices in rank order.
 pub fn rank(candidates: &[(u32, Evaluation)], penalty: f64) -> Vec<u32> {
-    let _ = penalty;
-    candidates.iter().map(|(i, _)| *i).collect() // red: not yet
+    let mut order: Vec<&(u32, Evaluation)> = candidates.iter().collect();
+    order.sort_by(|a, b| compare((a.0, &a.1), (b.0, &b.1), penalty));
+    order.into_iter().map(|(i, _)| *i).collect()
 }
 
 /// The roster index of personality `id`.

@@ -12,19 +12,14 @@
 //! - [`genome`]: genomes, the first population, mutation, crossover and selection.
 //! - [`fitness`]: what a candidate's games are worth, and the ranking.
 //! - [`output`]: `generations.csv` rows and the fitness curves.
-//! - [`run`]: playing generations, in parallel, resumable, optionally recorded.
-
-#![allow(
-    dead_code,
-    unused_imports,
-    clippy::unused_self,
-    clippy::needless_pass_by_value,
-    clippy::unnecessary_wraps,
-    reason = "red commit: the API is stubbed; the green commit implements it"
-)]
+//! - [`run`]: the run: resume, the generation loop, `summary.json`; with `evolution` (the
+//!   fixed context: roster, genes, configs, populations) and `generation` (one generation's
+//!   games, ranking, champions and lineup).
 
 pub mod def;
+mod evolution;
 pub mod fitness;
+mod generation;
 pub mod genome;
 pub mod output;
 pub mod run;

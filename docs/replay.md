@@ -17,7 +17,7 @@ A replay is a **header**, a **command log**, a **checkpoint at every midnight** 
 | Part | Contents |
 |---|---|
 | Header | game id, run id, sim build git commit, **rules fingerprint**, config hash, seed, preset, start and end year, seats, AI phase order |
-| Seat | `human` or `ai`; brain id (`core:<personality>`, `harness:<brain>`, `client`); brain version (the personality's settings hash, or the harness brain version); an anonymous player id for humans, never a name |
+| Seat | `human` or `ai`; brain id (`core:<personality>`, `harness:<brain>`, `client`); brain version (for a core personality, the stable hash of its `personalities.<id>` weights and its whole `<id>:` block of tunables, so any change to how it plays, an evolved genome included, gives a new version; or the harness brain version); an anonymous player id for humans, never a name |
 | Command log | every command the world applied: `(tick, seat, origin, accepted, command)` |
 | Checkpoint | day, tick, `World::state_hash()`, and per seat: net worth, cash, leases held, businesses owned, bankrupt |
 | Outcome | winner, per seat rank / final net worth / bankrupt, days played, ticks, final state hash |
@@ -197,7 +197,7 @@ than 8 seats is refused.
 | `size_bytes` | int64 (u64) | envelope length |
 | `seat<N>_kind` | string | `human` or `ai` |
 | `seat<N>_brain` | string | brain id |
-| `seat<N>_brain_version` | string | brain version or settings hash |
+| `seat<N>_brain_version` | string | brain version or settings hash (for `sim-cli evolve`, the candidate's `genome_id`, docs/evolve.md) |
 | `seat<N>_player_id` | string, nullable | anonymous player id (humans only) |
 | `seat<N>_rank` | int64 | final rank (1 = best; bankrupt seats after solvent ones) |
 | `seat<N>_net_worth` | int64 | final net worth, pence |

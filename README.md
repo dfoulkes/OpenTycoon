@@ -98,6 +98,11 @@ cargo perf
 # Balance study (R64, R65): ~100 sampled models × 500 rotated games of 1930–2050, ranked by
 # how even the AI win shares are. Resumable; definition in study/study.yaml (docs/study.md).
 cargo run --release -p sim-cli -- study config --out study-out
+
+# Evolve each AI personality's ai.yaml settings over generations of games; adopt a champion
+# with `cp evolve-out/champions/<gen>/ai.yaml config/`. Resumable; definition in
+# study/evolve.yaml (docs/evolve.md).
+cargo run --release -p sim-cli -- evolve config --out evolve-out
 ```
 
 Brains for the seats `ai.yaml` does not fill: `idle` (does nothing) and `scripted` (bids on the

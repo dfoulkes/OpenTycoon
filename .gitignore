@@ -22,3 +22,6 @@ client/bin/
 .vscode/
 *.iml
 .DS_Store
+
+# sim-cli evolve output (docs/evolve.md)
+/evolve-out/
