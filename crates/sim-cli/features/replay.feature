@@ -13,14 +13,14 @@ Feature: Game recorder
 
   @spec-11
   Scenario: A recorded game re-verifies
-    When I record a batch of 3 games from seed 5 with the "scripted" brain
+    When I record a batch of 3 games from seed 5 with the "scripted" brain in 6 seats
     Then the manifest lists 3 games
     And every recorded game re-verifies at every midnight
 
   @spec-11
   Scenario: Recording does not change the game
-    When I run a batch of 4 games from seed 20 with the "scripted" brain
-    And I record a batch of 4 games from seed 20 with the "scripted" brain
+    When I run a batch of 4 games from seed 20 with the "scripted" brain in 6 seats
+    And I record a batch of 4 games from seed 20 with the "scripted" brain in 6 seats
     Then each recorded game ends with the same state hash as the unrecorded one
 
   @spec-11
@@ -36,7 +36,7 @@ Feature: Game recorder
 
   @spec-11
   Scenario: A tampered command fails verification at the first midnight after it
-    When I record a batch of 1 games from seed 9 with the "scripted" brain
+    When I record a batch of 1 games from seed 9 with the "scripted" brain in 6 seats
     And I raise the opening bid in the first game's first external command by £1
     Then verifying the first game fails with "diverges at midnight 1"
 
@@ -67,14 +67,14 @@ Feature: Game recorder
 
   @spec-11
   Scenario: Replays are packed into a few segment objects, each game one ranged read
-    Given segments of 64 KiB
+    Given segments of 4 KiB
     When I record a batch of 24 games from seed 0 with the "scripted" brain
     Then the store holds fewer replay objects than games
     And every manifest row's byte range decodes to that game
 
   @spec-11
   Scenario: The extractor writes one row per command with lineage
-    When I record a batch of 2 games from seed 4 with the "scripted" brain
+    When I record a batch of 2 games from seed 4 with the "scripted" brain in 6 seats
     And I extract the run
     Then the extract has one row per recorded command
     And every extract row carries the extractor id, the game id and the rules fingerprint
@@ -100,7 +100,7 @@ Feature: Game recorder
 
   @spec-11
   Scenario: sim-cli records a batch and verifies it from the manifest
-    When I run sim-cli "batch config --games 2 --preset v1 --brain scripted --no-wall-time --out {tmp}/a.csv --record {tmp}/rec --run-id test-bdd"
+    When I run sim-cli "batch config --games 2 --preset v1 --brain scripted --players 6 --no-wall-time --out {tmp}/a.csv --record {tmp}/rec --run-id test-bdd"
     Then sim-cli succeeds
     When I run sim-cli "replay --verify {tmp}/rec/manifests/test-bdd/part-00000.parquet"
     Then sim-cli succeeds

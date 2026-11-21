@@ -13,7 +13,7 @@ use super::format::{
     SeatKind, SeatOutcome, Winner,
 };
 use crate::brains::BrainKind;
-use crate::game::{GameResult, GameSpec, Ticker, play_with, player_net_worth};
+use crate::game::{self, GameResult, GameSpec, Ticker, play_with, player_net_worth};
 
 /// What every game of a run shares in its header.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -37,77 +37,192 @@ pub const HARNESS_BRAIN_VERSION: &str = "1";
 /// `core:<personality>` (versioned by a hash of the personality's settings), every other seat
 /// as the harness `brain`.
 pub fn seats_of(world: &World, brain: BrainKind) -> Vec<Seat> {
-    let _ = (world, brain, CORE_BRAIN, stable_hash::<u8>);
-    Vec::new()
+    world
+        .players()
+        .iter()
+        .map(
+            |(p, _)| match world.ai_seats().iter().find(|s| s.player == *p) {
+                Some(ai) => {
+                    let settings = world
+                        .config()
+                        .ai
+                        .personalities
+                        .get(&ai.personality)
+                        .and_then(|cfg| serde_json::to_string(cfg).ok())
+                        .unwrap_or_default();
+                    Seat {
+                        kind: SeatKind::Ai,
+                        brain: format!("{CORE_BRAIN}{}", ai.personality),
+                        brain_version: format!("{:016x}", stable_hash(&settings)),
+                        player_id: None,
+                    }
+                }
+                None => Seat {
+                    kind: SeatKind::Ai,
+                    brain: format!("harness:{}", brain.name()),
+                    brain_version: HARNESS_BRAIN_VERSION.to_owned(),
+                    player_id: None,
+                },
+            },
+        )
+        .collect()
 }
 
 /// Records one game while it plays.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Recorder {
     commands: Vec<CommandRecord>,
     checkpoints: Vec<Checkpoint>,
-    tick_buffer: Vec<CommandRecord>,
 }
 
 impl Recorder {
     /// An empty recorder.
     pub fn new() -> Self {
-        Recorder {
-            commands: Vec::new(),
-            checkpoints: Vec::new(),
-            tick_buffer: Vec::new(),
-        }
+        Self::default()
+    }
+
+    /// The commands logged so far.
+    pub fn commands(&self) -> &[CommandRecord] {
+        &self.commands
+    }
+
+    /// The checkpoints taken so far.
+    pub fn checkpoints(&self) -> &[Checkpoint] {
+        &self.checkpoints
     }
 }
 
-impl Default for Recorder {
-    fn default() -> Self {
-        Self::new()
+/// Runs one tick through `World::tick_with`, appending what phase 2 applied to `log`. The
+/// queue holds sim-core's AI commands (queued by the previous tick's AI phase) followed by the
+/// `external` commands submitted since, so the last `external` applied are external.
+pub fn tick_logged(
+    world: &mut World,
+    external: usize,
+    log: &mut Vec<CommandRecord>,
+) -> ClockEvents {
+    let first = log.len();
+    let fired = world.tick_with(&mut |_| {}, &mut |a: Applied<'_>| {
+        log.push(CommandRecord {
+            tick: a.tick,
+            seat: a.player.0,
+            origin: Origin::Core,
+            accepted: a.accepted,
+            command: a.command.clone(),
+        });
+    });
+    let applied = log.len() - first;
+    for rec in &mut log[first + applied.saturating_sub(external)..] {
+        rec.origin = Origin::External;
     }
+    fired
 }
 
 impl Ticker for Recorder {
-    fn tick(&mut self, world: &mut World, _external: usize) -> ClockEvents {
-        let _ = (
-            &self.commands,
-            &self.checkpoints,
-            &self.tick_buffer,
-            Origin::Core,
-        );
-        world.tick_with(&mut |_| {}, &mut |_: Applied<'_>| {})
+    fn tick(&mut self, world: &mut World, external: usize) -> ClockEvents {
+        let fired = tick_logged(world, external, &mut self.commands);
+        if fired.midnight {
+            self.checkpoints.push(checkpoint(world));
+        }
+        fired
     }
 }
 
-/// A checkpoint of `world` now.
+/// A checkpoint of `world` now: the state hash and each seat's net worth and holdings.
 pub fn checkpoint(world: &World) -> Checkpoint {
-    let _ = (
-        AccountId::City,
-        PlayerStatus::Active,
-        SeatCheckpoint::default_for_stub(),
-    );
+    let seats = world
+        .players()
+        .iter()
+        .map(|(p, status)| {
+            let me = AccountId::Player(*p);
+            SeatCheckpoint {
+                net_worth: player_net_worth(world, *p).pence(),
+                cash: world.ledger().balance(me).pence(),
+                leases: count(
+                    world
+                        .map()
+                        .blocks
+                        .iter()
+                        .filter(|b| b.lease.as_ref().is_some_and(|l| l.holder == me)),
+                ),
+                businesses: count(world.businesses().owned_by(me)),
+                bankrupt: *status == PlayerStatus::Bankrupt,
+            }
+        })
+        .collect();
     Checkpoint {
         day: world.clock().day(),
         tick: world.clock().tick(),
-        state_hash: 0,
-        seats: Vec::new(),
+        state_hash: world.state_hash(),
+        seats,
     }
 }
 
-impl SeatCheckpoint {
-    fn default_for_stub() -> Self {
-        SeatCheckpoint {
-            net_worth: 0,
-            cash: 0,
-            leases: 0,
-            businesses: 0,
-            bankrupt: false,
-        }
-    }
+fn count<T>(it: impl Iterator<Item = T>) -> u32 {
+    u32::try_from(it.count()).unwrap_or(u32::MAX)
 }
 
-/// Ranks: solvent seats by net worth, best first, ties sharing a rank; then bankrupt seats.
+/// Ranks: solvent seats by net worth, best first, ties sharing a rank; then bankrupt seats,
+/// also by net worth.
 pub fn ranks(seats: &[(i64, bool)]) -> Vec<u8> {
-    vec![0; seats.len()]
+    seats
+        .iter()
+        .map(|(worth, bankrupt)| {
+            let ahead = seats
+                .iter()
+                .filter(|(w, b)| {
+                    (*b, std::cmp::Reverse(*w)) < (*bankrupt, std::cmp::Reverse(*worth))
+                })
+                .count();
+            u8::try_from(ahead + 1).unwrap_or(u8::MAX)
+        })
+        .collect()
+}
+
+/// The outcome of a finished game.
+pub fn outcome(result: &GameResult) -> Outcome {
+    let pairs: Vec<(i64, bool)> = result
+        .players
+        .iter()
+        .map(|p| (p.net_worth.pence(), p.bankrupt))
+        .collect();
+    let seats = pairs
+        .iter()
+        .zip(ranks(&pairs))
+        .map(|((net_worth, bankrupt), rank)| SeatOutcome {
+            rank,
+            net_worth: *net_worth,
+            bankrupt: *bankrupt,
+        })
+        .collect();
+    Outcome {
+        winner: match result.winner {
+            game::Winner::Player(p) => Winner::Seat(p),
+            game::Winner::Tie => Winner::Tie,
+            game::Winner::Nobody => Winner::Nobody,
+        },
+        seats,
+        days_played: result.days_played,
+        ticks: result.ticks,
+        final_state_hash: result.state_hash,
+    }
+}
+
+/// The header of a game about to start.
+pub fn header(world: &World, ctx: &RecordContext, game_id: &str, seats: Vec<Seat>) -> Header {
+    let clock = &world.config().game.clock;
+    Header {
+        game_id: game_id.to_owned(),
+        run_id: ctx.run_id.clone(),
+        git_commit: ctx.git_commit.clone(),
+        rules_fingerprint: ctx.rules_fingerprint.clone(),
+        config_hash: ctx.config_hash.clone(),
+        seed: world.seed(),
+        preset: ctx.preset.clone(),
+        start_year: clock.start_year,
+        end_year: clock.end_year,
+        seats,
+        ai_order: world.ai_seats().iter().map(|s| s.player.0).collect(),
+    }
 }
 
 /// Plays `world` to the whistle like [`crate::game::play_from`], recording it. `seats`
@@ -119,38 +234,16 @@ pub fn play_recorded(
     game_id: &str,
     seats: Vec<Seat>,
 ) -> (GameResult, Replay) {
+    let header = header(&world, ctx, game_id, seats);
     let mut rec = Recorder::new();
-    let (result, end) = play_with(world, spec, &mut rec);
-    let _ = (player_net_worth, SeatKind::Ai, SeatOutcome::stub);
+    let (result, _) = play_with(world, spec, &mut rec);
     let replay = Replay {
-        header: Header {
-            game_id: game_id.to_owned(),
-            run_id: ctx.run_id.clone(),
-            git_commit: ctx.git_commit.clone(),
-            rules_fingerprint: ctx.rules_fingerprint.clone(),
-            config_hash: ctx.config_hash.clone(),
-            seed: end.seed(),
-            preset: ctx.preset.clone(),
-            start_year: 0,
-            end_year: 0,
-            seats,
-            ai_order: Vec::new(),
-        },
+        header,
         commands: rec.commands,
         checkpoints: rec.checkpoints,
-        outcome: Outcome {
-            winner: Winner::Nobody,
-            seats: Vec::new(),
-            days_played: 0,
-            ticks: 0,
-            final_state_hash: 0,
-        },
+        outcome: outcome(&result),
     };
     (result, replay)
-}
-
-impl SeatOutcome {
-    fn stub() {}
 }
 
 #[cfg(test)]
@@ -168,9 +261,11 @@ mod tests {
 
     fn record(seed: u64, brain: BrainKind) -> (GameResult, Replay) {
         let config = v1();
-        let world = World::new(config, seed, 2);
+        // Five AI opponents fill seats 5..1; the harness brain plays seat 0.
+        let world = World::new(config, seed, 6);
         let seats = seats_of(&world, brain);
         let spec = GameSpec {
+            players: 6,
             brain,
             ..GameSpec::default()
         };
@@ -187,9 +282,9 @@ mod tests {
 
     #[test]
     fn seats_name_the_core_ai_and_the_harness_brain() {
-        let world = World::new(v1(), 1, 2);
+        let world = World::new(v1(), 1, 6);
         let seats = seats_of(&world, BrainKind::Scripted);
-        assert_eq!(seats.len(), 2);
+        assert_eq!(seats.len(), 6);
         assert_eq!(seats[0].brain, "harness:scripted");
         assert_eq!(seats[0].brain_version, HARNESS_BRAIN_VERSION);
         let ai = &world.ai_seats()[0];
@@ -211,8 +306,8 @@ mod tests {
             (replay.header.start_year, replay.header.end_year),
             (1930, 1950)
         );
-        assert_eq!(replay.header.seats.len(), 2);
-        assert!(!replay.header.ai_order.is_empty());
+        assert_eq!(replay.header.seats.len(), 6);
+        assert_ne!(replay.header.ai_order.len(), 0);
         assert_eq!(replay.checkpoints.len(), result.days_played as usize);
         assert!(replay.commands.iter().any(|c| c.origin == Origin::External));
         assert!(replay.commands.iter().any(|c| c.origin == Origin::Core));

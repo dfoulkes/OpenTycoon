@@ -350,8 +350,7 @@ impl World {
     ) -> ClockEvents {
         let fired = self.clock.advance();
         after(Phase::Clock);
-        let _ = applied; // red: not wired yet
-        self.apply_commands(&mut |_| {});
+        self.apply_commands(applied);
         after(Phase::Commands);
         if fired.midnight {
             self.midnight_reckoning();

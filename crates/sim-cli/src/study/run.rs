@@ -21,15 +21,19 @@ use sim_core::{Config, ConfigSources, World};
 
 use super::def::{StudyDef, StudyError};
 use super::metrics::{GameOutcome, Tally, metrics};
-use super::models::{ModelSpec, baseline_labels, generate, model_config, node_at};
+use super::models::{ModelSpec, baseline_labels, generate, model_files, node_at};
 use super::output::{
     Columns, Outcome, Row, csv_text, game_row, games_header, model_row, models_header, rank,
     read_models, split_csv_line, write_overlays,
 };
 use super::seats::{GamePlan, Roster, effective_games, plan, resolve_roster};
 use crate::brains::BrainKind;
-use crate::game::{GameSpec, Winner, play_from};
-use crate::overrides;
+use crate::game::{GameResult, GameSpec, Winner, play_from};
+use crate::overrides::{self, LoadError};
+use crate::replay::format::Replay;
+use crate::replay::record::{RecordContext, play_recorded, seats_of};
+use crate::replay::snapshot::snapshot;
+use crate::replay::writer::RunWriter;
 use crate::timing::Stopwatch;
 
 /// How to run a study.
@@ -135,6 +139,11 @@ fn play_one(config: &Config, roster: &Roster, g: &GamePlan) -> (GameOutcome, Dur
             ..GameSpec::default()
         },
     );
+    outcome_of(g, &result)
+}
+
+/// A game's study outcome from its harness result.
+fn outcome_of(g: &GamePlan, result: &GameResult) -> (GameOutcome, Duration) {
     let (winner, tie) = match result.winner {
         Winner::Player(p) => (g.seating.get(usize::from(p)).copied(), false),
         Winner::Tie => (None, true),
@@ -154,6 +163,28 @@ fn play_one(config: &Config, roster: &Roster, g: &GamePlan) -> (GameOutcome, Dur
         state_hash: result.state_hash,
     };
     (outcome, result.wall)
+}
+
+/// Plays one game of a model, recording it.
+fn play_one_recorded(
+    config: &Config,
+    roster: &Roster,
+    g: &GamePlan,
+    ctx: &RecordContext,
+    model: u32,
+) -> (GameOutcome, Duration, Replay) {
+    let seats = u8::try_from(roster.len()).unwrap_or(u8::MAX);
+    let world = World::seated(config.clone(), g.seed, seats, &roster.ai_seats(&g.seating));
+    let seat_info = seats_of(&world, BrainKind::Idle);
+    let spec = GameSpec {
+        players: seats,
+        brain: BrainKind::Idle,
+        ..GameSpec::default()
+    };
+    let game_id = format!("m{model:05}-g{:06}", g.index);
+    let (result, replay) = play_recorded(world, &spec, ctx, &game_id, seat_info);
+    let (outcome, wall) = outcome_of(g, &result);
+    (outcome, wall, replay)
 }
 
 fn read_opt(path: &Path) -> Result<Option<String>, StudyError> {
@@ -406,18 +437,50 @@ impl<'a> Study<'a> {
         &self,
         pool: &rayon::ThreadPool,
         model: &ModelSpec,
+        rec: Option<&mut StudyRecording<'_, '_>>,
     ) -> Result<(Outcome, u64), StudyError> {
         let watch = Stopwatch::start();
-        let config = match model_config(self.def, self.base, model, &self.preset) {
+        let files = model_files(self.def, self.base, model, &self.preset);
+        let config = match files.as_ref().map(Config::load) {
             Err(e) => return Ok((Outcome::Invalid(e.to_string()), 0)),
-            Ok(c) => c,
+            Ok(Err(e)) => return Ok((Outcome::Invalid(LoadError::Invalid(e).to_string()), 0)),
+            Ok(Ok(c)) => c,
         };
-        let games: Vec<(GameOutcome, Duration)> = pool.install(|| {
-            self.plans
-                .par_iter()
-                .map(|g| play_one(&config, &self.roster, g))
-                .collect()
-        });
+        let games: Vec<(GameOutcome, Duration)> = match (rec, files) {
+            (Some(rec), Ok(files)) => {
+                let snap = snapshot(&files);
+                rec.writer
+                    .put_config(&snap)
+                    .map_err(|e| StudyError::Record(e.to_string()))?;
+                let ctx = RecordContext {
+                    config_hash: snap.hash,
+                    preset: self.preset.clone(),
+                    ..rec.ctx.clone()
+                };
+                let played: Vec<(GameOutcome, Duration, Replay)> = pool.install(|| {
+                    self.plans
+                        .par_iter()
+                        .map(|g| play_one_recorded(&config, &self.roster, g, &ctx, model.id))
+                        .collect()
+                });
+                let replays: Vec<Replay> = played.iter().map(|(_, _, r)| r.clone()).collect();
+                rec.writer
+                    .write_part(
+                        &format!("part-m{:05}", model.id),
+                        &replays,
+                        "study",
+                        Some(model.id),
+                    )
+                    .map_err(|e| StudyError::Record(e.to_string()))?;
+                played.into_iter().map(|(o, w, _)| (o, w)).collect()
+            }
+            _ => pool.install(|| {
+                self.plans
+                    .par_iter()
+                    .map(|g| play_one(&config, &self.roster, g))
+                    .collect()
+            }),
+        };
         let mut tally = Tally::new(self.roster.len());
         for (g, _) in &games {
             tally.add(&self.roster, g);
@@ -511,11 +574,32 @@ impl<'a> Study<'a> {
     }
 }
 
+/// Recording a study (`--record`): every game of every model run, one manifest part per
+/// model (`part-m<id>`), game ids `m<model>-g<index>`.
+#[derive(Debug)]
+pub struct StudyRecording<'w, 'a> {
+    /// Header fields every game shares; the config hash and preset are filled per model.
+    pub ctx: RecordContext,
+    /// The run's writer.
+    pub writer: &'w mut RunWriter<'a>,
+}
+
 /// Runs (or resumes) a study on `base` (the config directory plus any global `--set`).
 pub fn run_study(
     def: &StudyDef,
     base: &ConfigSources,
     opts: &RunOptions,
+) -> Result<StudyReport, StudyError> {
+    run_study_recorded(def, base, opts, None)
+}
+
+/// [`run_study`], recording every game it plays into `rec` when given. A resumed study records
+/// only the models it runs now. Results are identical with or without recording.
+pub fn run_study_recorded(
+    def: &StudyDef,
+    base: &ConfigSources,
+    opts: &RunOptions,
+    mut rec: Option<&mut StudyRecording<'_, '_>>,
 ) -> Result<StudyReport, StudyError> {
     let watch = Stopwatch::start();
     let study = Study::prepare(def, base, opts)?;
@@ -539,7 +623,7 @@ pub fn run_study(
         if opts.stop_after.is_some_and(|n| report.ran >= n) {
             break;
         }
-        let (outcome, games) = study.run_model(&pool, model)?;
+        let (outcome, games) = study.run_model(&pool, model, rec.as_deref_mut())?;
         report.games += games;
         let fields = model_row(
             def,

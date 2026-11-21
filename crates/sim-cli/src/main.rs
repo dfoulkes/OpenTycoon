@@ -12,6 +12,12 @@
 //!   over budget.
 //! - `sim-cli study <dir>`: the balance study (R64, R65): sampled models × rotated games →
 //!   `models.csv`, `summary.json`, overlays of the best balanced models (docs/study.md).
+//! - `sim-cli record <dir> --dest <s3|dir>`: play and record N games (docs/replay.md);
+//!   `batch` and `study` take `--record <s3|dir>` too.
+//! - `sim-cli replay --verify <manifest|segment>`: re-simulate recorded games and compare
+//!   every midnight; exit 1 on a mismatch, 2 if they were recorded under other rules.
+//! - `sim-cli extract <manifest|segment> --out <file>`: the stub feature extractor.
+//! - `sim-cli rules-fingerprint`: this build's rules fingerprint.
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -20,7 +26,9 @@ use std::process::ExitCode;
 
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
-use sim_cli::batch::{BatchSpec, Timing, run_batch, summarise, write_csv};
+use sim_cli::batch::{
+    BatchRecording, BatchSpec, Timing, run_batch, run_batch_recorded, summarise, write_csv,
+};
 use sim_cli::bench::{BenchSpec, bench};
 use sim_cli::brains::BrainKind;
 use sim_cli::budget::{
@@ -28,9 +36,19 @@ use sim_cli::budget::{
 };
 use sim_cli::game::GameSpec;
 use sim_cli::overrides::{self, LoadError, Override};
-use sim_cli::study::{RunOptions, StudyDef, run_study};
+use sim_cli::replay::fingerprint::{GIT_COMMIT, rules_fingerprint};
+use sim_cli::replay::manifest::{RulesWeight, Weights};
+use sim_cli::replay::record::RecordContext;
+use sim_cli::replay::snapshot::snapshot;
+use sim_cli::replay::store::{LocalStore, ObjectStore};
+use sim_cli::replay::verify::{VerifyError, verify};
+use sim_cli::replay::writer::{RunWriter, WriteStats, WriterOptions};
+use sim_cli::replay::{self, extract, load};
+use sim_cli::study::{RunOptions, StudyDef, StudyRecording, run_study, run_study_recorded};
+use sim_cli::timing::Stopwatch;
 use sim_core::clock::ClockRules;
 use sim_core::config::ConfigFile;
+use sim_core::hash::stable_hash;
 use sim_core::{Config, ConfigSources, World};
 
 #[derive(Parser)]
@@ -111,6 +129,99 @@ enum Command {
     /// Balance study (R64, R65): sample economic models, play each over many games with the
     /// seats rotated, and rank the balanced ones. Resumes an interrupted study in `--out`.
     Study(StudyArgs),
+    /// Play N games of a preset and record every one (docs/replay.md).
+    Record(RecordCmdArgs),
+    /// Re-simulate recorded games and compare every midnight with the recording.
+    Replay(ReplayArgs),
+    /// Stub feature extractor: one Parquet row per recorded command, with lineage and weights.
+    Extract(ExtractArgs),
+    /// Print this build's rules fingerprint: the final state hash of the reference game.
+    RulesFingerprint,
+}
+
+/// Recording options shared by batch, study and record.
+#[derive(Args, Debug, Clone)]
+struct RecordOpts {
+    /// Run id (default: derived from the run's inputs, so a rerun overwrites itself).
+    #[arg(long)]
+    run_id: Option<String>,
+    /// Training weight of a game with a human seat (AI-only games weigh 1).
+    #[arg(long, default_value_t = 5.0)]
+    human_weight: f64,
+    /// Target replay segment size in MiB.
+    #[arg(long, default_value_t = 8)]
+    segment_mib: usize,
+}
+
+#[derive(Args, Debug)]
+struct RecordCmdArgs {
+    #[command(flatten)]
+    config: ConfigArgs,
+    /// Where to record: `s3` (from `OPENTYCOON_S3_*`) or a local directory.
+    #[arg(long)]
+    dest: String,
+    /// Games to play; seeds are `seed..seed+games`.
+    #[arg(long, default_value_t = 100)]
+    games: u64,
+    /// First seed.
+    #[arg(long, default_value_t = 0)]
+    seed: u64,
+    /// Game length preset from game.yaml.
+    #[arg(long, default_value = "v1")]
+    preset: String,
+    /// Brain for the seats the AI opponents do not play: idle or scripted.
+    #[arg(long, default_value = "idle", value_parser = parse_brain)]
+    brain: BrainKind,
+    /// Player seats.
+    #[arg(long, default_value_t = 2)]
+    players: u8,
+    /// Worker threads (default: every core).
+    #[arg(long)]
+    threads: Option<usize>,
+    #[command(flatten)]
+    record: RecordOpts,
+}
+
+#[derive(Args, Debug)]
+struct ReplayArgs {
+    /// A manifest (`*.parquet`) or replay segment (`*.otr`) to verify: a local path inside a
+    /// store directory, or an object key with `--store`.
+    #[arg(long)]
+    verify: String,
+    /// The store to read from: `s3` or a local directory (default: found from the path).
+    #[arg(long)]
+    store: Option<String>,
+    /// Verify only this game.
+    #[arg(long)]
+    game: Option<String>,
+    /// Worker threads (default: every core).
+    #[arg(long)]
+    threads: Option<usize>,
+}
+
+#[derive(Args, Debug)]
+struct ExtractArgs {
+    /// A manifest (`*.parquet`) or replay segment (`*.otr`): a local path inside a store
+    /// directory, or an object key with `--store`.
+    source: String,
+    /// The store to read from: `s3` or a local directory (default: found from the path).
+    #[arg(long)]
+    store: Option<String>,
+    /// Output Parquet file.
+    #[arg(long)]
+    out: PathBuf,
+    /// Older rules fingerprints, newest first, for the rules weight.
+    #[arg(long, value_delimiter = ',')]
+    rules_history: Vec<String>,
+    /// Rules weight multiplier per generation of age.
+    #[arg(long, default_value_t = 0.5)]
+    rules_decay: f64,
+    /// Lowest rules weight.
+    #[arg(long, default_value_t = 0.0)]
+    rules_floor: f64,
+    /// Weight of a human game read from a bare segment (manifests carry their own).
+    #[arg(long, default_value_t = 5.0)]
+    human_weight: f64,
 }
 
 #[derive(Args, Debug)]
@@ -163,6 +274,11 @@ struct StudyArgs {
     /// No progress lines on stderr.
     #[arg(long)]
     quiet: bool,
+    /// Record every game: `s3` (from `OPENTYCOON_S3_*`) or a local directory.
+    #[arg(long)]
+    record: Option<String>,
+    #[command(flatten)]
+    record_opts: RecordOpts,
 }
 
 #[derive(Args, Debug)]
@@ -196,6 +312,11 @@ struct BatchArgs {
     /// Also write the summary as JSON to this file.
     #[arg(long)]
     summary_json: Option<PathBuf>,
+    /// Record every game: `s3` (from `OPENTYCOON_S3_*`) or a local directory.
+    #[arg(long)]
+    record: Option<String>,
+    #[command(flatten)]
+    record_opts: RecordOpts,
 }
 
 #[derive(Args, Debug)]
@@ -347,7 +468,285 @@ fn run(cli: Cli) -> Result<ExitCode> {
         Command::Bench(args) => bench_cmd(args),
         Command::PerfBudget(args) => perf_budget_cmd(args),
         Command::Study(args) => study_cmd(args),
+        Command::Record(args) => record_cmd(args),
+        Command::Replay(args) => replay_cmd(&args),
+        Command::Extract(args) => extract_cmd(&args),
+        Command::RulesFingerprint => {
+            println!("{}", rules_fingerprint().map_err(anyhow::Error::msg)?);
+            Ok(ExitCode::SUCCESS)
+        }
     }
+}
+
+/// An open recording: the store, the writer's options and the header context.
+struct Recording {
+    store: Box<dyn ObjectStore>,
+    run_id: String,
+    opts: WriterOptions,
+    ctx: RecordContext,
+}
+
+impl Recording {
+    fn open(dest: &str, opts: &RecordOpts, default_run_id: String) -> Result<Self> {
+        let store = replay::store::open(dest)?;
+        let run_id = opts.run_id.clone().unwrap_or(default_run_id);
+        replay::store::check_key(&run_id)
+            .with_context(|| format!("run id {run_id:?} must be a plain name"))?;
+        let fingerprint = rules_fingerprint().map_err(anyhow::Error::msg)?;
+        Ok(Recording {
+            store,
+            opts: WriterOptions {
+                segment_bytes: opts.segment_mib.max(1) << 20,
+                weights: Weights {
+                    human_multiplier: opts.human_weight,
+                },
+            },
+            ctx: RecordContext {
+                run_id: run_id.clone(),
+                rules_fingerprint: fingerprint.to_owned(),
+                git_commit: GIT_COMMIT.to_owned(),
+                ..RecordContext::default()
+            },
+            run_id,
+        })
+    }
+
+    fn report(&self, stats: &WriteStats, wall: std::time::Duration) -> String {
+        let per = stats.replay_bytes.checked_div(stats.games).unwrap_or(0);
+        format!(
+            "recorded {} games into {}, run {}: {} replay bytes ({per} bytes/game), {} segments, \
+             {} manifest parts, configs {} written / {} already stored, {} objects, {} bytes; \
+             rules fingerprint {}; {:.2}s",
+            stats.games,
+            self.store.describe(),
+            self.run_id,
+            stats.replay_bytes,
+            stats.segments,
+            stats.manifest_parts,
+            stats.configs_written,
+            stats.configs_present,
+            stats.objects,
+            stats.bytes,
+            self.ctx.rules_fingerprint,
+            wall.as_secs_f64()
+        )
+    }
+}
+
+/// A run id derived from what decides the run's games, so a rerun overwrites itself.
+fn default_run_id(kind: &str, inputs: &impl std::hash::Hash) -> String {
+    format!("{kind}-{:012x}", stable_hash(inputs) & 0xffff_ffff_ffff)
+}
+
+fn record_cmd(args: RecordCmdArgs) -> Result<ExitCode> {
+    let RecordCmdArgs {
+        config,
+        dest,
+        games,
+        seed,
+        preset,
+        brain,
+        players,
+        threads,
+        record,
+    } = args;
+    record_batch(
+        &config,
+        &BatchSpec {
+            games,
+            base_seed: seed,
+            threads,
+            game: GameSpec {
+                players,
+                brain,
+                ..GameSpec::default()
+            },
+        },
+        &preset,
+        &dest,
+        &record,
+        "record",
+    )
+    .map(|(_, code)| code)
+}
+
+/// Plays and records a batch; returns its report (unless it failed) and the exit code.
+fn record_batch(
+    config: &ConfigArgs,
+    spec: &BatchSpec,
+    preset: &str,
+    dest: &str,
+    opts: &RecordOpts,
+    source: &str,
+) -> Result<(Option<sim_cli::batch::BatchReport>, ExitCode)> {
+    let Some(sources) = read_sources(&config.dir) else {
+        return Ok((None, ExitCode::FAILURE));
+    };
+    let files = match overrides::resolve(&sources, Some(preset), &config.overrides) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return Ok((None, ExitCode::FAILURE));
+        }
+    };
+    let loaded = match Config::load(&files) {
+        Ok(c) => c,
+        Err(errors) => {
+            eprintln!("error: config with overrides is invalid:");
+            eprint!("{errors}");
+            return Ok((None, ExitCode::FAILURE));
+        }
+    };
+    let snap = snapshot(&files);
+    let run_id = default_run_id(
+        source,
+        &(
+            &snap.hash,
+            preset,
+            spec.base_seed,
+            spec.games,
+            spec.game.brain.name(),
+            spec.game.players,
+        ),
+    );
+    let mut rec = Recording::open(dest, opts, run_id)?;
+    let watch = Stopwatch::start();
+    let mut writer = RunWriter::new(rec.store.as_ref(), &rec.run_id, rec.opts);
+    rec.ctx.config_hash.clone_from(&snap.hash);
+    preset.clone_into(&mut rec.ctx.preset);
+    let mut recording = BatchRecording {
+        ctx: rec.ctx.clone(),
+        snapshot: snap,
+        writer: &mut writer,
+        chunk: 4096,
+        source: source.to_owned(),
+    };
+    let report = run_batch_recorded(&loaded, spec, &mut recording)?;
+    let stats = writer.stats();
+    eprintln!("{}", rec.report(&stats, watch.elapsed()));
+    Ok((Some(report), ExitCode::SUCCESS))
+}
+
+/// The store and key a `--verify`/`extract` argument names.
+fn locate(path: &str, store: Option<&str>) -> Result<(Box<dyn ObjectStore>, String)> {
+    if let Some(dest) = store {
+        return Ok((replay::store::open(dest)?, path.to_owned()));
+    }
+    let Some((root, key)) = load::split_local(Path::new(path)) else {
+        anyhow::bail!(
+            "{path} is not inside a recording directory (no replays/ or manifests/ in the \
+             path); pass --store <s3|dir> and an object key"
+        );
+    };
+    Ok((Box::new(LocalStore::new(root)), key))
+}
+
+fn replay_cmd(args: &ReplayArgs) -> Result<ExitCode> {
+    let (store, key) = locate(&args.verify, args.store.as_deref())?;
+    let mut games = load::games(store.as_ref(), &key).map_err(anyhow::Error::msg)?;
+    if let Some(id) = &args.game {
+        games.retain(|g| &g.replay.header.game_id == id);
+        if games.is_empty() {
+            anyhow::bail!("no game {id} in {key}");
+        }
+    }
+    let build = rules_fingerprint().map_err(anyhow::Error::msg)?;
+    // Refuse before simulating anything if any game was recorded under other rules.
+    let foreign: Vec<_> = games
+        .iter()
+        .filter(|g| g.replay.header.rules_fingerprint != build)
+        .collect();
+    if let Some(first) = foreign.first() {
+        let h = &first.replay.header;
+        eprintln!(
+            "error: {} of {} games were recorded under other rules; {}",
+            foreign.len(),
+            games.len(),
+            VerifyError::RulesMismatch {
+                game: h.game_id.clone(),
+                replay: h.rules_fingerprint.clone(),
+                build: build.to_owned(),
+                commit: h.git_commit.clone(),
+            }
+        );
+        return Ok(ExitCode::from(2));
+    }
+    let mut configs = std::collections::BTreeMap::new();
+    for g in &games {
+        let hash = &g.replay.header.config_hash;
+        if !configs.contains_key(hash) {
+            let c = load::config(store.as_ref(), hash).map_err(anyhow::Error::msg)?;
+            configs.insert(hash.clone(), c);
+        }
+    }
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(args.threads.unwrap_or(0))
+        .build()?;
+    let watch = Stopwatch::start();
+    let results: Vec<Result<replay::verify::Verified, VerifyError>> = pool.install(|| {
+        use rayon::prelude::*;
+        games
+            .par_iter()
+            .map(|g| verify(&g.replay, &configs[&g.replay.header.config_hash], build))
+            .collect()
+    });
+    let mut failed = 0;
+    let (mut midnights, mut commands) = (0, 0);
+    for r in &results {
+        match r {
+            Ok(v) => {
+                midnights += v.checkpoints;
+                commands += v.commands;
+            }
+            Err(e) => {
+                failed += 1;
+                eprintln!("error: {e}");
+            }
+        }
+    }
+    if failed > 0 {
+        eprintln!("{failed} of {} games failed verification", results.len());
+        return Ok(ExitCode::FAILURE);
+    }
+    println!(
+        "{} games verified: {midnights} midnights and {commands} commands match, rules \
+         fingerprint {build}; {:.2}s",
+        results.len(),
+        watch.elapsed().as_secs_f64()
+    );
+    Ok(ExitCode::SUCCESS)
+}
+
+fn extract_cmd(args: &ExtractArgs) -> Result<ExitCode> {
+    let (store, key) = locate(&args.source, args.store.as_deref())?;
+    let games = load::games(store.as_ref(), &key).map_err(anyhow::Error::msg)?;
+    let rules = RulesWeight {
+        current: rules_fingerprint().map_err(anyhow::Error::msg)?.to_owned(),
+        history: args.rules_history.clone(),
+        decay: args.rules_decay,
+        floor: args.rules_floor,
+    };
+    let sources: Vec<extract::Source<'_>> = games
+        .iter()
+        .map(|g| extract::Source {
+            replay: &g.replay,
+            object_key: &g.object_key,
+            weight: g.row.as_ref().map(|r| r.weight),
+        })
+        .collect();
+    let weights = Weights {
+        human_multiplier: args.human_weight,
+    };
+    let (bytes, rows) = extract::extract(&sources, &rules, &weights)?;
+    std::fs::write(&args.out, &bytes).with_context(|| format!("writing {}", args.out.display()))?;
+    println!(
+        "extract {} v{}: {rows} rows from {} games -> {}",
+        extract::EXTRACTOR_ID,
+        extract::EXTRACTOR_VERSION,
+        games.len(),
+        args.out.display()
+    );
+    Ok(ExitCode::SUCCESS)
 }
 
 fn study_cmd(args: StudyArgs) -> Result<ExitCode> {
@@ -396,7 +795,25 @@ fn study_cmd(args: StudyArgs) -> Result<ExitCode> {
         stop_after: args.stop_after,
         progress: !args.quiet,
     };
-    let report = match run_study(&def, &base, &opts) {
+    let watch = Stopwatch::start();
+    let result = match &args.record {
+        None => run_study(&def, &base, &opts),
+        Some(dest) => {
+            let base_hash = snapshot(&base).hash;
+            let def_json = serde_json::to_string(&def)?;
+            let run_id = default_run_id("study", &(def_json, base_hash));
+            let rec = Recording::open(dest, &args.record_opts, run_id)?;
+            let mut writer = RunWriter::new(rec.store.as_ref(), &rec.run_id, rec.opts);
+            let mut recording = StudyRecording {
+                ctx: rec.ctx.clone(),
+                writer: &mut writer,
+            };
+            let r = run_study_recorded(&def, &base, &opts, Some(&mut recording));
+            eprintln!("{}", rec.report(&writer.stats(), watch.elapsed()));
+            r
+        }
+    };
+    let report = match result {
         Ok(r) => r,
         Err(e) => {
             eprintln!("error: {e}");
@@ -440,10 +857,9 @@ fn batch_cmd(args: BatchArgs) -> Result<ExitCode> {
         out,
         no_wall_time,
         summary_json,
+        record,
+        record_opts,
     } = args;
-    let Some(loaded) = load_with(&config, Some(&preset)) else {
-        return Ok(ExitCode::FAILURE);
-    };
     let spec = BatchSpec {
         games,
         base_seed: seed,
@@ -454,7 +870,17 @@ fn batch_cmd(args: BatchArgs) -> Result<ExitCode> {
             ..GameSpec::default()
         },
     };
-    let report = run_batch(&loaded, &spec)?;
+    let report = if let Some(dest) = &record {
+        match record_batch(&config, &spec, &preset, dest, &record_opts, "batch")? {
+            (Some(report), _) => report,
+            (None, code) => return Ok(code),
+        }
+    } else {
+        let Some(loaded) = load_with(&config, Some(&preset)) else {
+            return Ok(ExitCode::FAILURE);
+        };
+        run_batch(&loaded, &spec)?
+    };
     let timing = if no_wall_time {
         Timing::Omit
     } else {

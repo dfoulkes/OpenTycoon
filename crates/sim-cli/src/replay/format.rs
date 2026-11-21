@@ -251,18 +251,130 @@ pub enum EncodeError {
     TooLarge(usize),
 }
 
+/// The payload as postcard sees it: the command log's ticks are deltas from the previous
+/// command (the first from 0), so a log of many commands per day stays a byte or two per tick.
+#[derive(Serialize, Deserialize)]
+struct Wire {
+    header: Header,
+    commands: Vec<WireCommand>,
+    checkpoints: Vec<Checkpoint>,
+    outcome: Outcome,
+}
+
+#[derive(Serialize, Deserialize)]
+struct WireCommand {
+    dtick: u64,
+    seat: u8,
+    origin: Origin,
+    accepted: bool,
+    command: Command,
+}
+
 /// Encodes a replay as one envelope.
 pub fn encode(replay: &Replay) -> Result<Vec<u8>, EncodeError> {
-    let _ = replay;
-    Err(EncodeError::Encode("not implemented".into()))
+    let mut last = 0u64;
+    let commands = replay
+        .commands
+        .iter()
+        .map(|c| {
+            // A log is in tick order; a decreasing tick would not round-trip, so refuse it.
+            let dtick = c.tick.checked_sub(last).ok_or_else(|| {
+                EncodeError::Encode(format!("command ticks go backwards at tick {}", c.tick))
+            })?;
+            last = c.tick;
+            Ok(WireCommand {
+                dtick,
+                seat: c.seat,
+                origin: c.origin,
+                accepted: c.accepted,
+                command: c.command.clone(),
+            })
+        })
+        .collect::<Result<Vec<_>, EncodeError>>()?;
+    let wire = Wire {
+        header: replay.header.clone(),
+        commands,
+        checkpoints: replay.checkpoints.clone(),
+        outcome: replay.outcome.clone(),
+    };
+    let raw = postcard::to_stdvec(&wire).map_err(|e| EncodeError::Encode(e.to_string()))?;
+    let payload =
+        zstd::bulk::compress(&raw, ZSTD_LEVEL).map_err(|e| EncodeError::Encode(e.to_string()))?;
+    let len = u32::try_from(payload.len()).map_err(|_| EncodeError::TooLarge(payload.len()))?;
+    let mut out = Vec::with_capacity(ENVELOPE_LEN + payload.len());
+    out.extend_from_slice(&MAGIC);
+    out.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
+    out.extend_from_slice(&FLAG_ZSTD.to_le_bytes());
+    out.extend_from_slice(&len.to_le_bytes());
+    out.extend_from_slice(&crc32fast::hash(&payload).to_le_bytes());
+    out.extend_from_slice(&payload);
+    Ok(out)
 }
+
+fn le_u16(b: &[u8], at: usize) -> u16 {
+    u16::from_le_bytes([b[at], b[at + 1]])
+}
+
+fn le_u32(b: &[u8], at: usize) -> u32 {
+    u32::from_le_bytes([b[at], b[at + 1], b[at + 2], b[at + 3]])
+}
+
+/// Upper bound on a decompressed payload (a sanity check against corrupt input).
+const MAX_RAW: usize = 1 << 30;
 
 /// Decodes the envelope at the start of `bytes`; returns the replay and the bytes it used.
 pub fn decode_one(bytes: &[u8]) -> Result<(Replay, usize), DecodeError> {
-    Err(DecodeError::Truncated {
-        need: ENVELOPE_LEN,
+    let truncated = |need: usize| DecodeError::Truncated {
+        need,
         have: bytes.len(),
-    })
+    };
+    if bytes.len() < ENVELOPE_LEN {
+        return Err(truncated(ENVELOPE_LEN));
+    }
+    if bytes[0..4] != MAGIC {
+        return Err(DecodeError::Magic);
+    }
+    let version = le_u16(bytes, 4);
+    if version != FORMAT_VERSION {
+        return Err(DecodeError::Version { found: version });
+    }
+    let flags = le_u16(bytes, 6);
+    if flags != FLAG_ZSTD {
+        return Err(DecodeError::Flags(flags));
+    }
+    let len = le_u32(bytes, 8) as usize;
+    let end = ENVELOPE_LEN + len;
+    if bytes.len() < end {
+        return Err(truncated(end));
+    }
+    let payload = &bytes[ENVELOPE_LEN..end];
+    if crc32fast::hash(payload) != le_u32(bytes, 12) {
+        return Err(DecodeError::Checksum);
+    }
+    let raw = zstd::bulk::decompress(payload, MAX_RAW)
+        .map_err(|e| DecodeError::Payload(e.to_string()))?;
+    let wire: Wire = postcard::from_bytes(&raw).map_err(|e| DecodeError::Payload(e.to_string()))?;
+    let mut tick = 0u64;
+    let mut commands = Vec::with_capacity(wire.commands.len());
+    for c in wire.commands {
+        tick = tick
+            .checked_add(c.dtick)
+            .ok_or_else(|| DecodeError::Payload("command tick overflows".into()))?;
+        commands.push(CommandRecord {
+            tick,
+            seat: c.seat,
+            origin: c.origin,
+            accepted: c.accepted,
+            command: c.command,
+        });
+    }
+    let replay = Replay {
+        header: wire.header,
+        commands,
+        checkpoints: wire.checkpoints,
+        outcome: wire.outcome,
+    };
+    Ok((replay, end))
 }
 
 /// Decodes every envelope in a segment, with each one's byte offset and length.

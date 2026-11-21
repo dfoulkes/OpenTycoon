@@ -122,7 +122,14 @@ fn segments_of(w: &mut HarnessWorld, kib: usize) {
     w.replay.segment_bytes = Some(kib * 1024);
 }
 
-fn record_batch(w: &mut HarnessWorld, games: u64, seed: u64, brain: &str, extra: &[&str]) {
+fn record_batch(
+    w: &mut HarnessWorld,
+    games: u64,
+    seed: u64,
+    brain: &str,
+    players: u8,
+    extra: &[&str],
+) {
     let files = effective(w, extra);
     let config = Config::load(&files).unwrap();
     let snap = snapshot::snapshot(&files);
@@ -138,6 +145,7 @@ fn record_batch(w: &mut HarnessWorld, games: u64, seed: u64, brain: &str, extra:
         base_seed: seed,
         threads: None,
         game: GameSpec {
+            players,
             brain: brain.parse().unwrap(),
             ..GameSpec::default()
         },
@@ -156,21 +164,28 @@ fn record_batch(w: &mut HarnessWorld, games: u64, seed: u64, brain: &str, extra:
 
 #[when(expr = "I record a batch of {int} games from seed {int} with the {string} brain")]
 fn record(w: &mut HarnessWorld, games: u64, seed: u64, brain: String) {
-    record_batch(w, games, seed, &brain, &[]);
+    record_batch(w, games, seed, &brain, 2, &[]);
+}
+
+#[when(
+    expr = "I record a batch of {int} games from seed {int} with the {string} brain in {int} seats"
+)]
+fn record_seats(w: &mut HarnessWorld, games: u64, seed: u64, brain: String, players: u8) {
+    record_batch(w, games, seed, &brain, players, &[]);
 }
 
 #[when(
     expr = "I record a batch of {int} games from seed {int} with the {string} brain into the same store"
 )]
 fn record_same(w: &mut HarnessWorld, games: u64, seed: u64, brain: String) {
-    record_batch(w, games, seed, &brain, &[]);
+    record_batch(w, games, seed, &brain, 2, &[]);
 }
 
 #[when(
     expr = "I record a batch of {int} games from seed {int} with the {string} brain and {string} into the same store"
 )]
 fn record_same_with(w: &mut HarnessWorld, games: u64, seed: u64, brain: String, ov: String) {
-    record_batch(w, games, seed, &brain, &[ov.as_str()]);
+    record_batch(w, games, seed, &brain, 2, &[ov.as_str()]);
 }
 
 #[then(expr = "the manifest lists {int} games")]
@@ -228,7 +243,7 @@ fn tamper_command(w: &mut HarnessWorld, pounds: i64) {
         .find(|c| c.origin == Origin::External)
         .expect("no external command");
     match &mut rec.command {
-        Command::OpenLandAuction { bid, .. } => *bid = *bid + Money::from_pounds(pounds),
+        Command::OpenLandAuction { bid, .. } => *bid += Money::from_pounds(pounds),
         other => panic!("first external command is {other:?}"),
     }
 }
@@ -471,4 +486,24 @@ fn rewrite_fingerprint(w: &mut HarnessWorld, run: String, dir: String, fp: Strin
     writer
         .write_part("part-00000", &games, "record", None)
         .unwrap();
+}
+
+#[when(
+    expr = "I run a batch of {int} games from seed {int} with the {string} brain in {int} seats"
+)]
+fn plain_batch_seats(w: &mut HarnessWorld, games: u64, seed: u64, brain: String, players: u8) {
+    let config = w.config.load_ok();
+    let spec = BatchSpec {
+        games,
+        base_seed: seed,
+        threads: None,
+        game: GameSpec {
+            players,
+            brain: brain.parse().unwrap(),
+            ..GameSpec::default()
+        },
+    };
+    w.batch
+        .reports
+        .push(sim_cli::batch::run_batch(&config, &spec).unwrap());
 }
