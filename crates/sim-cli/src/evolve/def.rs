@@ -350,7 +350,38 @@ impl EvolveDef {
     /// Every gene edits one personality's tunables, `ai.<id>.<key>`, and never the Grocer's
     /// opportunism (R66).
     fn check_gene_keys(&self) -> Result<(), EvolveError> {
-        Ok(()) // red: not yet
+        for (i, g) in self.genes.iter().enumerate() {
+            let mut owner: Option<&str> = None;
+            for k in g.all_keys() {
+                if is_grocer_opportunism(k) {
+                    return Err(EvolveError::def(
+                        format!("genes[{i}].key"),
+                        format!(
+                            "{k}: the Grocer stays pure retail (R66), so its opportunism is off \
+                             and cannot be a gene"
+                        ),
+                    ));
+                }
+                let id = gene_personality(k)
+                    .filter(|id| !NOT_A_PERSONALITY.contains(id))
+                    .ok_or_else(|| {
+                        EvolveError::def(
+                            format!("genes[{i}].key"),
+                            format!(
+                                "{k:?}: a gene is one personality's setting, `ai.<personality>.<key>`"
+                            ),
+                        )
+                    })?;
+                if owner.is_some_and(|o| o != id) {
+                    return Err(EvolveError::def(
+                        format!("genes[{i}].keys"),
+                        "every key of a gene belongs to the same personality",
+                    ));
+                }
+                owner = Some(id);
+            }
+        }
+        Ok(())
     }
 }
 

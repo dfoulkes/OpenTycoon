@@ -78,8 +78,17 @@ impl Origin {
 /// `v` made canonical for gene `p`: a category index in `0..values`, or a number clamped to
 /// `[min, max]` and rounded to the gene's places (whole for an integer gene).
 pub fn canon(p: &Parameter, v: f64) -> f64 {
-    let _ = p;
-    v // red: not yet
+    if p.is_categorical() {
+        let top = p.values.len().saturating_sub(1) as f64;
+        return v.floor().clamp(0.0, top);
+    }
+    let (lo, hi) = p.range();
+    let r = match p.kind {
+        Kind::Integer => v.round(),
+        Kind::Decimal => round_to(v, p.places()),
+    };
+    // Rounding can step just outside a bound that is not on the grid; clamp after it.
+    r.clamp(lo, hi)
 }
 
 /// A genome as text: `name=value` per gene, `;`-joined (the `genome` column).
@@ -174,8 +183,24 @@ pub fn first_population(
     seed: u64,
     personality: &str,
 ) -> Vec<(Genome, Origin)> {
-    let _ = (genes, base, population, seed, personality);
-    Vec::new() // red: not yet
+    let mut out = vec![(base_genome(genes, base), Origin::Base)];
+    let n = usize::try_from(population.saturating_sub(1)).unwrap_or(0);
+    let units = unit_samples(genes.len(), n, stream_seed(seed, "first", personality, 0));
+    for u in units {
+        let values = genes
+            .iter()
+            .zip(&u)
+            .map(|(p, x)| {
+                if p.is_categorical() {
+                    canon(p, *x * p.values.len() as f64)
+                } else {
+                    canon(p, value_at(p, *x))
+                }
+            })
+            .collect();
+        out.push((Genome(values), Origin::Sample));
+    }
+    out
 }
 
 /// One standard normal draw (Box–Muller, through `libm`): `√(−2 ln(1 − u₁)) · cos(2π u₂)`.
@@ -192,33 +217,96 @@ pub fn normal(rng: &mut SimRng) -> f64 {
 ///
 /// then made canonical, so the result is always within `[min, max]`.
 pub fn mutate_number(p: &Parameter, v: f64, z: f64, sigma: f64) -> f64 {
-    let _ = (p, z, sigma);
-    v // red: not yet
+    let (lo, hi) = p.range();
+    let raw = match p.distribution {
+        Distribution::Uniform => v + z * sigma * (hi - lo),
+        Distribution::LogUniform => {
+            let span = libm::log(hi) - libm::log(lo);
+            libm::exp(libm::log(v.max(lo)) + z * sigma * span)
+        }
+    };
+    let mut out = canon(p, raw);
+    if p.kind == Kind::Integer && out.total_cmp(&v) == Ordering::Equal && z != 0.0 {
+        out = canon(p, v + z.signum());
+    }
+    out
 }
 
 /// Mutates gene `j` of `g` in place, drawing from `rng`. A categorical gene takes a different
 /// value, picked uniformly; a numeric one takes a Gaussian step ([`mutate_number`]).
 fn mutate_gene(p: &Parameter, g: &mut Genome, j: usize, sigma: f64, rng: &mut SimRng) {
-    let _ = (p, g, j, sigma, rng);
+    if p.is_categorical() {
+        let k = p.values.len() as u64;
+        if k > 1 {
+            #[allow(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "a canonical category index is a small whole number"
+            )]
+            let cur = g.0[j] as u64;
+            let mut pick = below(rng, k - 1);
+            if pick >= cur {
+                pick += 1;
+            }
+            g.0[j] = pick as f64;
+        }
+    } else {
+        g.0[j] = mutate_number(p, g.0[j], normal(rng), sigma);
+    }
 }
 
 /// Mutation as the definition asks: each gene with chance `rate`; if none came up, one gene
 /// picked uniformly. One `unit_f64` draw per gene first, so the stream never depends on values.
 pub fn mutate(genes: &[&Parameter], g: &mut Genome, def: &EvolveDef, rng: &mut SimRng) {
-    let _ = (genes, g, def, rng); // red: not yet
+    let picked: Vec<bool> = genes
+        .iter()
+        .map(|_| unit_f64(rng) < def.mutation.rate)
+        .collect();
+    let mut any = false;
+    for (j, p) in genes.iter().enumerate() {
+        if picked[j] {
+            mutate_gene(p, g, j, def.mutation.sigma, rng);
+            any = true;
+        }
+    }
+    if !any && !genes.is_empty() {
+        let j = usize::try_from(below(rng, genes.len() as u64)).unwrap_or(0);
+        mutate_gene(genes[j], g, j, def.mutation.sigma, rng);
+    }
 }
 
 /// Uniform crossover: each gene from `a` or `b` with even odds.
 pub fn crossover(a: &Genome, b: &Genome, rng: &mut SimRng) -> Genome {
-    let _ = (b, rng);
-    a.clone() // red: not yet
+    Genome(
+        a.0.iter()
+            .zip(&b.0)
+            .map(|(x, y)| if unit_f64(rng) < 0.5 { *x } else { *y })
+            .collect(),
+    )
 }
 
 /// Picks a parent from `n` candidates ranked best first (position 0 is the best): the best of
 /// `tournament_size` uniform draws, or a linear-rank draw. Returns a position in the ranking.
 pub fn select(n: usize, def: &EvolveDef, rng: &mut SimRng) -> usize {
-    let _ = (n, def, rng);
-    0 // red: not yet
+    let n64 = n.max(1) as u64;
+    match def.selection.method {
+        SelectionMethod::Tournament => (0..def.selection.tournament_size.max(1))
+            .map(|_| usize::try_from(below(rng, n64)).unwrap_or(0))
+            .min()
+            .unwrap_or(0),
+        SelectionMethod::Rank => {
+            // Weights n, n−1, …, 1: total n(n+1)/2.
+            let mut r = below(rng, n64 * (n64 + 1) / 2);
+            for i in 0..n64 {
+                let w = n64 - i;
+                if r < w {
+                    return usize::try_from(i).unwrap_or(0);
+                }
+                r -= w;
+            }
+            n.saturating_sub(1)
+        }
+    }
 }
 
 /// The next generation of one personality from the previous one's **valid** candidates ranked
@@ -235,8 +323,36 @@ pub fn breed(
     personality: &str,
     generation: u32,
 ) -> Vec<(Genome, Origin)> {
-    let _ = (genes, ranked, fallback, def, personality, generation);
-    Vec::new() // red: not yet
+    let mut rng = seeded(stream_seed(def.seed, "breed", personality, generation));
+    let pop = usize::try_from(def.population).unwrap_or(0);
+    let elites = usize::try_from(def.elitism).unwrap_or(0).min(ranked.len());
+    let mut out: Vec<(Genome, Origin)> = ranked[..elites]
+        .iter()
+        .map(|(i, g)| (g.clone(), Origin::Elite(*i)))
+        .collect();
+    let fallback_pool = [(0, fallback.clone())];
+    let pool: &[(u32, Genome)] = if ranked.is_empty() {
+        &fallback_pool
+    } else {
+        ranked
+    };
+    while out.len() < pop {
+        let a = &pool[select(pool.len(), def, &mut rng)];
+        let mut parents = vec![a.0];
+        let mut child = if unit_f64(&mut rng) < def.crossover.rate {
+            let b = &pool[select(pool.len(), def, &mut rng)];
+            parents.push(b.0);
+            crossover(&a.1, &b.1, &mut rng)
+        } else {
+            a.1.clone()
+        };
+        mutate(genes, &mut child, def, &mut rng);
+        if ranked.is_empty() {
+            parents.clear();
+        }
+        out.push((child, Origin::Child(parents)));
+    }
+    out
 }
 
 /// Total order on genome values for tests and dedup: by bits.

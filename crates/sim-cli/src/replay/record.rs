@@ -33,6 +33,20 @@ pub struct RecordContext {
 /// Version of the harness brains' behaviour; bump when `brains.rs` changes what they do.
 pub const HARNESS_BRAIN_VERSION: &str = "1";
 
+/// A core personality's brain version: the stable hash (16 hex digits) of everything in
+/// `ai.yaml` that decides how it plays, its `personalities.<id>` weights **and** its own
+/// `<id>:` block of tunables (aggression, buffers, rent rules, opportunism). Two seats with the
+/// same version play by the same settings; `sim-cli evolve` uses it as the genome id, so a
+/// replay names the variant that played.
+pub fn brain_version(config: &sim_core::Config, personality: &str) -> String {
+    let ai = serde_json::to_value(&config.ai).unwrap_or_default();
+    let settings = serde_json::json!({
+        "weights": ai["personalities"][personality],
+        "tunables": ai[personality],
+    });
+    format!("{:016x}", stable_hash(&settings.to_string()))
+}
+
 /// The seats of a world about to be played by the harness: sim-core's AI seats as
 /// `core:<personality>` (versioned by a hash of the personality's settings), every other seat
 /// as the harness `brain`.
@@ -42,21 +56,12 @@ pub fn seats_of(world: &World, brain: BrainKind) -> Vec<Seat> {
         .iter()
         .map(
             |(p, _)| match world.ai_seats().iter().find(|s| s.player == *p) {
-                Some(ai) => {
-                    let settings = world
-                        .config()
-                        .ai
-                        .personalities
-                        .get(&ai.personality)
-                        .and_then(|cfg| serde_json::to_string(cfg).ok())
-                        .unwrap_or_default();
-                    Seat {
-                        kind: SeatKind::Ai,
-                        brain: format!("{CORE_BRAIN}{}", ai.personality),
-                        brain_version: format!("{:016x}", stable_hash(&settings)),
-                        player_id: None,
-                    }
-                }
+                Some(ai) => Seat {
+                    kind: SeatKind::Ai,
+                    brain: format!("{CORE_BRAIN}{}", ai.personality),
+                    brain_version: brain_version(world.config(), &ai.personality),
+                    player_id: None,
+                },
                 None => Seat {
                     kind: SeatKind::Ai,
                     brain: format!("harness:{}", brain.name()),

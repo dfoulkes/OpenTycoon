@@ -10,7 +10,7 @@ crates/
   sim-core/    the game: deterministic, headless, no I/O        (library)
   protocol/    wire messages shared by server and client         (library, placeholder until M2)
   server/      authoritative server; single-player on 127.0.0.1  (binary `opentycoon-server`, placeholder)
-  sim-cli/     headless harness: validate config, run, batch, bench, study (binary `sim-cli`; docs/perf.md, docs/study.md)
+  sim-cli/     headless harness: validate config, run, batch, bench, study, evolve, record (binary `sim-cli`; docs/perf.md, docs/study.md, docs/evolve.md, docs/replay.md)
   client-ext/  godot-rust (gdext) extension for the Godot client  (cdylib)
 client/        Godot 4.7 project: GDScript scenes, cameras, UI, GUT tests
 config/        the nine YAML files (§10b) + generated JSON Schemas

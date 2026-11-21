@@ -38,7 +38,7 @@ pub use format::{
     SeatCheckpoint, SeatKind, SeatOutcome, Winner, decode_all, decode_one, encode,
 };
 pub use manifest::{ManifestRow, RulesWeight, Weights};
-pub use record::{RecordContext, play_recorded, seats_of};
+pub use record::{RecordContext, brain_version, play_recorded, seats_of};
 pub use store::{LocalStore, MemStore, ObjectStore, StoreError};
 pub use verify::{VerifyError, verify};
 pub use writer::{RunWriter, WriteStats, WriterOptions};
