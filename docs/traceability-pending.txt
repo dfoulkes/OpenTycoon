@@ -5,5 +5,6 @@
 R36  # partial: no online spend before the Internet (1995) proven; e-commerce types' unlock_year comes with the era content
 R64  # partial: era content (1930–2050 businesses, goods, demand by decade) proven in sim-core; sim-cli study is built (crates/sim-cli/features/study.feature, outside cargo trace's sim-core scan); the 100 × 500 full-span run is still to do
 R65  # partial: the criteria (idle below every solvent AI, bankrupt AIs left to the bankruptcy limit) and seat rotation are computed by sim-cli study (crates/sim-cli/features/study.feature); no model meets them yet
+R79  # partial: the fun metrics, bands and R65-then-fun ranking are computed by sim-cli study, rescore and evolve's lineup_fun.json (crates/sim-cli/features/fun.feature, outside cargo trace's sim-core scan); the shipped line-up is not yet chosen by fun
 R14  # partial: holding a full set is proven (land, Map::holds_full_set); the Hotel it unlocks lands with hotels
 R16  # partial: desirability shifts (with headlines) and tube lines proven (land); fit-out, class split by era, reputation, events, Sir Penny Sugar land with their modules

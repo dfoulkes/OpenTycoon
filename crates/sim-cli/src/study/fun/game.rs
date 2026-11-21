@@ -137,16 +137,38 @@ pub fn leaders(board: &[(i64, bool)]) -> Vec<u8> {
 
 /// Lead changes over the midnights, in order (see the module docs).
 pub fn lead_changes(boards: &[Board]) -> u32 {
-    // red: not yet implemented
-    let _ = boards;
-    0
+    let mut last: Option<u8> = None;
+    let mut changes = 0;
+    for b in boards {
+        if let [only] = leaders(b)[..] {
+            if last.is_some_and(|l| l != only) {
+                changes += 1;
+            }
+            last = Some(only);
+        }
+    }
+    changes
 }
 
 /// The winning margin in parts per million (see the module docs).
 pub fn winning_margin_ppm(last: &[(i64, bool)], winner: Option<u8>) -> Option<i64> {
-    // red: not yet implemented
-    let _ = (last, winner);
-    None
+    let w = usize::from(winner?);
+    let (top, _) = *last.get(w)?;
+    if top <= 0 {
+        return None;
+    }
+    let runner_up = last
+        .iter()
+        .enumerate()
+        .filter(|(s, _)| *s != w)
+        .map(|(_, (nw, bankrupt))| (!bankrupt, *nw))
+        .max()?
+        .1;
+    let m = div_round(
+        (i128::from(top) - i128::from(runner_up)) * i128::from(PPM),
+        i128::from(top),
+    );
+    Some(i64::try_from(m.clamp(0, i128::from(PPM))).unwrap_or(PPM))
 }
 
 /// One game's fun data.
@@ -186,8 +208,10 @@ pub fn fun_game(
         .and_then(|i| boards.get(i as usize))
         .map(|b| leaders(b))
         .unwrap_or_default();
-    // red: not yet implemented
-    let comeback = None;
+    let comeback = match (winner, halfway_day) {
+        (Some(w), h) if h > 0 => Some(!halfway_leaders.contains(&w)),
+        _ => None,
+    };
     FunGame {
         midnights,
         lead_changes: lead_changes(boards),

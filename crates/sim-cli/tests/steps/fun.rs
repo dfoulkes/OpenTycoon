@@ -160,11 +160,17 @@ fn winners(w: &mut HarnessWorld, s: String) {
 #[given(
     expr = "over {int} games grocer holds {string}, landlord holds {string} and speculator holds {string}"
 )]
-fn holdings(w: &mut HarnessWorld, games: u32, g: String, l: String, s: String) {
+fn holdings(
+    w: &mut HarnessWorld,
+    games: u32,
+    grocer: String,
+    landlord: String,
+    speculator: String,
+) {
     let roster = roster(w);
     let n = roster.len();
-    let parse = |s: &str| {
-        let v: Vec<u32> = s.split('/').map(|x| x.parse().unwrap()).collect();
+    let parse = |text: &str| {
+        let v: Vec<u32> = text.split('/').map(|x| x.parse().unwrap()).collect();
         Holdings {
             flats: v[0],
             shops: v[1],
@@ -176,18 +182,18 @@ fn holdings(w: &mut HarnessWorld, games: u32, g: String, l: String, s: String) {
         }
     };
     let by_name: BTreeMap<&str, Holdings> = [
-        ("grocer", parse(&g)),
-        ("landlord", parse(&l)),
-        ("speculator", parse(&s)),
+        ("grocer", parse(&grocer)),
+        ("landlord", parse(&landlord)),
+        ("speculator", parse(&speculator)),
     ]
     .into_iter()
     .collect();
     w.fun.games = (0..games)
         .map(|i| {
             let seating = seats::seating(n, i as usize % n);
-            let mut g = game(i, seating.clone(), Some(0), false);
-            g.fun.full_holdings = true;
-            g.fun.holdings = seating
+            let mut one = game(i, seating.clone(), Some(0), false);
+            one.fun.full_holdings = true;
+            one.fun.holdings = seating
                 .iter()
                 .map(|e| {
                     by_name
@@ -196,7 +202,7 @@ fn holdings(w: &mut HarnessWorld, games: u32, g: String, l: String, s: String) {
                         .unwrap_or_default()
                 })
                 .collect();
-            g
+            one
         })
         .collect();
 }
@@ -368,14 +374,14 @@ fn play_both(w: &mut HarnessWorld, seed: u64, names: String, rotation: usize, pr
     let (measured, _) = play_one(&config, &roster, &plan);
     let seats_n = u8::try_from(roster.len()).unwrap();
     let world = World::seated(config, seed, seats_n, &roster.ai_seats(&plan.seating));
-    let plain = play_from(
+    let unmeasured = play_from(
         world,
         &GameSpec {
             players: seats_n,
             ..GameSpec::default()
         },
     );
-    w.fun.hashes = Some((measured.state_hash, plain.state_hash));
+    w.fun.hashes = Some((measured.state_hash, unmeasured.state_hash));
     w.fun.game = Some(measured.fun);
 }
 
@@ -480,6 +486,11 @@ fn raw_equal(w: &mut HarnessWorld, a: String, b: String, except: String) {
 fn json(w: &mut HarnessWorld, path: &str) -> serde_json::Value {
     let text = std::fs::read_to_string(w.cli.tmp_dir().join(path)).unwrap();
     serde_json::from_str(&text).unwrap()
+}
+
+#[when(expr = "I remove {string}")]
+fn remove(w: &mut HarnessWorld, path: String) {
+    std::fs::remove_file(w.cli.tmp_dir().join(path)).unwrap();
 }
 
 #[then(expr = "{string} says the playstyle was measured on {string}")]

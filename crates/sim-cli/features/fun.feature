@@ -159,7 +159,7 @@ Feature: The fun score
     And the files "re1/summary.json" and "re4/summary.json" are identical
 
   @R79
-  Scenario: rescore measures playstyle on leases and businesses, and works from a run id alone
+  Scenario: rescore measures playstyle on leases and businesses, from a run id alone or before summary.json exists
     When I run sim-cli "study config --def crates/sim-cli/tests/fixtures/study-loose.yaml --out {tmp}/out --threads 2 --no-wall-time --record {tmp}/rec --run-id test-fun"
     Then sim-cli succeeds
     When I run sim-cli "study rescore --recordings {tmp}/rec --run {tmp}/out --out {tmp}/re"
@@ -169,6 +169,12 @@ Feature: The fun score
     When I run sim-cli "study rescore --recordings {tmp}/rec --run test-fun --out {tmp}/bare"
     Then sim-cli succeeds
     And the raw fun columns of "bare/models.csv" equal those of "re/models.csv" except "fun_distinctness"
+    # A study still in its first chunk has no summary.json yet: the definition comes from --def
+    # and the run is the store's one study run.
+    When I remove "out/summary.json"
+    And I run sim-cli "study rescore --recordings {tmp}/rec --run {tmp}/out --def crates/sim-cli/tests/fixtures/study-loose.yaml --out {tmp}/early"
+    Then sim-cli succeeds
+    And the raw fun columns of "early/models.csv" equal those of "re/models.csv" except "fun_distinctness"
 
   @R79
   Scenario: confirm re-runs chosen models on fresh seeds next to the study's numbers
