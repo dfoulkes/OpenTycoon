@@ -161,6 +161,23 @@ sim-core`) on the reference machine, update `baseline` in `perf/budgets.yaml` an
 above, and state the change in the PR. Change a `limit` only by re-deriving it from D (or by
 changing D, with the reason in its `why`); `perf-budget` rejects limits that disagree.
 
+## Wire sizes
+
+The inspector's messages (docs/inspector-protocol.md) have size budgets in the `wire` section of
+`perf/budgets.yaml`: `snapshot_bytes` (the snapshot) and `delta_bytes` (the largest delta). They
+are measured on the full board, seed 42, four AI seats, over three game days, with a delta every
+`ceil(fastest speed's ticks/s ÷ deltas_per_second)` ticks (12 shipped) and a snapshot at the start
+and the end. Sizes are deterministic, so `crates/server/tests/wire_budget.rs` runs in `cargo test`
+and the limit applies exactly; `perf-budget` reads past the section.
+
+| Metric | Limit | Baseline (2026-11-21) | Derivation |
+|---|---|---|---|
+| `snapshot_bytes` | 262,144 | 43,154 | every lot with a stocked shop (81 × ~1.2 KB) + `max_walkers` walkers (~28 KB) + the board |
+| `delta_bytes` | 65,536 | 6,491 | `max_walkers` walkers (~28 KB) + every lot changed at once (~32 KB); 640 KB/s at 10 deltas/s |
+
+Walkers dominate a busy delta (`[x, z]` pairs, ~14 bytes each). If the budget trips, lower
+`max_walkers` or send walkers less often before trimming lot fields.
+
 ## Measured numbers (2026-11-20, a 10-core arm64 laptop, release)
 
 M1 wave 3: customers and population real; AI, businesses phase and auctions mostly idle in the

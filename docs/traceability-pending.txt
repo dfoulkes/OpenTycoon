@@ -11,5 +11,5 @@ R16  # partial: desirability shifts (with headlines) and tube lines proven (land
 R84  # economy adoption: config swap lands after the inspector review
 R86  # customers: the 17:00 close, with the daily agenda
 R87  # customers: the daily agenda (not built yet)
-R88  # inspector: server and protocol scenarios land with the inspector build
+R88  # partial: server and protocol proven (crates/server/features/inspector, @R88, outside cargo trace's sim-core scan: board, lots with values and shop tables, city-run marks, players, live auctions with the room and the bid feed, walkers capped, speed, leave, watching leaves the state hash unchanged; SimLink in client/test/test_sim_link.gd); the client scenes (camera, lot card, menus) are still to prove
 R85  # map: west-side bridges, built with streets; a tagged scenario is still to write

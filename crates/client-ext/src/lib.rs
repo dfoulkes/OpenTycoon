@@ -1,7 +1,8 @@
 //! OpenTycoon Godot extension (godot-rust / gdext, R47).
 //!
-//! Loaded by `client/opentycoon.gdextension`. Will hold the network client and walker
-//! interpolation (M3/M4). For now: one `Hello` node that proves the bridge works.
+//! Loaded by `client/opentycoon.gdextension`. Holds `SimLink`, the network client (which runs
+//! the server in-process for single player, R44), and will hold walker
+//! interpolation (M3/M4). `Hello` proves the bridge works (the GUT smoke test).
 // gdext's entry point is an `unsafe impl`; this crate is the only one allowed unsafe code.
 #![allow(
     unsafe_code,
@@ -13,6 +14,10 @@
 )]
 
 use godot::prelude::*;
+
+mod sim_link;
+
+pub use sim_link::SimLink;
 
 struct OpenTycoonExtension;
 

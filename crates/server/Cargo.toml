@@ -1,6 +1,6 @@
 [package]
 name = "server"
-description = "OpenTycoon authoritative game server (placeholder until M2)."
+description = "OpenTycoon authoritative game server: the inspector's WebSocket server (R40, R44, R88)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,13 +8,34 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+[lib]
+name = "server"
+path = "src/lib.rs"
+
 [[bin]]
 name = "opentycoon-server"
 path = "src/main.rs"
 
 [dependencies]
 sim-core = { workspace = true, features = ["fs"] }
+protocol.workspace = true
 clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml_ng.workspace = true
+serde_path_to_error.workspace = true
+schemars.workspace = true
+jsonschema.workspace = true
+thiserror.workspace = true
+tungstenite.workspace = true
+
+[dev-dependencies]
+cucumber.workspace = true
+futures.workspace = true
+
+[[test]]
+name = "bdd"
+harness = false
 
 [lints]
 workspace = true
