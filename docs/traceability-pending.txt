@@ -8,3 +8,8 @@ R65  # partial: the criteria (idle below every solvent AI, bankrupt AIs left to 
 R79  # partial: the fun metrics, bands and R65-then-fun ranking are computed by sim-cli study, rescore and evolve's lineup_fun.json (crates/sim-cli/features/fun.feature, outside cargo trace's sim-core scan); the shipped line-up is not yet chosen by fun
 R14  # partial: holding a full set is proven (land, Map::holds_full_set); the Hotel it unlocks lands with hotels
 R16  # partial: desirability shifts (with headlines) and tube lines proven (land); fit-out, class split by era, reputation, events, Sir Penny Sugar land with their modules
+R84  # economy adoption: config swap lands after the inspector review
+R86  # customers: the 17:00 close, with the daily agenda
+R87  # customers: the daily agenda (not built yet)
+R88  # inspector: server and protocol scenarios land with the inspector build
+R85  # map: west-side bridges, built with streets; a tagged scenario is still to write

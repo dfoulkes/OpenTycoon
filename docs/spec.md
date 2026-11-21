@@ -557,6 +557,27 @@ OpenTycoon/
 
 **After v1:** Hotel and tourists, residential (needs its design session), elections and utilities, events, the full 9×9 map, eras past 1950, more AIs, art.
 
+## 10d. Game inspector: see the game before training it (R88)
+
+**Why:** before mass AI training or settling the economy, the game has to be watchable: load into it, move around the map, and look at the lots and their values to judge whether the mechanics are right. The inspector comes before mass AI training, and the adopted economy (R84) is provisional until it has been reviewed here.
+
+**Scope (R88): a quick prototype, an MVP to see the game.**
+
+| # | Feature | Detail |
+|---|---|---|
+| 1 | Main controls | Main menu (New Game, Settings, Quit), in-game menu (Continue, Settings, Quit to Main Menu, Quit) and their sub-menus (Settings: Graphics, Controls, Camera). New Game picks the economy (the shipped `economy.yaml` or a file) and the seed |
+| 2 | Bird's-eye camera | RTS view only: pan, zoom and rotate over the whole board, with the grid, districts, the Thames and the west-side bridges (R85). Walk mode waits for M4 |
+| 3 | Lot card | Click a lot to see its stats: district, owner, land value, lease and term left, building, flats and rent or takings, and profit per day |
+| 4 | City businesses | City-owned buildings and businesses are marked on the map and can be watched |
+| 5 | Customers | Shoppers walk the streets |
+| 6 | Bids | A live auction shows on its lot with the current bid, and a feed lists recent bids and results |
+| 7 | Time | Pause, play and speed steps |
+| 8 | Single-player only | The AI opponents play; the player watches. No player actions, no music or sound |
+
+**Architecture:** single player is the real server on `127.0.0.1` (R44). The `server` crate runs the sim and streams a snapshot then per-tick deltas over WebSocket (`protocol`); `client-ext` (godot-rust) is the network client; GDScript holds the scenes, cameras and UI.
+
+**Look (R89):** menus, panels and feel take inspiration from classic tycoon games: a front-end flow, a property card per lot, auctions as visible events. No third-party assets, names, art, text or look are used. Stand-in art is free CC0 low-poly kits, with each asset's licence recorded beside its file.
+
 ## 11. Notes and risks
 
 - **IP:** "Monopoly" is a Hasbro trademark. The 1930–1980 business table is near-verbatim from the original game's manual. Before anything public, regenerate the business stats from our own formulas and drop "Monopoly" from the name. The sets-and-hotel mechanic is generic enough. (Raised once, already.)
@@ -650,6 +671,12 @@ OpenTycoon/
 | R71 | Every economy weight (the levers the balance study varies) lives in one economy.yaml; adopting an economic model means swapping that one file |
 | R78 | AI evolution runs against the balanced economy the study picks, and a personality whose win share is near zero is scored more on net worth gained (versus idle), so losers can still improve when one personality dominates |
 | R79 | "Best" means most fun, not most efficient. A model must pass R65 (every AI wins 10–40%, AI bankruptcy under 15%, idle below every solvent AI). Passing models are then ranked by a fun score built from: upset rate 50–75% (games not won by the model's strongest AI overall); ≥2 lead changes per game (changes of net-worth leader across the 24 midnights); comeback rate 20–40% (the winner wasn't leading at the halfway midnight, 1990); median winning margin under about 25% ((winner − runner-up) / winner, in net worth); distinct playstyles per personality (what each AI owns differs clearly: holdings mix of flats / shops / land / hotels / other); no improbable winning streaks (the same AI winning consecutive seeds no more often than chance predicts). The shipped AI line-up is chosen by fun; the strongest evolved AIs become a higher difficulty tier. |
+| R84 | Adopted economy: study model 29 (land value `market_no_decay`), the most even three-way race of the confirmed top five. No model met R65, so closing the gap for the Grocer and Speculator is the AI evolution's job. Starting cash is £10,874, superseding R62's £7,000. Provisional until reviewed in the inspector (§10d) |
+| R85 | Bridges sit on the west side of their named column (London keeps left) |
+| R86 | At the 17:00 day close no shopper vanishes on screen: shoppers with an evening window (R70) stay out for night trade at 19:00, everyone else walks home |
+| R87 | Every city shopper follows a daily agenda of errands and leisure, with no work or commuting, on a universal income (R63). The agenda is built each morning from the shopper's profile and is configurable in YAML |
+| R88 | Game inspector (§10d): a quick prototype to see the game. Bird's-eye camera, a lot card with stats, city-owned businesses and walking customers, live bids and each property's profitability, and the main controls (main menu, in-game menu, sub-menus, quit). Single-player only; no music or sound |
+| R89 | The inspector's menus, panels and feel take inspiration from classic tycoon games; no third-party assets, names, art, text or look are used |
 
 ### Open
 
