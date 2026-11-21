@@ -89,6 +89,15 @@ func test_building_height_comes_from_floors() -> void:
 	assert_almost_eq(mayfair.building_height(), 2.0 * Palette.FLOOR_HEIGHT_M, 0.01)
 
 
+func test_buildings_use_the_stand_in_kit_models() -> void:
+	world.apply_snapshot(snapshot())
+	var building: Node = world.lot_view("holborn").find_child("Building", false, false)
+	var meshes := building.find_children("*", "MeshInstance3D", true, false)
+	assert_gt(meshes.size(), 0)
+	for mesh_instance: MeshInstance3D in meshes:
+		assert_false(mesh_instance.mesh is BoxMesh, "a kit model, not the grey-box fallback")
+
+
 func test_a_delta_that_demolishes_removes_the_building() -> void:
 	world.apply_snapshot(snapshot())
 	var lot: Dictionary = snapshot()["lots"][4].duplicate(true)

@@ -1,0 +1,14 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/world_demo.gd" id="1_demo"]
+[ext_resource type="PackedScene" path="res://scenes/world/world.tscn" id="2_world"]
+
+[node name="WorldDemo" type="Node"]
+script = ExtResource("1_demo")
+
+[node name="World" parent="." instance=ExtResource("2_world")]
+
+[node name="Stats" type="Label" parent="."]
+offset_left = 16.0
+offset_top = 16.0
+text = "world demo"

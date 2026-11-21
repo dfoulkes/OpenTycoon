@@ -1,0 +1,19 @@
+Building models and colour map by Kenney (www.kenney.nl)
+
+Source: https://github.com/KenneyNL/Starter-Kit-City-Builder (folder `models/`)
+
+The source package states: "Assets included in this package (2D sprites, 3D models and
+sound effects) are CC0 licensed" (Creative Commons Zero, CC0 1.0 Universal).
+
+License: (Creative Commons Zero, CC0)
+http://creativecommons.org/publicdomain/zero/1.0/
+
+You can use these assets in personal and commercial projects. Credit (Kenney or
+www.kenney.nl) is not required but appreciated.
+
+Files used, unmodified:
+  building-small-a.glb
+  building-small-b.glb
+  building-small-c.glb
+  building-small-d.glb
+  Textures/colormap.png

@@ -1,12 +1,58 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/world.gd" id="1_world"]
 [ext_resource type="Script" path="res://scripts/world/camera_rig.gd" id="2_rig"]
+[ext_resource type="Script" path="res://scripts/world/board.gd" id="3_board"]
+[ext_resource type="Script" path="res://scripts/world/walkers.gd" id="4_walkers"]
+[ext_resource type="Script" path="res://scripts/world/auction_marker.gd" id="5_auction"]
+[ext_resource type="Script" path="res://scripts/world/highlight_frame.gd" id="6_highlight"]
+
+[sub_resource type="ProceduralSkyMaterial" id="sky_material"]
+sky_top_color = Color(0.36, 0.52, 0.72, 1)
+sky_horizon_color = Color(0.72, 0.76, 0.80, 1)
+ground_horizon_color = Color(0.72, 0.76, 0.80, 1)
+ground_bottom_color = Color(0.36, 0.42, 0.30, 1)
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("sky_material")
+
+[sub_resource type="Environment" id="environment"]
+background_mode = 2
+sky = SubResource("sky")
+ambient_light_source = 3
+ambient_light_energy = 0.6
+tonemap_mode = 2
+fog_enabled = false
 
 [node name="World" type="Node3D"]
 script = ExtResource("1_world")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("environment")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, -0.354, 0.354, 0, 0.707, 0.707, -0.5, -0.612, 0.612, 0, 80, 0)
+light_energy = 1.1
+shadow_enabled = true
+directional_shadow_max_distance = 600.0
+
+[node name="Board" type="Node3D" parent="."]
+script = ExtResource("3_board")
+
+[node name="Lots" type="Node3D" parent="."]
+
+[node name="Walkers" type="MultiMeshInstance3D" parent="."]
+script = ExtResource("4_walkers")
+
+[node name="AuctionMarker" type="Node3D" parent="."]
+script = ExtResource("5_auction")
+
+[node name="Highlight" type="Node3D" parent="."]
+script = ExtResource("6_highlight")
 
 [node name="CameraRig" type="Node3D" parent="."]
 script = ExtResource("2_rig")
 
 [node name="Camera3D" type="Camera3D" parent="CameraRig"]
+current = true
+far = 3000.0
