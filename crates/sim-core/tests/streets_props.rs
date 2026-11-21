@@ -156,8 +156,9 @@ proptest! {
         let all = oracle.cells();
         for (a, b) in picks {
             let (from, to) = (*a.get(&all), *b.get(&all));
-            let dist = oracle.bfs(from);
-            let Some(&want) = dist.get(&to) else { continue };
+            // Distances to the destination: each step must close the gap by what it moved.
+            let dist = oracle.bfs(to);
+            let Some(&want) = dist.get(&from) else { continue };
             prop_assert_eq!(streets.route_len(from, to), want, "{:?} to {:?}", from, to);
             let mut at = from;
             let mut walked = 0;

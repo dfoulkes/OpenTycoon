@@ -28,9 +28,11 @@ Feature: Batch determinism
   # R71 moved every economy lever into economy.yaml as a pure refactor: the shipped defaults
   # moved verbatim and every multiplier is exactly neutral at 1.0, so the full shipped game
   # ends in the same state as before (hash taken on the commit before R71). A deliberate
-  # balance change moves this hash; say so in its PR and update it here.
+  # balance change moves this hash; say so in its PR and update it here. Street routing (shoppers
+  # keep to the streets, cross the Thames by a bridge and wait at home between windows) moved it
+  # from fd5bd3a7bcc696e4 on purpose.
   @spec-11 @R71
   Scenario: The shipped config plays the full game to the same state as before R71
     When I run sim-cli "run config --seed 42 --ticks 207360"
     Then sim-cli succeeds
-    And its output contains "year=2050 day=24 hash=fd5bd3a7bcc696e4"
+    And its output contains "year=2050 day=24 hash=c2b3aca13bc5ee35"

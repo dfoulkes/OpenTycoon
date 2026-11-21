@@ -23,17 +23,26 @@ use sim_core::population::{AgeBand, Class, Cohort, Sex, allowance};
 use super::population::{CityState, class, cohort, pounds};
 use crate::SimWorld;
 
+/// The scenario's streets, built once from its config and map (building them runs the route
+/// tables, too slow to repeat every tick).
 fn streets(w: &mut SimWorld) -> Streets {
+    if let Some(s) = &w.streets.board {
+        return s.clone();
+    }
     let config = CityState::config(w);
     let map = CityState::map(w);
-    Streets::for_config(&map, &config)
+    let s = Streets::for_config(&map, &config);
+    w.streets.board = Some(s.clone());
+    s
 }
 
 /// Runs the customers phase for one tick.
 fn tick(w: &mut SimWorld) {
     let config = CityState::config(w);
     let map = CityState::map(w);
-    let streets = streets(w);
+    streets(w);
+    // Borrowed out for the tick and put back, rather than copying the tables every tick.
+    let streets = w.streets.board.take().unwrap();
     CityState::clock(w).advance();
     let clock = w.city.clock.clone().unwrap();
     let mut rng = w.city.rng().clone();
@@ -63,6 +72,7 @@ fn tick(w: &mut SimWorld) {
     }
     city.reports.push(report);
     city.report_times.push(now);
+    w.streets.board = Some(streets);
     super::streets::observe(w);
 }
 

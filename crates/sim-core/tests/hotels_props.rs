@@ -97,12 +97,13 @@ fn hotels_never_let_more_rooms_than_they_have_and_only_to_tourists() {
         let mut let_tonight: BTreeMap<BusinessId, u32> = BTreeMap::new();
         let mut budgets: BTreeMap<CustomerId, Money> = BTreeMap::new();
         let mut spent: BTreeMap<CustomerId, Money> = BTreeMap::new();
+        let streets = sim_core::customers::streets::Streets::for_config(&map, &config);
         // 19:00 to 04:00 the next morning.
         for _ in 0..(9 * 360) {
             clock.advance();
             let report = run_phase(
                 &mut customers,
-                PhaseInputs { config: &config, map: &map, clock: &clock, population: &pop, modifiers: &sim_core::events::Modifiers::default(), streets: &sim_core::customers::streets::Streets::for_config(&map, &config) },
+                PhaseInputs { config: &config, map: &map, clock: &clock, population: &pop, modifiers: &sim_core::events::Modifiers::default(), streets: &streets },
                 &mut businesses,
                 &mut rng,
             );

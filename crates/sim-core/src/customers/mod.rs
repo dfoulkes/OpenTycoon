@@ -19,7 +19,12 @@
 //!   out by the time they arrive is a **lost sale**: its reputation drops and the shopper
 //!   re-scores. A window that passes without a purchase (no shop can sell it, too late at the
 //!   door, or dark until it closes) drops the good for the day; that is not a lost sale.
-//!   Between windows shoppers are off the map ([`Activity::Away`]).
+//!   Between windows shoppers walk to their away spot ([`Activity::GoingAway`]): home for a
+//!   resident, the station they arrived at for a visitor. Only there do they leave the map
+//!   ([`Activity::Away`]), and they step back out from the same spot when the next window
+//!   opens, so nobody vanishes from or appears on the pavement.
+//! - **Streets (§4.1):** walkers keep to the road ring around the lots and cross the river
+//!   only by a bridge ([`streets`]). Shop distance for scoring is the street route's length.
 //! - **Power cuts (R69):** shoppers wait on the street for the lights while their window is
 //!   still open when the lights return; otherwise they move on to their next item (R70).
 //! - **17:00** day trade closes: day shoppers still on the map despawn (§8.4).
@@ -109,10 +114,18 @@ pub enum Activity {
     },
     /// Picking a shop for the first good on their list.
     Choosing,
-    /// Off the map between errands (at work, at home): their next item's window opens at
-    /// `until` (R70). Then they step back out where they left off and choose again.
+    /// Off the map between errands at their away spot, home or their arrival station (R70):
+    /// their next item's window opens at `until`. Then they step back out from that spot and
+    /// choose again.
     Away {
         /// Second of day they step back out.
+        until: u32,
+    },
+    /// Between windows, walking to their away spot (R70): home for a resident, the station
+    /// they arrived at for a visitor, to leave the map there until `until`. If the window opens
+    /// before they get there, they shop again from where they stand.
+    GoingAway {
+        /// Second of day their next window opens.
         until: u32,
     },
     /// Out, but a power cut has every shop dark (R69): standing where they are until the
@@ -444,6 +457,7 @@ fn activity(state: &Customers, now: u32) -> (bool, bool) {
             Activity::Waiting { from: t }
             | Activity::Away { until: t }
             | Activity::WaitingForPower { until: t } => (now >= t, now >= t),
+            Activity::GoingAway { until: t } => (true, now >= t),
             Activity::Choosing => (true, true),
             _ => (true, false),
         };

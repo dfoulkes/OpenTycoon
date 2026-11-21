@@ -21,6 +21,8 @@ use crate::SimWorld;
 /// What the streets scenarios watch.
 #[derive(Debug, Default)]
 pub struct StreetsState {
+    /// The scenario's streets, built once (`steps::customers`).
+    pub board: Option<Streets>,
     /// Record every walker's position every tick.
     pub watching: bool,
     /// Every on-map position per shopper id, tick by tick: (second of day, cell).
